@@ -1,0 +1,154 @@
+<?php
+
+use App\Enums\AssignmentStatus;
+use App\Models\Course;
+use App\Models\Department;
+use App\Models\JobFunction;
+use App\Services\Compliance\ComplianceOverview;
+use Livewire\Component;
+use Livewire\WithPagination;
+
+new class extends Component
+{
+    use WithPagination;
+
+    public string $search = '';
+
+    public string $department_id = '';
+
+    public string $job_function_id = '';
+
+    public string $course_id = '';
+
+    public string $status = 'open';
+
+    public string $due_bucket = '';
+
+    public function updated(): void
+    {
+        $this->resetPage();
+    }
+
+    public function clearFilters(): void
+    {
+        $this->reset(['search', 'department_id', 'job_function_id', 'course_id', 'due_bucket']);
+        $this->status = 'open';
+        $this->resetPage();
+    }
+
+    public function with(ComplianceOverview $overview): array
+    {
+        return [
+            'assignments' => $overview->assignments([
+                'search' => $this->search,
+                'department_id' => $this->department_id ?: null,
+                'job_function_id' => $this->job_function_id ?: null,
+                'course_id' => $this->course_id ?: null,
+                'status' => $this->status ?: null,
+                'due_bucket' => $this->due_bucket ?: null,
+            ])->paginate(25),
+            'departments' => Department::query()->active()->orderBy('name')->get(),
+            'jobFunctions' => JobFunction::query()->active()->orderBy('name')->get(),
+            'courses' => Course::query()->orderBy('title')->get(),
+            'buckets' => $overview->dueBuckets(),
+        ];
+    }
+};
+?>
+
+<div class="admin-page space-y-7">
+    <x-page-hero
+        :kicker="__('ui.compliance')"
+        :title="__('Assignments')"
+        :description="__('ui.assignments_page_description')">
+        <span class="status-pill status-pill--accent">{{ trans_choice('ui.results_count', $assignments->total(), ['count' => $assignments->total()]) }}</span>
+    </x-page-hero>
+
+    <div class="form-panel rounded-[20px] border border-[#dde3e7] p-4 sm:p-5">
+        <div class="grid gap-3 lg:grid-cols-3 xl:grid-cols-6">
+            <flux:input wire:model.live.debounce.400ms="search" class="admin-control" icon="magnifying-glass" :label="__('Search')" :placeholder="__('Person or course')" />
+            <flux:select wire:model.live="department_id" class="admin-control" :label="__('Department')">
+                <option value="">{{ __('All departments') }}</option>
+                @foreach ($departments as $department)
+                    <option value="{{ $department->id }}">{{ $department->name }}</option>
+                @endforeach
+            </flux:select>
+            <flux:select wire:model.live="job_function_id" class="admin-control" :label="__('Job function')">
+                <option value="">{{ __('All job functions') }}</option>
+                @foreach ($jobFunctions as $jobFunction)
+                    <option value="{{ $jobFunction->id }}">{{ $jobFunction->name }}</option>
+                @endforeach
+            </flux:select>
+            <flux:select wire:model.live="course_id" class="admin-control" :label="__('Course')">
+                <option value="">{{ __('All courses') }}</option>
+                @foreach ($courses as $course)
+                    <option value="{{ $course->id }}">{{ $course->title }}</option>
+                @endforeach
+            </flux:select>
+            <flux:select wire:model.live="status" class="admin-control" :label="__('Status')">
+                <option value="">{{ __('All statuses') }}</option>
+                <option value="open">{{ __('Open') }}</option>
+                @foreach (AssignmentStatus::cases() as $case)
+                    <option value="{{ $case->value }}">{{ $case->label() }}</option>
+                @endforeach
+            </flux:select>
+            <flux:select wire:model.live="due_bucket" class="admin-control" :label="__('Deadline')">
+                <option value="">{{ __('Any deadline') }}</option>
+                @foreach ($buckets as $key => $label)
+                    <option value="{{ $key }}">{{ $label }}</option>
+                @endforeach
+            </flux:select>
+        </div>
+        <div class="mt-3 flex justify-end">
+            <flux:button wire:click="clearFilters" variant="ghost" size="sm">{{ __('Clear filters') }}</flux:button>
+        </div>
+    </div>
+
+    @if ($assignments->isEmpty())
+        <x-empty-state
+            icon="rectangle-stack"
+            :title="__('ui.no_assignments')"
+            :description="__('ui.no_assignments_help')" />
+    @else
+        <div class="overflow-x-auto rounded-[20px] border border-[#dde3e7] shadow-[0_12px_35px_-30px_rgba(20,28,34,.42)]">
+            <table class="w-full text-left text-sm">
+                <thead>
+                    <tr>
+                        <th>{{ __('Employee') }}</th>
+                        <th>{{ __('Department') }}</th>
+                        <th>{{ __('Job function') }}</th>
+                        <th>{{ __('Course') }}</th>
+                        <th>{{ __('Due date') }}</th>
+                        <th>{{ __('Origin') }}</th>
+                        <th>{{ __('Status') }}</th>
+                        <th class="text-right">{{ __('Days overdue') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($assignments as $assignment)
+                        <tr class="border-t">
+                            <td>
+                                <a href="{{ route('people.show', $assignment->user) }}" wire:navigate class="font-semibold text-[#262d33] hover:text-[#1c6b84]">{{ $assignment->user->name }}</a>
+                                <span class="block text-xs text-[#8a9298]">{{ $assignment->user->email }}</span>
+                            </td>
+                            <td class="text-[#5f6a71]">{{ $assignment->user->departments->pluck('name')->join(', ') ?: '—' }}</td>
+                            <td class="text-[#5f6a71]">{{ $assignment->user->jobFunctions->pluck('name')->join(', ') ?: '—' }}</td>
+                            <td class="text-[#5f6a71]">
+                                {{ $assignment->course->title }}
+                                <span class="block text-xs text-[#8a9298]">{{ __('Version :number', ['number' => $assignment->courseVersion->version_number]) }}</span>
+                            </td>
+                            <td class="text-[#5f6a71]">{{ $assignment->due_at?->locale(app()->getLocale())->translatedFormat('M j, Y') ?? '—' }}</td>
+                            <td class="text-[#5f6a71]">{{ $assignment->origin_type->label() }}</td>
+                            <td><span class="status-pill {{ $assignment->status->pillModifier() }}">{{ $assignment->status->label() }}</span></td>
+                            <td class="text-right font-bold {{ $assignment->daysOverdue() > 0 ? 'text-[#b23a3a]' : 'text-[#8a9298]' }}">
+                                {{ $assignment->daysOverdue() > 0 ? $assignment->daysOverdue() : '—' }}
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+
+        <div>{{ $assignments->links() }}</div>
+    @endif
+</div>

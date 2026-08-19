@@ -1,0 +1,33 @@
+<?php
+
+use Livewire\Attributes\Layout;
+use Livewire\Component;
+
+new #[Layout('layouts::guest')] class extends Component
+{
+    //
+};
+?>
+
+<div class="w-full max-w-md">
+    <div class="rounded-[2rem] border border-white/70 bg-white/90 p-7 shadow-[0_30px_80px_-35px_rgba(11,32,44,.45)] backdrop-blur sm:p-10">
+        <div class="text-center">
+            <img src="{{ asset('images/oceanix-logo.svg') }}" alt="Oceanix" class="mx-auto h-auto w-48 sm:w-56">
+            <img src="{{ asset('images/oceanix-mark.svg') }}" alt="" class="mx-auto mt-7 size-20 rounded-[1.4rem] shadow-[0_16px_32px_-16px_rgba(11,32,44,.65)]">
+            <flux:heading size="xl" class="mt-7 !text-[#16222a]">{{ __('ui.login_title') }}</flux:heading>
+            <flux:text class="mx-auto mt-2 max-w-xs !text-[#5f6a71]">{{ __('ui.login_subtitle') }}</flux:text>
+        </div>
+
+        @if ($errors->any())
+            <flux:callout variant="danger" heading="{{ $errors->first() }}" class="mt-6" />
+        @endif
+
+        <flux:button href="{{ route('auth.workos.redirect') }}" variant="primary" class="mt-7 !min-h-12 w-full !rounded-xl !bg-[#16222a] !font-bold hover:!bg-[#22333d]">
+            {{ __('ui.login_action') }}
+            <flux:icon.arrow-right class="ml-1 size-4" />
+        </flux:button>
+        <p class="mt-4 flex items-center justify-center gap-1.5 text-[11px] font-medium text-[#868f95]">
+            <flux:icon.lock-closed class="size-3.5" /> {{ __('ui.login_security') }}
+        </p>
+    </div>
+</div>
