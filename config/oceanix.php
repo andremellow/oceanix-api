@@ -66,11 +66,29 @@ return [
     'due_soon_days' => (int) env('OCEANIX_DUE_SOON_DAYS', 14),
     'critical_overdue_days' => (int) env('OCEANIX_CRITICAL_OVERDUE_DAYS', 30),
 
+    // How often an overdue reminder repeats, in days. Daily nagging trains people to ignore it.
+    'overdue_reminder_days' => (int) env('OCEANIX_OVERDUE_REMINDER_DAYS', 7),
+
     /*
     |--------------------------------------------------------------------------
     | Certificates
     |--------------------------------------------------------------------------
     */
+
+    /*
+    |--------------------------------------------------------------------------
+    | Retention
+    |--------------------------------------------------------------------------
+    |
+    | How long after termination a person's identifying data is kept before it can be
+    | anonymized. Training evidence is preserved either way. The correct window is a legal
+    | decision — this is only the default the command uses when none is given.
+    |
+    */
+
+    'retention' => [
+        'terminated_months' => (int) env('OCEANIX_RETENTION_TERMINATED_MONTHS', 60),
+    ],
 
     'certificates' => [
         'disk' => env('OCEANIX_CERTIFICATE_DISK', 'local'),

@@ -64,6 +64,12 @@ Do not duplicate query logic across components; extract it into a Service.
    and ignored for progress — see `LessonProgressProjector`.
 9. **The assessment is gated server-side.** `AnswerQuestion` refuses an answer whose lesson
    has not met its watch threshold, whatever the page renders.
+10. **Nothing operational is deleted.** Waiving, cancelling and revoking mark and record a
+    reason; anonymization destroys identity but preserves the evidence. Deleting a user would
+    cascade the assignments and erase the proof an obligation was ever met.
+11. **A translation group must never share a name with a visible label.** `lang/xx/certificates.php`
+    makes `__('Certificates')` return the whole file as an array — and only on a
+    case-insensitive filesystem, so it breaks in one environment and not the other.
 
 ## Localization — English-first source
 

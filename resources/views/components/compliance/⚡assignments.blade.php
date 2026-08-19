@@ -119,6 +119,19 @@ new class extends Component
         :title="__('Assignments')"
         :description="__('ui.assignments_page_description')">
         <span class="status-pill status-pill--accent">{{ trans_choice('ui.results_count', $assignments->total(), ['count' => $assignments->total()]) }}</span>
+        @can(App\Enums\Permission::ComplianceReportsExport->value)
+            <flux:button
+                :href="route('assignments.export', array_filter([
+                    'search' => $search,
+                    'department_id' => $department_id,
+                    'job_function_id' => $job_function_id,
+                    'course_id' => $course_id,
+                    'status' => $status,
+                    'due_bucket' => $due_bucket,
+                ]))"
+                variant="ghost"
+                icon="arrow-down-tray">{{ __('Export CSV') }}</flux:button>
+        @endcan
         @can('create', App\Models\UserTrainingAssignment::class)
             <flux:button wire:click="startAssigning" variant="primary" class="admin-primary-action">{{ __('Assign training') }}</flux:button>
         @endcan

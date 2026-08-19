@@ -1,5 +1,7 @@
 <?php
 
+use App\Actions\Assignments\CloseAssignment;
+use App\Enums\AssignmentStatus;
 use App\Enums\Permission;
 use App\Models\UserTrainingAssignment;
 use App\Services\Compliance\AssignmentEvidence;
@@ -21,6 +23,34 @@ new class extends Component
             'user.departments', 'user.jobFunctions', 'course',
             'courseVersion.lessons.video', 'certificate', 'trainingRequirement',
         ]);
+    }
+
+    public ?string $closing = null;
+
+    public string $closeReason = '';
+
+    public function startClosing(string $status): void
+    {
+        $this->authorize($status === 'waived' ? 'waive' : 'cancel', $this->assignment);
+
+        $this->closing = $status;
+        $this->closeReason = '';
+    }
+
+    public function close(CloseAssignment $action): void
+    {
+        $status = AssignmentStatus::from((string) $this->closing);
+
+        $this->authorize($status === AssignmentStatus::Waived ? 'waive' : 'cancel', $this->assignment);
+
+        $validated = $this->validate([
+            'closeReason' => ['required', 'string', 'min:5', 'max:255'],
+        ]);
+
+        $this->assignment = $action->handle($this->assignment, $status, $validated['closeReason']);
+        $this->closing = null;
+
+        session()->flash('status', __('ui.assignment_closed', ['status' => $status->label()]));
     }
 
     public function with(AssignmentEvidence $evidence): array
@@ -45,7 +75,21 @@ new class extends Component
         :description="$assignment->course->title">
         <span class="status-pill {{ $assignment->status->pillModifier() }}">{{ $assignment->status->label() }}</span>
         <flux:button :href="route('assignments.index')" wire:navigate variant="ghost" size="sm">{{ __('ui.back_to_assignments') }}</flux:button>
+        @can('waive', $assignment)
+            <flux:button wire:click="startClosing('waived')" variant="ghost" size="sm">{{ __('Waive') }}</flux:button>
+        @endcan
+        @can('cancel', $assignment)
+            <flux:button wire:click="startClosing('cancelled')" variant="ghost" size="sm">{{ __('Cancel assignment') }}</flux:button>
+        @endcan
     </x-page-hero>
+
+    @if (session('status'))
+        <flux:callout variant="success" :heading="session('status')" />
+    @endif
+
+    @if ($assignment->metadata['closed_reason'] ?? null)
+        <flux:callout variant="secondary" :heading="__('ui.closed_reason')" :text="$assignment->metadata['closed_reason']" />
+    @endif
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div class="metric-card metric-card--teal">
@@ -236,4 +280,20 @@ new class extends Component
             </div>
         </section>
     @endcan
+
+    <flux:modal :open="$closing !== null" wire:model.self="closing" class="max-w-lg">
+        <form wire:submit="close" class="space-y-5">
+            <div>
+                <flux:heading size="lg">{{ $closing === 'waived' ? __('Waive this training') : __('Cancel this training') }}</flux:heading>
+                <flux:text class="mt-2">{{ $closing === 'waived' ? __('ui.waive_help') : __('ui.cancel_help') }}</flux:text>
+            </div>
+
+            <flux:textarea wire:model="closeReason" class="admin-control" :label="__('Reason')" rows="3" />
+
+            <div class="flex justify-end gap-2">
+                <flux:button x-on:click="$wire.closing = null" variant="ghost" type="button">{{ __('Cancel') }}</flux:button>
+                <flux:button type="submit" variant="primary" class="admin-primary-action">{{ __('Confirm') }}</flux:button>
+            </div>
+        </form>
+    </flux:modal>
 </div>

@@ -108,8 +108,19 @@ composer test
 | `oceanix:materialize-requirements` | hourly | Create the assignments active requirements currently demand |
 | `oceanix:update-overdue` | daily | Move open assignments past their deadline to overdue |
 | `oceanix:sync-videos` | every 10 min | Reconcile videos still encoding at the provider |
+| `oceanix:send-notifications` | daily | Schedule the reminders due today and queue them |
 
-All three are idempotent and safe to retry.
+All are idempotent and safe to retry.
+
+Run on demand, never scheduled:
+
+```bash
+php artisan oceanix:anonymize-terminated --dry-run
+```
+
+Anonymizes people terminated beyond the retention window while preserving their training
+evidence — identity is destroyed, the record of what they completed is not. The window is a
+legal decision, so the command is triggered knowingly rather than by a scheduler.
 
 ## Project status
 

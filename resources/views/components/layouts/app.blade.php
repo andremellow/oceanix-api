@@ -121,7 +121,9 @@
                         </div>
                     @endif
 
-                    @if ($user->isAdmin() || $user->can(\App\Enums\Permission::AuditLogsView->value))
+                    @if ($user->isAdmin()
+                        || $user->can(\App\Enums\Permission::AuditLogsView->value)
+                        || $user->can(\App\Enums\Permission::AppSettingsView->value))
                         <div>
                             <p class="px-3 text-[10px] font-bold uppercase tracking-[.16em] text-[#9ea6ac]">{{ __('ui.administration') }}</p>
                             <div class="mt-2 space-y-1">
@@ -135,6 +137,12 @@
                                         <span>{{ __('ui.access_profiles') }}</span>
                                     </a>
                                 @endif
+                                @can(\App\Enums\Permission::AppSettingsView->value)
+                                    <a href="{{ route('settings') }}" wire:navigate class="saas-nav-item {{ request()->routeIs('settings') ? 'is-active' : '' }}">
+                                        <flux:icon.cog-6-tooth class="size-[18px]" />
+                                        <span>{{ __('Settings') }}</span>
+                                    </a>
+                                @endcan
                                 @can(\App\Enums\Permission::AuditLogsView->value)
                                     <a href="{{ route('audit-log') }}" wire:navigate class="saas-nav-item {{ request()->routeIs('audit-log') ? 'is-active' : '' }}">
                                         <flux:icon.shield-check class="size-[18px]" />

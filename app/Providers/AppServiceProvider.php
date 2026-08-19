@@ -16,6 +16,7 @@ use App\Policies\RolePolicy;
 use App\Policies\TrainingRequirementPolicy;
 use App\Policies\UserPolicy;
 use App\Policies\UserTrainingAssignmentPolicy;
+use App\Services\Settings\ApplicationSettings;
 use App\Services\SocialLogin\SocialLoginManager;
 use App\Services\SocialLogin\WorkosAuthKitIdentityProvider;
 use App\Services\Video\CloudflareStreamProvider;
@@ -24,6 +25,7 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -31,6 +33,8 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->scoped(ApplicationSettings::class);
+
         $this->app->singleton(SocialLoginManager::class, fn ($app) => new SocialLoginManager([
             'workos' => $app->make(WorkosAuthKitIdentityProvider::class),
         ]));
@@ -51,6 +55,11 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Stored operational settings override configuration for the whole request.
+        if (Schema::hasTable('settings')) {
+            $this->app->make(ApplicationSettings::class)->apply();
+        }
+
         // Administrators bypass permission Gates here — never inside domain Actions or
         // Policies, so the bypass stays auditable in one place.
         Gate::before(fn (User $user): ?bool => $user->isAdmin() ? true : null);

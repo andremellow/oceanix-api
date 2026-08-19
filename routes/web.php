@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\WorkosController;
 use App\Http\Controllers\CertificateDownloadController;
 use App\Http\Controllers\CertificateVerificationController;
+use App\Http\Controllers\ComplianceExportController;
 use App\Http\Controllers\DevVideoController;
 use App\Http\Controllers\TrainingPlaybackController;
 use App\Http\Middleware\EnsureUserCanAccessControlCenter;
@@ -103,6 +104,9 @@ Route::middleware('auth')->group(function (): void {
         Route::livewire('/assignments', 'compliance.assignments')
             ->middleware(EnsureUserHasPermission::class.':assignments.view')
             ->name('assignments.index');
+        Route::get('/assignments/export', ComplianceExportController::class)
+            ->middleware(EnsureUserHasPermission::class.':compliance-reports.export')
+            ->name('assignments.export');
         Route::livewire('/assignments/{assignment}', 'compliance.assignment')
             ->middleware(EnsureUserHasPermission::class.':assignments.view')
             ->name('assignments.show');
@@ -126,6 +130,9 @@ Route::middleware('auth')->group(function (): void {
             ->middleware(EnsureUserHasPermission::class.':job-functions.view')
             ->name('job-functions.index');
 
+        Route::livewire('/settings', 'admin.settings')
+            ->middleware(EnsureUserHasPermission::class.':app-settings.view')
+            ->name('settings');
         Route::livewire('/audit-log', 'admin.audit-log')
             ->middleware(EnsureUserHasPermission::class.':audit-logs.view')
             ->name('audit-log');

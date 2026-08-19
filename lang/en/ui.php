@@ -155,6 +155,14 @@ return [
     'lessons_count' => '{0} No lessons|{1} :count lesson|[2,*] :count lessons',
     'immutable' => 'Immutable',
 
+    'anonymized_person' => 'Anonymized person',
+    'email' => 'Email',
+    'employee_id' => 'Employee ID',
+    'assignment_closed' => 'Assignment closed as :status. The history and its evidence stay untouched.',
+    'closed_reason' => 'Why this assignment was closed',
+    'waive_help' => 'A waiver satisfies the obligation without the training being taken. The reason is recorded and stays visible to auditors.',
+    'cancel_help' => 'Cancelling ends the obligation without satisfying it. Nothing is deleted — the history and evidence remain.',
+
     // Assignments
     'assignments_page_description' => 'Materialized obligations: who owes which course version, by when, and from which rule.',
     'results_count' => '{0} No results|{1} :count result|[2,*] :count results',
@@ -208,6 +216,11 @@ return [
     'clock_skew' => 'device clock differs',
     'device_events' => '{1} :count event from one device|[2,*] :count events from one device',
 
+    'mail_due_on' => 'It is due on :date.',
+    'mail_was_due' => 'It was due on :date.',
+    'mail_open_training' => 'Open the training',
+    'mail_footer' => 'You are receiving this because this training is part of your compliance record.',
+
     // Certificates
     'verify' => 'Verify',
     'certificate_document_title' => 'Certificate of completion',
@@ -235,6 +248,20 @@ return [
     'job_function_created' => 'Job function created.',
     'no_job_functions' => 'No job functions yet',
     'no_job_functions_help' => 'Job functions let a requirement target a role across several departments.',
+
+    'settings_page_description' => 'Operational values an administrator can change without a deploy.',
+    'settings_saved' => 'Settings saved. They apply from the next request.',
+    'settings_secrets_note' => 'Credentials and infrastructure are not editable here — they live in the environment, where a web form cannot reach them.',
+    'setting_due_soon' => 'Due soon window (days)',
+    'setting_due_soon_help' => 'How far ahead a deadline counts as due soon, on dashboards and in reminders.',
+    'setting_critical' => 'Critical overdue (days)',
+    'setting_critical_help' => 'How late an obligation must be before it is escalated as critical.',
+    'setting_reminder' => 'Overdue reminder every (days)',
+    'setting_reminder_help' => 'How often an overdue reminder repeats. Daily reminders train people to ignore them.',
+    'setting_token' => 'Playback token lifetime (minutes)',
+    'setting_token_help' => 'How long a signed video link stays valid. Shorter is safer; too short interrupts a lesson.',
+    'setting_provisioning' => 'Create users on first sign-in',
+    'setting_provisioning_help' => 'Turn off once the directory provisions the workforce: only people who already exist will then be able to sign in.',
 
     // Administration
     'users_page_description' => 'Accounts, identity provider linkage, and the access profiles each person holds.',

@@ -155,6 +155,14 @@ return [
     'lessons_count' => '{0} Nenhuma lesson|{1} :count lesson|[2,*] :count lessons',
     'immutable' => 'Imutável',
 
+    'anonymized_person' => 'Pessoa anonimizada',
+    'email' => 'E-mail',
+    'employee_id' => 'Matrícula',
+    'assignment_closed' => 'Atribuição encerrada como :status. O histórico e as evidências continuam intactos.',
+    'closed_reason' => 'Por que esta atribuição foi encerrada',
+    'waive_help' => 'A dispensa satisfaz a obrigação sem o treinamento ter sido feito. O motivo fica registrado e visível para auditoria.',
+    'cancel_help' => 'Cancelar encerra a obrigação sem satisfazê-la. Nada é apagado — o histórico e as evidências permanecem.',
+
     // Assignments
     'assignments_page_description' => 'Obrigações materializadas: quem deve qual versão de curso, até quando e por qual regra.',
     'results_count' => '{0} Nenhum resultado|{1} :count resultado|[2,*] :count resultados',
@@ -208,6 +216,11 @@ return [
     'clock_skew' => 'relógio do dispositivo difere',
     'device_events' => '{1} :count evento de um dispositivo|[2,*] :count eventos de um dispositivo',
 
+    'mail_due_on' => 'O prazo é :date.',
+    'mail_was_due' => 'O prazo era :date.',
+    'mail_open_training' => 'Abrir o treinamento',
+    'mail_footer' => 'Você está recebendo isto porque este treinamento faz parte do seu histórico de conformidade.',
+
     // Certificates
     'verify' => 'Verificar',
     'certificate_document_title' => 'Certificado de conclusão',
@@ -235,6 +248,20 @@ return [
     'job_function_created' => 'Função criada.',
     'no_job_functions' => 'Nenhuma função ainda',
     'no_job_functions_help' => 'As funções permitem que uma regra atinja um papel em vários setores.',
+
+    'settings_page_description' => 'Valores operacionais que um administrador pode mudar sem deploy.',
+    'settings_saved' => 'Configurações salvas. Valem a partir da próxima requisição.',
+    'settings_secrets_note' => 'Credenciais e infraestrutura não são editáveis aqui — ficam no ambiente, onde um formulário web não alcança.',
+    'setting_due_soon' => 'Janela de "vence em breve" (dias)',
+    'setting_due_soon_help' => 'Com quanta antecedência um prazo passa a contar como próximo, nos painéis e nos lembretes.',
+    'setting_critical' => 'Atraso crítico (dias)',
+    'setting_critical_help' => 'Quanto tempo de atraso até a obrigação ser escalada como crítica.',
+    'setting_reminder' => 'Lembrete de atraso a cada (dias)',
+    'setting_reminder_help' => 'De quanto em quanto tempo o lembrete de atraso se repete. Lembrete diário ensina as pessoas a ignorar.',
+    'setting_token' => 'Validade do token de vídeo (minutos)',
+    'setting_token_help' => 'Por quanto tempo o link assinado do vídeo vale. Menor é mais seguro; curto demais interrompe a lesson.',
+    'setting_provisioning' => 'Criar usuários no primeiro acesso',
+    'setting_provisioning_help' => 'Desligue quando o diretório provisionar a equipe: só quem já existe consegue entrar.',
 
     // Administration
     'users_page_description' => 'Contas, vínculo com o provedor de identidade e os perfis de acesso de cada pessoa.',
