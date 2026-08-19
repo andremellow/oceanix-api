@@ -209,7 +209,14 @@ return [
     'device_events' => '{1} :count event from one device|[2,*] :count events from one device',
 
     // Certificates
+    'verify' => 'Verify',
+    'certificate_document_title' => 'Certificate of completion',
+    'certificate_scan_to_verify' => 'Scan to verify',
+    'certificate_document_footer' => 'Verify this certificate at :url. The verification page confirms validity, holder, course, issue and expiry, and nothing else.',
     'certificates_page_description' => 'Issued certificates, their validity, and the version of the course they attest.',
+    'certificate_revoked' => 'Certificate revoked. The document and its verification page stay available, marked as revoked.',
+    'revoke_help' => 'The certificate is not deleted: verification keeps answering, and now answers that it was revoked. The reason is recorded in the audit trail.',
+    'score' => 'Score',
     'no_certificates' => 'No certificates issued',
     'no_certificates_help' => 'A certificate is issued automatically when someone completes a course.',
 

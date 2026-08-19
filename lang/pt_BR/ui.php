@@ -209,7 +209,14 @@ return [
     'device_events' => '{1} :count evento de um dispositivo|[2,*] :count eventos de um dispositivo',
 
     // Certificates
+    'verify' => 'Verificar',
+    'certificate_document_title' => 'Certificado de conclusão',
+    'certificate_scan_to_verify' => 'Escaneie para verificar',
+    'certificate_document_footer' => 'Verifique este certificado em :url. A página de verificação confirma validade, titular, curso, emissão e expiração, e mais nada.',
     'certificates_page_description' => 'Certificados emitidos, sua validade e a versão do curso que atestam.',
+    'certificate_revoked' => 'Certificado revogado. O documento e a página de verificação continuam disponíveis, marcados como revogados.',
+    'revoke_help' => 'O certificado não é apagado: a verificação continua respondendo, e agora responde que foi revogado. O motivo fica na trilha de auditoria.',
+    'score' => 'Nota',
     'no_certificates' => 'Nenhum certificado emitido',
     'no_certificates_help' => 'O certificado é emitido automaticamente quando alguém conclui um curso.',
 

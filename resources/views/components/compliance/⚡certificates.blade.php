@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Certificates\RevokeCertificate;
 use App\Models\Certificate;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -9,6 +10,35 @@ new class extends Component
     use WithPagination;
 
     public string $search = '';
+
+    public ?int $revokingId = null;
+
+    public string $revocationReason = '';
+
+    public function startRevoking(int $certificateId): void
+    {
+        $this->authorize('revoke', Certificate::query()->findOrFail($certificateId));
+
+        $this->revokingId = $certificateId;
+        $this->revocationReason = '';
+    }
+
+    public function revoke(RevokeCertificate $action): void
+    {
+        $certificate = Certificate::query()->findOrFail($this->revokingId);
+
+        $this->authorize('revoke', $certificate);
+
+        $validated = $this->validate([
+            'revocationReason' => ['required', 'string', 'min:5', 'max:255'],
+        ]);
+
+        $action->handle($certificate, $validated['revocationReason']);
+
+        $this->revokingId = null;
+
+        session()->flash('status', __('ui.certificate_revoked'));
+    }
 
     public function updatedSearch(): void
     {
@@ -39,6 +69,10 @@ new class extends Component
         <span class="status-pill status-pill--accent">{{ trans_choice('ui.results_count', $certificates->total(), ['count' => $certificates->total()]) }}</span>
     </x-page-hero>
 
+    @if (session('status'))
+        <flux:callout variant="success" :heading="session('status')" />
+    @endif
+
     <div class="form-panel rounded-[20px] border border-[#dde3e7] p-4 sm:p-5">
         <flux:input wire:model.live.debounce.400ms="search" class="admin-control" icon="magnifying-glass" :label="__('Search')" :placeholder="__('Certificate number or holder')" />
     </div>
@@ -59,6 +93,7 @@ new class extends Component
                         <th>{{ __('Issued') }}</th>
                         <th>{{ __('Valid until') }}</th>
                         <th>{{ __('Status') }}</th>
+                        <th class="text-right">{{ __('Actions') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -81,6 +116,14 @@ new class extends Component
                                     <span class="status-pill status-pill--positive">{{ __('Valid') }}</span>
                                 @endif
                             </td>
+                            <td class="text-right">
+                                <div class="flex justify-end gap-2">
+                                    <flux:button :href="route('certificates.download', $certificate)" variant="ghost" size="sm" icon="arrow-down-tray">{{ __('PDF') }}</flux:button>
+                                    @can('revoke', $certificate)
+                                        <flux:button wire:click="startRevoking({{ $certificate->id }})" variant="ghost" size="sm">{{ __('Revoke') }}</flux:button>
+                                    @endcan
+                                </div>
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>
@@ -89,4 +132,20 @@ new class extends Component
 
         <div>{{ $certificates->links() }}</div>
     @endif
+
+    <flux:modal :open="$revokingId !== null" wire:model.self="revokingId" class="max-w-lg">
+        <form wire:submit="revoke" class="space-y-5">
+            <div>
+                <flux:heading size="lg">{{ __('Revoke certificate') }}</flux:heading>
+                <flux:text class="mt-2">{{ __('ui.revoke_help') }}</flux:text>
+            </div>
+
+            <flux:textarea wire:model="revocationReason" class="admin-control" :label="__('Reason')" rows="3" />
+
+            <div class="flex justify-end gap-2">
+                <flux:button x-on:click="$wire.revokingId = null" variant="ghost" type="button">{{ __('Cancel') }}</flux:button>
+                <flux:button type="submit" variant="danger">{{ __('Revoke certificate') }}</flux:button>
+            </div>
+        </form>
+    </flux:modal>
 </div>

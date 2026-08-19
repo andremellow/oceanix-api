@@ -3,6 +3,7 @@
 namespace App\Actions\Certificates;
 
 use App\Enums\ComplianceEventType;
+use App\Jobs\GenerateCertificateDocument;
 use App\Models\Certificate;
 use App\Models\UserTrainingAssignment;
 use App\Services\Compliance\ComplianceEventRecorder;
@@ -51,6 +52,8 @@ class IssueCertificate
                 'course_version_id' => $assignment->course_version_id,
                 'metadata' => ['certificate_number' => $certificate->certificate_number],
             ]);
+
+            GenerateCertificateDocument::dispatch($certificate->id)->afterCommit();
 
             return $certificate;
         });

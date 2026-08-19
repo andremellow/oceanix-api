@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\WorkosController;
+use App\Http\Controllers\CertificateDownloadController;
 use App\Http\Controllers\CertificateVerificationController;
 use App\Http\Controllers\DevVideoController;
 use App\Http\Controllers\TrainingPlaybackController;
@@ -70,6 +71,8 @@ Route::middleware('auth')->group(function (): void {
     Route::livewire('/dashboard', 'dashboard')->name('dashboard');
     Route::livewire('/my-training', 'training.my-training')->name('my-training');
     Route::livewire('/my-training/{assignment}', 'training.assignment')->name('my-training.show');
+    Route::get('/certificates/{certificate}/download', CertificateDownloadController::class)
+        ->name('certificates.download');
     Route::livewire('/my-training/{assignment}/lessons/{lesson}', 'training.lesson')->name('my-training.lesson');
 
     // Playback authorization and event ingestion for the player. Both re-authorize the
