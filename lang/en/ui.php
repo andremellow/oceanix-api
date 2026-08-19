@@ -133,6 +133,7 @@ return [
     'assessment_help' => 'Each question is graded on its own. Running out of attempts on any question fails the lesson.',
     'assessment_locked_help' => 'The assessment unlocks once :percentage% of the video has been watched.',
     'assessment_locked' => 'Watched so far: :percentage%',
+    'select_an_option' => 'Choose an answer before submitting. This did not use an attempt.',
     'submit_answer' => 'Submit answer',
     'answer_correct' => 'Correct',
     'answer_wrong' => 'Not correct',

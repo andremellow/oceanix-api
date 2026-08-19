@@ -19,6 +19,7 @@ use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -145,4 +146,12 @@ function watch(UserTrainingAssignment $assignment, Lesson $lesson, int $toSecond
     }
 
     app(LessonProgressProjector::class)->project($assignment, $lesson);
+}
+
+/** The provider is exercised through its real implementation; only the network is faked. */
+function fakeCloudflarePlayback(): void
+{
+    Http::fake([
+        'api.cloudflare.com/*' => Http::response(['success' => true, 'result' => ['token' => 'signed-token']]),
+    ]);
 }

@@ -133,6 +133,7 @@ return [
     'assessment_help' => 'Cada questão é avaliada separadamente. Esgotar as tentativas em qualquer questão reprova a lesson.',
     'assessment_locked_help' => 'A avaliação libera quando :percentage% do vídeo tiver sido assistido.',
     'assessment_locked' => 'Assistido até agora: :percentage%',
+    'select_an_option' => 'Escolha uma resposta antes de enviar. Isto não consumiu uma tentativa.',
     'submit_answer' => 'Responder',
     'answer_correct' => 'Correto',
     'answer_wrong' => 'Incorreto',

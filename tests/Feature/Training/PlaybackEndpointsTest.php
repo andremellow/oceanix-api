@@ -4,16 +4,7 @@ use App\Enums\ComplianceEventType;
 use App\Models\ComplianceEvent;
 use App\Models\Lesson;
 use App\Models\User;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
-
-/** The provider is exercised through its real implementation; only the network is faked. */
-function fakeCloudflarePlayback(): void
-{
-    Http::fake([
-        'api.cloudflare.com/*' => Http::response(['success' => true, 'result' => ['token' => 'signed-token']]),
-    ]);
-}
 
 function eventPayload(array $overrides = []): array
 {

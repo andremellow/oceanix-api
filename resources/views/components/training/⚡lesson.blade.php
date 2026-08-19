@@ -52,6 +52,14 @@ new class extends Component
         $this->playbackUrl = $authorization->playbackUrl;
         $this->posterUrl = $authorization->posterUrl;
 
+        // Seeded per question so Livewire binds a multiple-choice question to an array and
+        // a single-choice one to a scalar, instead of inferring a boolean from an absent key.
+        $this->selected = $this->lesson->questions
+            ->mapWithKeys(fn (Question $question): array => [
+                $question->id => $question->type === QuestionType::MultipleChoice ? [] : null,
+            ])
+            ->all();
+
         app(StartAssignment::class)->handle($assignment);
 
         app(ComplianceEventRecorder::class)->record(ComplianceEventType::AssignmentOpened, $assignment->user_id, [
@@ -66,6 +74,13 @@ new class extends Component
         $this->authorize('execute', $this->assignment);
 
         $question = $this->lesson->questions()->findOrFail($questionId);
+
+        if ($this->selectedOptionIds($questionId) === []) {
+            $this->addError('assessment', __('ui.select_an_option'));
+
+            return;
+        }
+
         $courseAttempt = app(StartAssignment::class)->handle($this->assignment);
         $lessonAttempt = app(StartLessonAttempt::class)->handle($this->assignment, $courseAttempt, $this->lesson);
 
@@ -74,7 +89,7 @@ new class extends Component
                 $this->assignment,
                 $lessonAttempt,
                 $question,
-                array_map('intval', $this->selected[$questionId] ?? []),
+                $this->selectedOptionIds($questionId),
             );
         } catch (AuthorizationException $e) {
             $this->addError('assessment', $e->getMessage());
@@ -108,6 +123,24 @@ new class extends Component
         if ($evaluated->status === AttemptStatus::Failed) {
             $this->lessonOutcome = 'failed';
         }
+    }
+
+    /**
+     * Single choice binds to a scalar and multiple choice to an array; both arrive here as
+     * a list of ids.
+     *
+     * @return list<int>
+     */
+    private function selectedOptionIds(int $questionId): array
+    {
+        $selected = $this->selected[$questionId] ?? [];
+
+        return collect(is_array($selected) ? $selected : [$selected])
+            ->filter(fn ($value): bool => is_numeric($value) && (int) $value > 0)
+            ->map(fn ($value): int => (int) $value)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     public function with(): array
@@ -236,7 +269,8 @@ new class extends Component
 
                         <div class="mt-4 space-y-2">
                             @foreach ($question->options as $option)
-                                <label class="role-option {{ in_array((string) $option->id, array_map('strval', $selected[$question->id] ?? []), true) ? 'is-selected' : '' }}">
+                                @php($chosen = array_map('strval', is_array($selected[$question->id] ?? null) ? $selected[$question->id] : array_filter([$selected[$question->id] ?? null])))
+                                <label class="role-option {{ in_array((string) $option->id, $chosen, true) ? 'is-selected' : '' }}">
                                     <input
                                         type="{{ $question->type === QuestionType::MultipleChoice ? 'checkbox' : 'radio' }}"
                                         wire:model="selected.{{ $question->id }}"
