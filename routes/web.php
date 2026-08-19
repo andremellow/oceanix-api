@@ -100,6 +100,9 @@ Route::middleware('auth')->group(function (): void {
         Route::livewire('/assignments', 'compliance.assignments')
             ->middleware(EnsureUserHasPermission::class.':assignments.view')
             ->name('assignments.index');
+        Route::livewire('/assignments/{assignment}', 'compliance.assignment')
+            ->middleware(EnsureUserHasPermission::class.':assignments.view')
+            ->name('assignments.show');
 
         Route::livewire('/certificates', 'compliance.certificates')
             ->middleware(EnsureUserHasPermission::class.':certificates.view')

@@ -142,8 +142,8 @@ enum Permission: string
             self::AuditLogsView,
             self::AppSettingsView => [],
 
-            self::ComplianceReportsExport,
-            self::ComplianceEventsView => [self::ComplianceDashboardView],
+            self::ComplianceReportsExport => [self::ComplianceDashboardView],
+            self::ComplianceEventsView => [self::ComplianceDashboardView, self::AssignmentsView],
 
             self::CoursesCreate,
             self::CoursesUpdate,

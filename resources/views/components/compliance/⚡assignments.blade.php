@@ -203,7 +203,11 @@ new class extends Component
                             </td>
                             <td class="text-[#5f6a71]">{{ $assignment->due_at?->locale(app()->getLocale())->translatedFormat('M j, Y') ?? '—' }}</td>
                             <td class="text-[#5f6a71]">{{ $assignment->origin_type->label() }}</td>
-                            <td><span class="status-pill {{ $assignment->status->pillModifier() }}">{{ $assignment->status->label() }}</span></td>
+                            <td>
+                                <a href="{{ route('assignments.show', $assignment) }}" wire:navigate class="inline-flex">
+                                    <span class="status-pill {{ $assignment->status->pillModifier() }}">{{ $assignment->status->label() }}</span>
+                                </a>
+                            </td>
                             <td class="text-right font-bold {{ $assignment->daysOverdue() > 0 ? 'text-[#b23a3a]' : 'text-[#8a9298]' }}">
                                 {{ $assignment->daysOverdue() > 0 ? $assignment->daysOverdue() : '—' }}
                             </td>
