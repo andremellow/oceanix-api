@@ -148,6 +148,8 @@ class CloudflareStreamProvider implements VideoProvider
             metadata: [
                 'thumbnail' => $response->json('result.thumbnail'),
                 'state' => $state,
+                // Carries the account's delivery host, which differs per account.
+                'hls' => $response->json('result.playback.hls'),
             ],
         );
     }
@@ -164,12 +166,13 @@ class CloudflareStreamProvider implements VideoProvider
         $this->guard($response->successful(), 'createPlaybackAuthorization', $response->json());
 
         $token = (string) $response->json('result.token');
+        $host = $this->deliveryHostFor($video);
 
         return new PlaybackAuthorization(
             token: $token,
-            playbackUrl: sprintf('%s/%s/manifest/video.m3u8', $this->deliveryHost(), $token),
+            playbackUrl: sprintf('%s/%s/manifest/video.m3u8', $host, $token),
             expiresAt: $expiresAt,
-            posterUrl: sprintf('%s/%s/thumbnails/thumbnail.jpg', $this->deliveryHost(), $token),
+            posterUrl: sprintf('%s/%s/thumbnails/thumbnail.jpg', $host, $token),
         );
     }
 
@@ -234,8 +237,18 @@ class CloudflareStreamProvider implements VideoProvider
         return "https://api.cloudflare.com/client/v4/accounts/{$accountId}{$path}";
     }
 
-    private function deliveryHost(): string
+    /**
+     * Prefer the host Cloudflare itself reported for this asset; fall back to configuration
+     * only when the asset was never reconciled.
+     */
+    private function deliveryHostFor(Video $video): string
     {
+        $hls = $video->metadata['hls'] ?? null;
+
+        if (is_string($hls) && preg_match('#^(https://[^/]+)/#', $hls, $matches) === 1) {
+            return $matches[1];
+        }
+
         return rtrim((string) config('services.cloudflare_stream.delivery_host'), '/');
     }
 

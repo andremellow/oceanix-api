@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\WorkosController;
 use App\Http\Controllers\CertificateVerificationController;
 use App\Http\Controllers\DevVideoController;
+use App\Http\Controllers\TrainingPlaybackController;
 use App\Http\Middleware\EnsureUserCanAccessControlCenter;
 use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\EnsureUserIsAdmin;
@@ -69,6 +70,17 @@ Route::middleware('auth')->group(function (): void {
     Route::livewire('/dashboard', 'dashboard')->name('dashboard');
     Route::livewire('/my-training', 'training.my-training')->name('my-training');
     Route::livewire('/my-training/{assignment}', 'training.assignment')->name('my-training.show');
+    Route::livewire('/my-training/{assignment}/lessons/{lesson}', 'training.lesson')->name('my-training.lesson');
+
+    // Playback authorization and event ingestion for the player. Both re-authorize the
+    // assignment on every call and are rate limited: they are the two endpoints a client
+    // touches most.
+    Route::post('/my-training/{assignment}/lessons/{lesson}/playback', [TrainingPlaybackController::class, 'authorizePlayback'])
+        ->middleware('throttle:playback')
+        ->name('my-training.playback');
+    Route::post('/my-training/{assignment}/lessons/{lesson}/events', [TrainingPlaybackController::class, 'ingest'])
+        ->middleware('throttle:compliance-events')
+        ->name('my-training.events');
 
     Route::middleware(EnsureUserCanAccessControlCenter::class)->group(function (): void {
         Route::livewire('/courses', 'courses.index')

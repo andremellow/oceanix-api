@@ -101,6 +101,16 @@ composer test
 ./vendor/bin/pint --test
 ```
 
+### Scheduled work
+
+| Command | Cadence | Purpose |
+| --- | --- | --- |
+| `oceanix:materialize-requirements` | hourly | Create the assignments active requirements currently demand |
+| `oceanix:update-overdue` | daily | Move open assignments past their deadline to overdue |
+| `oceanix:sync-videos` | every 10 min | Reconcile videos still encoding at the provider |
+
+All three are idempotent and safe to retry.
+
 ## Project status
 
 Phase 1 (foundation) is in place: authentication, authorization, the complete data model, the

@@ -59,6 +59,11 @@ Do not duplicate query logic across components; extract it into a Service.
    public URL is ever persisted.
 7. **Compliance is derived from materialized assignments**, never from the user's current
    department or job function.
+8. **Watch progress is credited only for playback that could have happened in real time.**
+   A reported position that jumps further than wall-clock time allows is stored as evidence
+   and ignored for progress — see `LessonProgressProjector`.
+9. **The assessment is gated server-side.** `AnswerQuestion` refuses an answer whose lesson
+   has not met its watch threshold, whatever the page renders.
 
 ## Localization — English-first source
 

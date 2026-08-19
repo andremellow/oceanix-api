@@ -20,7 +20,7 @@ class SyncVideoAsset
 
     public function handle(Video $video): Video
     {
-        if ($video->status === VideoStatus::Ready) {
+        if ($video->status === VideoStatus::Ready && filled($video->metadata['hls'] ?? null)) {
             return $video;
         }
 
