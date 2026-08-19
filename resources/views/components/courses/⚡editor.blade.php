@@ -566,18 +566,12 @@ new class extends Component
                             <flux:input wire:model.blur="lessons.{{ $lessonIndex }}.title" class="admin-control" :label="__('Lesson title')" />
                             <div class="grid grid-cols-2 gap-4">
                                 <flux:field>
-                                    <div class="flex items-center gap-1.5">
-                                        <flux:label>{{ __('Watch threshold (%)') }}</flux:label>
-                                        <x-field-hint :text="__('ui.watch_threshold_help')" />
-                                    </div>
+                                    <x-field-label :hint="__('ui.watch_threshold_help')">{{ __('Watch threshold (%)') }}</x-field-label>
                                     <flux:input type="number" min="1" max="100" wire:model.blur="lessons.{{ $lessonIndex }}.minimum_watch_percentage" class="admin-control" />
                                     <flux:error name="lessons.{{ $lessonIndex }}.minimum_watch_percentage" />
                                 </flux:field>
                                 <flux:field>
-                                    <div class="flex items-center gap-1.5">
-                                        <flux:label>{{ __('Passing score (%)') }}</flux:label>
-                                        <x-field-hint :text="__('ui.passing_score_help')" />
-                                    </div>
+                                    <x-field-label :hint="__('ui.passing_score_help')">{{ __('Passing score (%)') }}</x-field-label>
                                     <flux:input type="number" min="1" max="100" wire:model.blur="lessons.{{ $lessonIndex }}.passing_score" class="admin-control" />
                                     <flux:error name="lessons.{{ $lessonIndex }}.passing_score" />
                                 </flux:field>
@@ -635,10 +629,7 @@ new class extends Component
                                                 @endforeach
                                             </flux:select>
                                             <flux:field>
-                                                <div class="flex items-center gap-1.5">
-                                                    <flux:label>{{ __('Attempts') }}</flux:label>
-                                                    <x-field-hint :text="__('ui.attempts_help')" />
-                                                </div>
+                                                <x-field-label :hint="__('ui.attempts_help')">{{ __('Attempts') }}</x-field-label>
                                                 <flux:input type="number" min="1" max="10" wire:model.blur="lessons.{{ $lessonIndex }}.questions.{{ $questionIndex }}.max_attempts" class="admin-control" />
                                                 <flux:error name="lessons.{{ $lessonIndex }}.questions.{{ $questionIndex }}.max_attempts" />
                                             </flux:field>

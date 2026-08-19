@@ -236,6 +236,11 @@ a percentage, a count — inline help wraps and drags the whole row out of align
 explanation moves behind `x-field-hint`: an icon beside the label, the text in a tooltip and
 in the trigger's accessible name, so it is reachable by keyboard and by screen reader.
 
+Compose it with `x-field-label`, never by wrapping the label in a div. Flux styles and spaces
+a label only while `ui-label` is a direct child of the field, and the element is `inline-flex`
+with a small natural offset, so a wrapper silently lifts the control a few pixels above every
+other field in the row.
+
 ### 6.6 Tables
 
 White body, muted header, uppercase compact column labels, comfortable cell padding, subtle row

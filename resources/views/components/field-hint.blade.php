@@ -8,7 +8,8 @@
 --}}
 <flux:tooltip :content="$text">
     <button type="button"
-        class="grid size-4 shrink-0 place-items-center rounded-full text-[#9aa3a9] transition hover:text-[#1c6b84] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3e8ba3]"
+        {{ $attributes->merge(['class' => 'grid size-4 shrink-0 place-items-center rounded-full text-[#9aa3a9] transition hover:text-[#1c6b84] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3e8ba3]']) }}
+        x-on:click.stop.prevent
         aria-label="{{ $text }}">
         <flux:icon.information-circle class="size-4" />
     </button>
