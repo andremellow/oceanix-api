@@ -231,6 +231,11 @@ relying on opacity. Primary admin action uses `.admin-primary-action`.
 
 Every input needs a visible label. Placeholder text is supplementary and never the only label.
 
+Help text goes inline only where the column is wide enough for prose. In a narrow field —
+a percentage, a count — inline help wraps and drags the whole row out of alignment, so the
+explanation moves behind `x-field-hint`: an icon beside the label, the text in a tooltip and
+in the trigger's accessible name, so it is reachable by keyboard and by screen reader.
+
 ### 6.6 Tables
 
 White body, muted header, uppercase compact column labels, comfortable cell padding, subtle row

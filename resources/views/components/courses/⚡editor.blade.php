@@ -565,8 +565,22 @@ new class extends Component
                         <div class="grid gap-4 lg:grid-cols-2">
                             <flux:input wire:model.blur="lessons.{{ $lessonIndex }}.title" class="admin-control" :label="__('Lesson title')" />
                             <div class="grid grid-cols-2 gap-4">
-                                <flux:input type="number" min="1" max="100" wire:model.blur="lessons.{{ $lessonIndex }}.minimum_watch_percentage" class="admin-control" :label="__('Watch threshold (%)')" :description:trailing="__('ui.watch_threshold_help')" />
-                                <flux:input type="number" min="1" max="100" wire:model.blur="lessons.{{ $lessonIndex }}.passing_score" class="admin-control" :label="__('Passing score (%)')" :description:trailing="__('ui.passing_score_help')" />
+                                <flux:field>
+                                    <div class="flex items-center gap-1.5">
+                                        <flux:label>{{ __('Watch threshold (%)') }}</flux:label>
+                                        <x-field-hint :text="__('ui.watch_threshold_help')" />
+                                    </div>
+                                    <flux:input type="number" min="1" max="100" wire:model.blur="lessons.{{ $lessonIndex }}.minimum_watch_percentage" class="admin-control" />
+                                    <flux:error name="lessons.{{ $lessonIndex }}.minimum_watch_percentage" />
+                                </flux:field>
+                                <flux:field>
+                                    <div class="flex items-center gap-1.5">
+                                        <flux:label>{{ __('Passing score (%)') }}</flux:label>
+                                        <x-field-hint :text="__('ui.passing_score_help')" />
+                                    </div>
+                                    <flux:input type="number" min="1" max="100" wire:model.blur="lessons.{{ $lessonIndex }}.passing_score" class="admin-control" />
+                                    <flux:error name="lessons.{{ $lessonIndex }}.passing_score" />
+                                </flux:field>
                             </div>
                         </div>
                         <flux:textarea wire:model.blur="lessons.{{ $lessonIndex }}.description" class="admin-control mt-4" :label="__('Lesson description')" rows="2" />
@@ -620,7 +634,14 @@ new class extends Component
                                                     <option value="{{ $case->value }}">{{ $case->label() }}</option>
                                                 @endforeach
                                             </flux:select>
-                                            <flux:input type="number" min="1" max="10" wire:model.blur="lessons.{{ $lessonIndex }}.questions.{{ $questionIndex }}.max_attempts" class="admin-control" :label="__('Attempts')" :description:trailing="__('ui.attempts_help')" />
+                                            <flux:field>
+                                                <div class="flex items-center gap-1.5">
+                                                    <flux:label>{{ __('Attempts') }}</flux:label>
+                                                    <x-field-hint :text="__('ui.attempts_help')" />
+                                                </div>
+                                                <flux:input type="number" min="1" max="10" wire:model.blur="lessons.{{ $lessonIndex }}.questions.{{ $questionIndex }}.max_attempts" class="admin-control" />
+                                                <flux:error name="lessons.{{ $lessonIndex }}.questions.{{ $questionIndex }}.max_attempts" />
+                                            </flux:field>
                                             <flux:button wire:click="removeQuestion({{ $lessonIndex }}, {{ $questionIndex }})" wire:confirm="{{ __('ui.confirm_remove_question') }}" variant="ghost" size="sm" icon="trash" :aria-label="__('Remove question')" />
                                         </div>
 
