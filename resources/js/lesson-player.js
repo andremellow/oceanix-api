@@ -64,9 +64,18 @@ document.addEventListener('alpine:init', () => {
 
             this.flushTimer = setInterval(() => this.flush(), 10000)
 
-            // A batch in flight must not be lost when the tab goes away.
-            document.addEventListener('visibilitychange', () => document.hidden && this.flush())
-            window.addEventListener('beforeunload', () => this.flush())
+            // Leaving mid-segment must not discard the seconds since the last checkpoint,
+            // so stamp the current position before sending what is queued.
+            document.addEventListener('visibilitychange', () => document.hidden && this.checkpoint())
+            window.addEventListener('beforeunload', () => this.checkpoint())
+        },
+
+        checkpoint() {
+            if (this.$refs.video.currentTime > 0) {
+                this.record('video.progressed')
+            }
+
+            this.flush()
         },
 
         destroy() {
