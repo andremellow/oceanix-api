@@ -27,6 +27,8 @@ return [
     'login_subtitle' => 'Use your corporate account to access your training and compliance record.',
     'login_action' => 'Continue with corporate account',
     'login_security' => 'Protected by your organization identity provider',
+    'local_development' => 'Local development',
+    'local_sign_in' => 'Sign in as :email',
 
     // Dashboard
     'operation_overview' => 'Operation overview',

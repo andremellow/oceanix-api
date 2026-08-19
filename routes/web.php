@@ -5,6 +5,7 @@ use App\Http\Controllers\CertificateVerificationController;
 use App\Http\Middleware\EnsureUserCanAccessControlCenter;
 use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\EnsureUserIsAdmin;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -27,6 +28,22 @@ Route::post('/locale/{locale}', function (string $locale) {
 
 Route::middleware('guest')->group(function (): void {
     Route::livewire('/login', 'auth.login')->name('login');
+
+    // Local-only bypass so the application can be opened before WorkOS is configured.
+    // Registered only in the local environment and only for the single configured
+    // address; it authenticates nobody else.
+    if (app()->environment('local') && filled(config('oceanix.local_auth_email'))) {
+        Route::get('/auth/local', function () {
+            $user = User::query()->firstWhere('email', config('oceanix.local_auth_email'));
+
+            abort_if($user === null, 404);
+
+            Auth::login($user, remember: true);
+            request()->session()->regenerate();
+
+            return redirect()->intended(route('dashboard'));
+        })->name('auth.local');
+    }
 
     Route::middleware('throttle:auth')->group(function (): void {
         Route::get('/auth/workos/redirect', [WorkosController::class, 'redirect'])->name('auth.workos.redirect');

@@ -33,6 +33,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Local development sign-in
+    |--------------------------------------------------------------------------
+    |
+    | Email allowed to sign in without the identity provider, so the application can be
+    | opened before WorkOS is configured. The route only exists when the application
+    | environment is `local` AND this value is set — it is never registered in any other
+    | environment, and it can only authenticate this exact address.
+    |
+    */
+
+    'local_auth_email' => env('LOCAL_AUTH_EMAIL'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Playback authorization
     |--------------------------------------------------------------------------
     |

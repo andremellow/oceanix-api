@@ -27,6 +27,8 @@ return [
     'login_subtitle' => 'Use sua conta corporativa para acessar seus treinamentos e seu histórico de conformidade.',
     'login_action' => 'Continuar com a conta corporativa',
     'login_security' => 'Protegido pelo provedor de identidade da sua organização',
+    'local_development' => 'Desenvolvimento local',
+    'local_sign_in' => 'Entrar como :email',
 
     // Dashboard
     'operation_overview' => 'Panorama da operação',

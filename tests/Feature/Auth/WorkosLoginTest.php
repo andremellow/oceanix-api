@@ -4,6 +4,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\SocialLogin\OauthStateSigner;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Route;
 
 it('shows the sign-in page to guests', function (): void {
     $this->get(route('login'))
@@ -125,4 +126,11 @@ it('refuses to provision an unknown identity when auto-provisioning is off', fun
         ->assertRedirect(route('login'));
 
     expect(User::query()->where('email', 'stranger@example.com')->exists())->toBeFalse();
+});
+
+it('does not register the local sign-in bypass outside the local environment', function (): void {
+    // The test environment is not `local`, so the route must not exist at all.
+    expect(Route::has('auth.local'))->toBeFalse();
+
+    $this->get('/auth/local')->assertNotFound();
 });
