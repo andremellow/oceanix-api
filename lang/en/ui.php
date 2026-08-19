@@ -108,7 +108,7 @@ return [
     'version_description_note' => 'This is what the employee reads when they open the training. It is frozen when the version is published, so a later rename of the course never rewrites what someone was shown.',
     'video_upload_hint' => 'Uploads go straight to the video provider, not through this server.',
     'fake_video_provider' => 'Local video provider in use',
-    'fake_video_provider_help' => 'Cloudflare Stream is not configured, so uploads are stored on this machine and marked ready without encoding. Configure CLOUDFLARE_STREAM_ACCOUNT_ID to use the real provider.',
+    'fake_video_provider_help' => 'Cloudflare Stream is not configured, so uploads are stored on this machine and marked ready without encoding. Set both CLOUDFLARE_STREAM_ACCOUNT_ID and CLOUDFLARE_STREAM_API_TOKEN to use the real provider.',
     'watch_threshold_help' => 'How much of the video must be watched before the assessment unlocks.',
     'passing_score_help' => 'How much of the assessment must be correct to pass this lesson.',
     'attempts_help' => 'Tries allowed on this question before the lesson attempt fails.',

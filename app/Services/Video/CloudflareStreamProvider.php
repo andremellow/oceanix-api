@@ -27,6 +27,16 @@ class CloudflareStreamProvider implements VideoProvider
         return 'cloudflare_stream';
     }
 
+    /**
+     * Both credentials are required: the account id addresses the account, the API token
+     * authenticates against it. Having only one is the same as having neither.
+     */
+    public static function isConfigured(): bool
+    {
+        return filled(config('services.cloudflare_stream.account_id'))
+            && filled(config('services.cloudflare_stream.api_token'));
+    }
+
     public function createUpload(string $title, int $maxDurationSeconds): VideoUpload
     {
         $response = $this->request()->post($this->accountUrl('/stream/direct_upload'), [

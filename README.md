@@ -50,7 +50,7 @@ seeds in `local` and `testing`.
 | `ADMIN_EMAILS` | Comma-separated emails that receive the admin profile on sign-in |
 | `WORKOS_CLIENT_ID` / `WORKOS_API_KEY` | AuthKit credentials |
 | `OCEANIX_AUTO_PROVISION_USERS` | `false` once Directory Sync provisions the workforce |
-| `CLOUDFLARE_STREAM_ACCOUNT_ID` / `_API_TOKEN` | Private video ingestion and signed playback |
+| `CLOUDFLARE_STREAM_ACCOUNT_ID` + `CLOUDFLARE_STREAM_API_TOKEN` | Private video ingestion and signed playback. Both are required — with either one missing, a local environment falls back to the file-backed development provider and every other environment fails loudly. |
 | `OCEANIX_PLAYBACK_TOKEN_MINUTES` | Lifetime of a signed playback token |
 
 ## Architecture

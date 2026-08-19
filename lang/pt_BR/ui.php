@@ -108,7 +108,7 @@ return [
     'version_description_note' => 'É isto que o funcionário lê ao abrir o treinamento. Fica congelado quando a versão é publicada, então renomear o curso depois nunca reescreve o que alguém viu.',
     'video_upload_hint' => 'O envio vai direto para o provedor de vídeo, sem passar por este servidor.',
     'fake_video_provider' => 'Provedor de vídeo local em uso',
-    'fake_video_provider_help' => 'O Cloudflare Stream não está configurado, então os envios ficam nesta máquina e são marcados como prontos sem encoding. Configure CLOUDFLARE_STREAM_ACCOUNT_ID para usar o provedor real.',
+    'fake_video_provider_help' => 'O Cloudflare Stream não está configurado, então os envios ficam nesta máquina e são marcados como prontos sem encoding. Preencha CLOUDFLARE_STREAM_ACCOUNT_ID e CLOUDFLARE_STREAM_API_TOKEN para usar o provedor real.',
     'watch_threshold_help' => 'Quanto do vídeo precisa ser assistido para liberar a avaliação.',
     'passing_score_help' => 'Quanto da avaliação precisa estar correto para aprovar nesta lesson.',
     'attempts_help' => 'Tentativas permitidas nesta questão antes de a lesson ser reprovada.',

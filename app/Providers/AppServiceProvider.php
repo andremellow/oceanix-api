@@ -43,8 +43,7 @@ class AppServiceProvider extends ServiceProvider
         // exist. Any other environment always gets the real provider, configured or not:
         // failing loudly beats silently serving fake video.
         $this->app->bind(VideoProvider::class, function ($app) {
-            $useFake = $app->environment('local')
-                && blank(config('services.cloudflare_stream.account_id'));
+            $useFake = $app->environment('local') && ! CloudflareStreamProvider::isConfigured();
 
             return $app->make($useFake ? FakeVideoProvider::class : CloudflareStreamProvider::class);
         });
