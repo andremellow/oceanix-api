@@ -53,6 +53,17 @@ seeds in `local` and `testing`.
 | `CLOUDFLARE_STREAM_ACCOUNT_ID` + `CLOUDFLARE_STREAM_API_TOKEN` | Private video ingestion and signed playback. Both are required — with either one missing, a local environment falls back to the file-backed development provider and every other environment fails loudly. |
 | `OCEANIX_PLAYBACK_TOKEN_MINUTES` | Lifetime of a signed playback token |
 
+### Verifying the video provider
+
+```bash
+php artisan oceanix:video-check
+```
+
+Checks the token, that it reaches this account's Stream, and that it may write — a valid
+token can still point at the wrong account or lack write scope, and both would only surface
+when someone uploads a lesson video. The write check creates an upload slot and removes it;
+pass `--no-write` to skip it.
+
 ## Architecture
 
 ```text

@@ -33,6 +33,16 @@ class FakeVideoProvider implements VideoProvider
         return 'local_fake';
     }
 
+    /** @return list<array{label: string, ok: bool, detail: string|null}> */
+    public function verifyConfiguration(bool $write = true): array
+    {
+        return [[
+            'label' => 'Local development provider',
+            'ok' => true,
+            'detail' => 'Files are stored on the local disk. Cloudflare is not being contacted.',
+        ]];
+    }
+
     public function createUpload(string $title, int $maxDurationSeconds): VideoUpload
     {
         $assetId = (string) Str::uuid();

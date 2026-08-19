@@ -18,6 +18,17 @@ interface VideoProvider
 {
     public function key(): string;
 
+    /**
+     * Verify that this provider is usable with the current configuration.
+     *
+     * Meant for an operator running a check, not for the request path: it may perform
+     * network calls. `$write` also exercises a mutating call, which is the only way to
+     * prove the credentials carry write scope.
+     *
+     * @return list<array{label: string, ok: bool, detail: string|null}>
+     */
+    public function verifyConfiguration(bool $write = true): array;
+
     public function createUpload(string $title, int $maxDurationSeconds): VideoUpload;
 
     public function getAssetStatus(string $assetId): VideoAssetStatus;
