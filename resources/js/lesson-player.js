@@ -1,5 +1,11 @@
 import Hls from 'hls.js'
 
+/** Largest jump still treated as ordinary playback rather than a seek. */
+const MAX_NATURAL_ADVANCE_SECONDS = 3
+
+/** Slack so ordinary playback is never mistaken for scrubbing ahead. */
+const SEEK_TOLERANCE_SECONDS = 1.5
+
 /**
  * Lesson player.
  *
@@ -33,27 +39,33 @@ document.addEventListener('alpine:init', () => {
                 this.flush()
             })
 
+            // The high-water mark may only advance the way playback advances: in small
+            // steps, while not seeking. A jump — dragged or clicked — can never raise it,
+            // which is what a naive `currentTime > watched` check let through, because the
+            // browser fires timeupdate with the new position before the seek is observed.
             this.$refs.video.addEventListener('timeupdate', () => {
-                const current = this.$refs.video.currentTime
+                const video = this.$refs.video
 
-                if (current > this.watched) {
-                    this.watched = current
+                if (video.seeking) {
+                    return
+                }
+
+                const advanced = video.currentTime - this.watched
+
+                if (advanced > 0 && advanced < MAX_NATURAL_ADVANCE_SECONDS) {
+                    this.watched = video.currentTime
                 }
             })
 
             // Forward scrubbing is clamped back to what has been watched. Rewinding is free.
-            this.$refs.video.addEventListener('seeking', () => {
-                const current = this.$refs.video.currentTime
+            this.$refs.video.addEventListener('seeking', () => this.clampSeek())
 
-                if (! this.unlocked && current > this.watched + 1.5) {
-                    this.$refs.video.currentTime = this.watched
-                    this.blockedSeek = true
-                    setTimeout(() => { this.blockedSeek = false }, 2500)
-
-                    return
-                }
-
-                this.record('video.seeked')
+            // Belt and braces: whatever slipped past `seeking` is corrected once the seek
+            // lands, so a single event ordering quirk cannot open the whole timeline.
+            this.$refs.video.addEventListener('seeked', () => {
+                this.clampSeek()
+                    ? this.record('video.rewatched')
+                    : this.record('video.seeked')
             })
 
             this.progressTimer = setInterval(() => {
@@ -68,6 +80,21 @@ document.addEventListener('alpine:init', () => {
             // so stamp the current position before sending what is queued.
             document.addEventListener('visibilitychange', () => document.hidden && this.checkpoint())
             window.addEventListener('beforeunload', () => this.checkpoint())
+        },
+
+        /** Returns true when a forward seek was refused. */
+        clampSeek() {
+            const video = this.$refs.video
+
+            if (this.unlocked || video.currentTime <= this.watched + SEEK_TOLERANCE_SECONDS) {
+                return false
+            }
+
+            video.currentTime = this.watched
+            this.blockedSeek = true
+            setTimeout(() => { this.blockedSeek = false }, 2500)
+
+            return true
         },
 
         checkpoint() {
