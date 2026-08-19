@@ -50,9 +50,7 @@ new class extends Component
         :kicker="__('ui.content')"
         :title="__('Courses')"
         :description="__('ui.courses_page_description')">
-        @can('create', App\Models\Course::class)
-            <flux:button variant="primary" class="admin-primary-action" disabled>{{ __('New course') }}</flux:button>
-        @endcan
+        <span class="status-pill status-pill--accent">{{ trans_choice('ui.results_count', $courses->total(), ['count' => $courses->total()]) }}</span>
     </x-page-hero>
 
     <div class="form-panel rounded-[20px] border border-[#dde3e7] p-4 sm:p-5">

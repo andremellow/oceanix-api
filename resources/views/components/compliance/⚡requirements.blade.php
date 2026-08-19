@@ -30,9 +30,7 @@ new class extends Component
         :kicker="__('ui.compliance')"
         :title="__('Training requirements')"
         :description="__('ui.requirements_page_description')">
-        @can('create', App\Models\TrainingRequirement::class)
-            <flux:button variant="primary" class="admin-primary-action" disabled>{{ __('New requirement') }}</flux:button>
-        @endcan
+        <span class="status-pill status-pill--accent">{{ trans_choice('ui.results_count', $requirements->count(), ['count' => $requirements->count()]) }}</span>
     </x-page-hero>
 
     @if ($requirements->isEmpty())

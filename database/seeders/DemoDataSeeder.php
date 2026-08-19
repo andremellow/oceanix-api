@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Enums\AssignmentOrigin;
 use App\Enums\AssignmentStatus;
+use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
 use App\Enums\FrequencyType;
 use App\Enums\RenewalBasis;
@@ -126,7 +127,10 @@ class DemoDataSeeder extends Seeder
                 }
             }
 
-            $course->update(['current_published_version_id' => $version->id]);
+            $course->update([
+                'current_published_version_id' => $version->id,
+                'status' => CourseStatus::Active,
+            ]);
 
             return $course->refresh();
         })->keyBy('code');
