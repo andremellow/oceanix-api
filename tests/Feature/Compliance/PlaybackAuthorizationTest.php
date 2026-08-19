@@ -29,6 +29,11 @@ function fakeVideoProvider(): void
             return 'fake';
         }
 
+        public function verifyConfiguration(bool $write = true): array
+        {
+            return [['label' => 'Test double', 'ok' => true, 'detail' => null]];
+        }
+
         public function createUpload(string $title, int $maxDurationSeconds): VideoUpload
         {
             return new VideoUpload('fake', 'asset', 'https://upload.test');
