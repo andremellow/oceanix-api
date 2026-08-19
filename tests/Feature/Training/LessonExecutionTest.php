@@ -203,3 +203,56 @@ it('starts a new numbered attempt instead of reopening a finished one', function
         ->and($second->attempt_number)->toBe(2)
         ->and($first->fresh()->status)->toBe(AttemptStatus::Failed);
 });
+
+it('counts a rewatched stretch once, not twice', function (): void {
+    [$assignment, $lesson] = trainableAssignment();
+    $recorder = app(ComplianceEventRecorder::class);
+    $clock = Carbon::now();
+
+    // Watch the first half, rewind, watch it again. Half the video has been seen.
+    foreach ([0, 10, 20, 30, 40, 50, 0, 10, 20, 30, 40, 50] as $position) {
+        $clock = $clock->copy()->addSeconds(10);
+        Carbon::setTestNow($clock);
+
+        $recorder->record(ComplianceEventType::VideoProgressed, $assignment->user_id, [
+            'uuid' => (string) Str::uuid(),
+            'assignment_id' => $assignment->id,
+            'lesson_id' => $lesson->id,
+            'position_seconds' => $position,
+        ]);
+    }
+
+    $progress = app(LessonProgressProjector::class)->project($assignment, $lesson);
+
+    expect($progress->percentage_watched)->toBe(50)
+        ->and($progress->watched_seconds)->toBe(50);
+});
+
+it('unions overlapping stretches instead of adding them up', function (): void {
+    [$assignment, $lesson] = trainableAssignment();
+    $recorder = app(ComplianceEventRecorder::class);
+    $clock = Carbon::now();
+
+    // 0→40, then back to 20 and on to 60: 60 distinct seconds, not 80.
+    foreach ([0, 20, 40, 20, 40, 60] as $position) {
+        $clock = $clock->copy()->addSeconds(25);
+        Carbon::setTestNow($clock);
+
+        $recorder->record(ComplianceEventType::VideoProgressed, $assignment->user_id, [
+            'uuid' => (string) Str::uuid(),
+            'assignment_id' => $assignment->id,
+            'lesson_id' => $lesson->id,
+            'position_seconds' => $position,
+        ]);
+    }
+
+    expect(app(LessonProgressProjector::class)->project($assignment, $lesson)->watched_seconds)->toBe(60);
+});
+
+it('reaches the threshold from a single honest watch', function (): void {
+    [$assignment, $lesson] = trainableAssignment();
+
+    watch($assignment, $lesson, 95);
+
+    expect($assignment->lessonProgress()->first()->percentage_watched)->toBeGreaterThanOrEqual(90);
+});

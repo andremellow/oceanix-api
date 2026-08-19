@@ -11,10 +11,13 @@ use App\Models\UserTrainingAssignment;
 /**
  * Rebuilds the operational progress row from the append-only event trail.
  *
- * Client-reported positions are evidence, not truth. A position that jumps further than
- * wall-clock time allows cannot have been watched, so it is preserved as an event but never
- * credited as progress — otherwise a scripted seek would satisfy the watch threshold.
- * See docs/product-spec.md §7 and §22.
+ * Progress is coverage of the video, not time spent in front of it. Playback is collected
+ * as intervals and unioned, so watching the first half twice counts once — the threshold
+ * asks whether the material was seen, not whether the player ran long enough.
+ *
+ * Client-reported positions are evidence, not truth. An interval that advances further than
+ * wall-clock time allows cannot have been watched, so it is preserved as an event and
+ * discarded for progress. See docs/product-spec.md §7 and §22.
  */
 class LessonProgressProjector
 {
@@ -38,7 +41,7 @@ class LessonProgressProjector
             ->orderBy('id')
             ->get();
 
-        $credited = 0;
+        $intervals = [];
         $lastPosition = 0;
         $previous = null;
 
@@ -46,18 +49,21 @@ class LessonProgressProjector
             $position = (int) ($event->position_seconds ?? 0);
 
             if ($previous !== null) {
+                $from = (int) ($previous->position_seconds ?? 0);
                 $elapsed = (int) $previous->received_at->diffInSeconds($event->received_at, absolute: true);
-                $advanced = $position - (int) ($previous->position_seconds ?? 0);
+                $advanced = $position - $from;
 
-                // Credit only playback that could plausibly have happened in real time.
+                // Keep only playback that could plausibly have happened in real time.
                 if ($advanced > 0 && $advanced <= $elapsed + self::DRIFT_TOLERANCE_SECONDS) {
-                    $credited += $advanced;
+                    $intervals[] = [$from, $position];
                 }
             }
 
             $lastPosition = $position;
             $previous = $event;
         }
+
+        $credited = $this->coveredSeconds($intervals);
 
         $percentage = $duration !== null && $duration > 0
             ? (int) min(100, round($credited / $duration * 100))
@@ -77,6 +83,36 @@ class LessonProgressProjector
         ])->save();
 
         return $progress->refresh();
+    }
+
+    /**
+     * Total distinct seconds covered by the watched intervals.
+     *
+     * @param  list<array{0: int, 1: int}>  $intervals
+     */
+    private function coveredSeconds(array $intervals): int
+    {
+        if ($intervals === []) {
+            return 0;
+        }
+
+        usort($intervals, fn (array $a, array $b): int => $a[0] <=> $b[0]);
+
+        $covered = 0;
+        [$start, $end] = $intervals[0];
+
+        foreach (array_slice($intervals, 1) as [$from, $to]) {
+            if ($from > $end) {
+                $covered += $end - $start;
+                [$start, $end] = [$from, $to];
+
+                continue;
+            }
+
+            $end = max($end, $to);
+        }
+
+        return $covered + ($end - $start);
     }
 
     /** A failed lesson must be watched again before the next assessment attempt. */
