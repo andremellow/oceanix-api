@@ -187,3 +187,35 @@ it('denies publishing to someone who can edit but not publish', function (): voi
         ->call('confirmPublish')
         ->assertForbidden();
 });
+
+it('keeps the version title tracking the course title while it is a draft', function (): void {
+    $course = draftCourse();
+    $version = $course->versions()->first();
+
+    Livewire::actingAs(adminUser())
+        ->test('courses.editor', ['course' => $course])
+        ->set('courseForm.title', 'Hydrogen sulphide awareness');
+
+    expect($course->fresh()->title)->toBe('Hydrogen sulphide awareness')
+        ->and($version->fresh()->title)->toBe('Hydrogen sulphide awareness');
+});
+
+it('freezes the version title when the course is renamed after publication', function (): void {
+    $course = draftCourse();
+    $version = $course->versions()->first();
+    $lesson = Lesson::factory()->create(['course_version_id' => $version->id]);
+    Video::factory()->create(['lesson_id' => $lesson->id]);
+    $question = Question::factory()->create(['lesson_id' => $lesson->id]);
+    QuestionOption::factory()->correct()->create(['question_id' => $question->id, 'position' => 1]);
+    QuestionOption::factory()->create(['question_id' => $question->id, 'position' => 2]);
+
+    Livewire::actingAs(adminUser())
+        ->test('courses.editor', ['course' => $course])
+        ->set('courseForm.title', 'Original wording')
+        ->call('publish');
+
+    // Renaming the course afterwards must not rewrite what the published edition said.
+    $course->fresh()->update(['title' => 'Renamed later']);
+
+    expect($version->fresh()->title)->toBe('Original wording');
+});

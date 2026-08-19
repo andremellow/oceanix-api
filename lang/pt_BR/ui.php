@@ -105,6 +105,7 @@ return [
     'back_to_course' => 'Voltar para o curso',
     'not_publishable_yet' => 'Esta versão ainda não pode ser publicada',
     'completion_rule_note' => 'O curso é concluído quando todas as lessons obrigatórias forem concluídas.',
+    'version_description_note' => 'É isto que o funcionário lê ao abrir o treinamento. Fica congelado quando a versão é publicada, então renomear o curso depois nunca reescreve o que alguém viu.',
     'video_upload_hint' => 'O envio vai direto para o provedor de vídeo, sem passar por este servidor.',
     'fake_video_provider' => 'Provedor de vídeo local em uso',
     'fake_video_provider_help' => 'O Cloudflare Stream não está configurado, então os envios ficam nesta máquina e são marcados como prontos sem encoding. Configure CLOUDFLARE_STREAM_ACCOUNT_ID para usar o provedor real.',

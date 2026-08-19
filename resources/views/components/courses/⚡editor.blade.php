@@ -302,6 +302,15 @@ new class extends Component
 
         $this->course->update([$field => $field === 'code' ? strtoupper(trim((string) $value)) : $value]);
         $this->courseForm['code'] = $this->course->code;
+
+        // The version carries its own title so a published edition keeps the wording the
+        // employee actually saw. While it is still a draft there is nothing to preserve
+        // yet, so it simply tracks the course.
+        if ($field === 'title') {
+            $this->version->update(['title' => $this->course->title]);
+            $this->versionForm['title'] = $this->course->title;
+        }
+
         $this->touchSaved();
     }
 
@@ -507,11 +516,11 @@ new class extends Component
             <h2 class="text-base font-bold text-[#262d33]">{{ __('Version settings') }}</h2>
             <span class="status-pill status-pill--neutral">{{ __('Draft') }}</span>
         </div>
-        <div class="mt-4 grid gap-4">
-            <flux:input wire:model.blur="versionForm.title" class="admin-control" :label="__('Version title')" />
-            <flux:textarea wire:model.blur="versionForm.description" class="admin-control" :label="__('What this version covers')" rows="2" />
+        <div class="mt-4">
+            <flux:textarea wire:model.blur="versionForm.description" class="admin-control" :label="__('Description shown to the employee')" rows="3" />
+            <p class="mt-2 text-xs text-[#8a9298]">{{ __('ui.version_description_note') }}</p>
         </div>
-        <p class="mt-3 text-xs text-[#8a9298]">{{ __('ui.completion_rule_note') }}</p>
+        <p class="mt-4 border-t border-[#eef1f4] pt-4 text-xs text-[#8a9298]">{{ __('ui.completion_rule_note') }}</p>
     </section>
 
     {{-- Lessons --}}

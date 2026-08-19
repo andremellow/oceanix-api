@@ -35,7 +35,7 @@ new class extends Component
     <x-page-hero
         :kicker="$assignment->course->code"
         :title="$assignment->course->title"
-        :description="$assignment->courseVersion->description">
+        :description="$assignment->courseVersion->description ?: $assignment->course->description">
         <span class="status-pill {{ $assignment->status->pillModifier() }}">{{ $assignment->status->label() }}</span>
         <flux:button :href="route('my-training')" wire:navigate variant="ghost" size="sm">{{ __('ui.back_to_training') }}</flux:button>
     </x-page-hero>
