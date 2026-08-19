@@ -96,6 +96,29 @@ return [
     'no_activity' => 'No activity recorded',
     'no_activity_help' => 'Playback, answers and completion are recorded here as they happen.',
 
+    // Course editor
+    'course_editor' => 'Course editor',
+    'course_editor_description' => 'Everything in one screen. Changes save as you go; publishing freezes this version forever.',
+    'draft_version' => 'Draft · version :number',
+    'autosave_hint' => 'Changes save automatically',
+    'saved_at' => 'Saved at :time',
+    'back_to_course' => 'Back to course',
+    'not_publishable_yet' => 'This version is not ready to publish',
+    'completion_rule_note' => 'The course is complete when every required lesson is completed.',
+    'video_upload_hint' => 'Uploads go straight to the video provider, not through this server.',
+    'fake_video_provider' => 'Local video provider in use',
+    'fake_video_provider_help' => 'Cloudflare Stream is not configured, so uploads are stored on this machine and marked ready without encoding. Configure CLOUDFLARE_STREAM_ACCOUNT_ID to use the real provider.',
+    'confirm_remove_lesson' => 'Remove this lesson and everything in it?',
+    'confirm_remove_question' => 'Remove this question and its options?',
+    'no_questions' => 'No questions yet',
+    'no_questions_help' => 'A lesson needs at least one question before the version can be published.',
+    'no_lessons_draft' => 'This draft has no lessons',
+    'no_lessons_draft_help' => 'Add the first lesson, upload its video and write the assessment.',
+    'publish_confirm_title' => 'Publish version :number?',
+    'publish_confirm_body' => 'A published version becomes immutable. New assignments will point at it, and any later change requires a new draft version.',
+    'version_published' => 'Version :number published. It is now immutable.',
+    'new_course_help' => 'The course code is permanent. A first draft version is created with it.',
+
     // Courses
     'courses_page_description' => 'Course identity is permanent; each published version is an immutable, auditable edition.',
     'no_courses' => 'No courses yet',
@@ -114,6 +137,14 @@ return [
     'no_assignments' => 'No assignments found',
     'no_assignments_help' => 'Adjust the filters, or assign a course manually to someone.',
     'no_assignments_person_help' => 'Assignments appear here once a requirement applies or one is created manually.',
+
+    'requirement_saved' => 'Requirement saved.',
+    'requirement_status_changed' => 'Requirement status updated.',
+    'requirement_form_help' => 'A requirement declares who must hold a training and how often. It only starts creating obligations once it is active.',
+    'target_form_help' => 'Targets are explicit: everyone, a department, a job function, or the intersection of both.',
+    'manual_assignment_help' => 'Assigns a course to one person without a requirement. The published version is frozen at creation.',
+    'assignment_created' => 'Assignment created.',
+    'course_not_publishable' => 'This course has no published version to assign.',
 
     // Requirements
     'requirements_page_description' => 'Rules that declare who must hold which training and how often. A rule is not yet an obligation.',

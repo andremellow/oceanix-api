@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\WorkosController;
 use App\Http\Controllers\CertificateVerificationController;
+use App\Http\Controllers\DevVideoController;
 use App\Http\Middleware\EnsureUserCanAccessControlCenter;
 use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\EnsureUserIsAdmin;
@@ -25,6 +26,17 @@ Route::post('/locale/{locale}', function (string $locale) {
 
     return back();
 })->name('locale.update');
+
+// Local development video provider (see App\Services\Video\FakeVideoProvider). Signed,
+// short-lived URLs, and the routes do not exist outside the local environment.
+if (app()->environment('local')) {
+    Route::post('/dev/videos/{asset}', [DevVideoController::class, 'store'])
+        ->middleware('signed')
+        ->name('dev.video.upload');
+    Route::get('/dev/videos/{asset}', [DevVideoController::class, 'show'])
+        ->middleware('signed')
+        ->name('dev.video.play');
+}
 
 Route::middleware('guest')->group(function (): void {
     Route::livewire('/login', 'auth.login')->name('login');
@@ -65,6 +77,9 @@ Route::middleware('auth')->group(function (): void {
         Route::livewire('/courses/{course}', 'courses.show')
             ->middleware(EnsureUserHasPermission::class.':courses.view')
             ->name('courses.show');
+        Route::livewire('/courses/{course}/editor', 'courses.editor')
+            ->middleware(EnsureUserHasPermission::class.':courses.update')
+            ->name('courses.editor');
 
         Route::livewire('/requirements', 'compliance.requirements')
             ->middleware(EnsureUserHasPermission::class.':training-requirements.view')

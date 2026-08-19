@@ -96,6 +96,29 @@ return [
     'no_activity' => 'Nenhuma atividade registrada',
     'no_activity_help' => 'Reprodução, respostas e conclusão são registradas aqui conforme acontecem.',
 
+    // Course editor
+    'course_editor' => 'Editor de curso',
+    'course_editor_description' => 'Tudo em uma tela. As alterações são salvas conforme você edita; publicar congela esta versão para sempre.',
+    'draft_version' => 'Rascunho · versão :number',
+    'autosave_hint' => 'As alterações são salvas automaticamente',
+    'saved_at' => 'Salvo às :time',
+    'back_to_course' => 'Voltar para o curso',
+    'not_publishable_yet' => 'Esta versão ainda não pode ser publicada',
+    'completion_rule_note' => 'O curso é concluído quando todas as lessons obrigatórias forem concluídas.',
+    'video_upload_hint' => 'O envio vai direto para o provedor de vídeo, sem passar por este servidor.',
+    'fake_video_provider' => 'Provedor de vídeo local em uso',
+    'fake_video_provider_help' => 'O Cloudflare Stream não está configurado, então os envios ficam nesta máquina e são marcados como prontos sem encoding. Configure CLOUDFLARE_STREAM_ACCOUNT_ID para usar o provedor real.',
+    'confirm_remove_lesson' => 'Remover esta lesson e tudo o que está nela?',
+    'confirm_remove_question' => 'Remover esta questão e suas alternativas?',
+    'no_questions' => 'Nenhuma questão ainda',
+    'no_questions_help' => 'A lesson precisa de pelo menos uma questão antes de a versão ser publicada.',
+    'no_lessons_draft' => 'Este rascunho não tem lessons',
+    'no_lessons_draft_help' => 'Adicione a primeira lesson, envie o vídeo e escreva a avaliação.',
+    'publish_confirm_title' => 'Publicar a versão :number?',
+    'publish_confirm_body' => 'Uma versão publicada se torna imutável. Novas atribuições apontam para ela, e qualquer mudança depois exige uma nova versão em rascunho.',
+    'version_published' => 'Versão :number publicada. Agora ela é imutável.',
+    'new_course_help' => 'O código do curso é permanente. Uma primeira versão em rascunho é criada junto.',
+
     // Courses
     'courses_page_description' => 'A identidade do curso é permanente; cada versão publicada é uma edição imutável e auditável.',
     'no_courses' => 'Nenhum curso ainda',
@@ -114,6 +137,14 @@ return [
     'no_assignments' => 'Nenhuma atribuição encontrada',
     'no_assignments_help' => 'Ajuste os filtros ou atribua um curso manualmente para alguém.',
     'no_assignments_person_help' => 'As atribuições aparecem aqui quando uma regra passa a valer ou quando uma é criada manualmente.',
+
+    'requirement_saved' => 'Regra salva.',
+    'requirement_status_changed' => 'Status da regra atualizado.',
+    'requirement_form_help' => 'Uma regra declara quem deve possuir um treinamento e com qual frequência. Ela só começa a criar obrigações quando estiver ativa.',
+    'target_form_help' => 'Os públicos são explícitos: todos, um setor, uma função ou a interseção dos dois.',
+    'manual_assignment_help' => 'Atribui um curso a uma pessoa sem regra. A versão publicada é congelada na criação.',
+    'assignment_created' => 'Atribuição criada.',
+    'course_not_publishable' => 'Este curso não tem versão publicada para atribuir.',
 
     // Requirements
     'requirements_page_description' => 'Regras que declaram quem deve possuir qual treinamento e com qual frequência. Uma regra ainda não é uma obrigação.',

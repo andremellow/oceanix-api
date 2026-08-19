@@ -1,5 +1,14 @@
 @import 'tailwindcss';
 
+/*
+| The authenticated shell is light-only (design system §3.3). Without this, Flux's `dark:`
+| utilities fall back to Tailwind's default `prefers-color-scheme` strategy and every Flux
+| surface — modals above all — turns dark on a machine set to dark mode, while our own
+| light surfaces stay light. Scoping the variant to an explicit `.dark` class means the
+| appearance is decided by the application, not by the operating system.
+*/
+@custom-variant dark (&:where(.dark, .dark *));
+
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../vendor/livewire/flux/stubs/**/*.blade.php';
 @source '../../vendor/livewire/flux-pro/stubs/**/*.blade.php';

@@ -1,10 +1,14 @@
 <?php
 
+use App\Actions\Assignments\CreateManualAssignment;
 use App\Enums\AssignmentStatus;
 use App\Models\Course;
 use App\Models\Department;
 use App\Models\JobFunction;
+use App\Models\User;
+use App\Models\UserTrainingAssignment;
 use App\Services\Compliance\ComplianceOverview;
+use Illuminate\Support\Carbon;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -24,9 +28,60 @@ new class extends Component
 
     public string $due_bucket = '';
 
+    public bool $assigning = false;
+
+    /** @var array<string, string> */
+    public array $assignment = ['user_id' => '', 'course_id' => '', 'due_at' => '', 'available_at' => ''];
+
     public function updated(): void
     {
         $this->resetPage();
+    }
+
+    public function startAssigning(): void
+    {
+        $this->authorize('create', UserTrainingAssignment::class);
+
+        $this->assignment = [
+            'user_id' => '',
+            'course_id' => '',
+            'due_at' => now()->addDays(30)->toDateString(),
+            'available_at' => '',
+        ];
+        $this->assigning = true;
+    }
+
+    /** Assigns a course to one person without a requirement — docs/product-spec.md §9. */
+    public function assign(CreateManualAssignment $action): void
+    {
+        $this->authorize('create', UserTrainingAssignment::class);
+
+        $validated = $this->validate([
+            'assignment.user_id' => ['required', 'exists:users,id'],
+            'assignment.course_id' => ['required', 'exists:courses,id'],
+            'assignment.due_at' => ['nullable', 'date'],
+            'assignment.available_at' => ['nullable', 'date'],
+        ])['assignment'];
+
+        $course = Course::query()->findOrFail($validated['course_id']);
+
+        if ($course->current_published_version_id === null) {
+            $this->addError('assignment.course_id', __('ui.course_not_publishable'));
+
+            return;
+        }
+
+        $action->handle(
+            User::query()->findOrFail($validated['user_id']),
+            $course,
+            dueAt: $validated['due_at'] ? Carbon::parse($validated['due_at'])->endOfDay() : null,
+            availableAt: $validated['available_at'] ? Carbon::parse($validated['available_at'])->startOfDay() : null,
+        );
+
+        $this->assigning = false;
+        $this->resetPage();
+
+        session()->flash('status', __('ui.assignment_created'));
     }
 
     public function clearFilters(): void
@@ -50,6 +105,8 @@ new class extends Component
             'departments' => Department::query()->active()->orderBy('name')->get(),
             'jobFunctions' => JobFunction::query()->active()->orderBy('name')->get(),
             'courses' => Course::query()->orderBy('title')->get(),
+            'assignableCourses' => Course::query()->assignable()->orderBy('title')->get(),
+            'people' => User::query()->eligibleForTraining()->orderBy('name')->get(),
             'buckets' => $overview->dueBuckets(),
         ];
     }
@@ -62,7 +119,14 @@ new class extends Component
         :title="__('Assignments')"
         :description="__('ui.assignments_page_description')">
         <span class="status-pill status-pill--accent">{{ trans_choice('ui.results_count', $assignments->total(), ['count' => $assignments->total()]) }}</span>
+        @can('create', App\Models\UserTrainingAssignment::class)
+            <flux:button wire:click="startAssigning" variant="primary" class="admin-primary-action">{{ __('Assign training') }}</flux:button>
+        @endcan
     </x-page-hero>
+
+    @if (session('status'))
+        <flux:callout variant="success" :heading="session('status')" />
+    @endif
 
     <div class="form-panel rounded-[20px] border border-[#dde3e7] p-4 sm:p-5">
         <div class="grid gap-3 lg:grid-cols-3 xl:grid-cols-6">
@@ -151,4 +215,37 @@ new class extends Component
 
         <div>{{ $assignments->links() }}</div>
     @endif
+
+    <flux:modal wire:model.self="assigning" class="max-w-lg">
+        <form wire:submit="assign" class="space-y-5">
+            <div>
+                <flux:heading size="lg">{{ __('Assign training') }}</flux:heading>
+                <flux:text class="mt-2">{{ __('ui.manual_assignment_help') }}</flux:text>
+            </div>
+
+            <flux:select wire:model="assignment.user_id" class="admin-control" :label="__('Employee')">
+                <option value="">{{ __('Select a person') }}</option>
+                @foreach ($people as $person)
+                    <option value="{{ $person->id }}">{{ $person->name }}</option>
+                @endforeach
+            </flux:select>
+
+            <flux:select wire:model="assignment.course_id" class="admin-control" :label="__('Course')">
+                <option value="">{{ __('Select a course') }}</option>
+                @foreach ($assignableCourses as $course)
+                    <option value="{{ $course->id }}">{{ $course->title }}</option>
+                @endforeach
+            </flux:select>
+
+            <div class="grid gap-4 sm:grid-cols-2">
+                <flux:input type="date" wire:model="assignment.available_at" class="admin-control" :label="__('Available from')" />
+                <flux:input type="date" wire:model="assignment.due_at" class="admin-control" :label="__('Due date')" />
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <flux:button x-on:click="$wire.assigning = false" variant="ghost" type="button">{{ __('Cancel') }}</flux:button>
+                <flux:button type="submit" variant="primary" class="admin-primary-action">{{ __('Create assignment') }}</flux:button>
+            </div>
+        </form>
+    </flux:modal>
 </div>

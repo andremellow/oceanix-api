@@ -1,5 +1,8 @@
 <?php
 
+use App\Actions\Courses\CreateDraftFromVersion;
+use App\Enums\CourseVersionStatus;
+use App\Exceptions\CoursePublicationException;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use Livewire\Component;
@@ -27,6 +30,25 @@ new class extends Component
         $this->selectedVersionId = $versionId;
     }
 
+    /** Editing a published version means cloning it into a new draft — see §6 of the spec. */
+    public function createDraft(CreateDraftFromVersion $action): void
+    {
+        $this->authorize('update', $this->course);
+
+        $source = $this->course->currentPublishedVersion
+            ?? $this->course->versions()->orderByDesc('version_number')->firstOrFail();
+
+        try {
+            $draft = $action->handle($source);
+        } catch (CoursePublicationException $e) {
+            session()->flash('status', $e->problems[0]);
+
+            return;
+        }
+
+        $this->redirect(route('courses.editor', $this->course), navigate: true);
+    }
+
     public function with(): array
     {
         return [
@@ -46,7 +68,18 @@ new class extends Component
         :description="$course->description">
         <span class="status-pill {{ $course->status->pillModifier() }}">{{ $course->status->label() }}</span>
         <flux:button :href="route('courses.index')" wire:navigate variant="ghost" size="sm">{{ __('ui.back_to_courses') }}</flux:button>
+        @can('update', $course)
+            @if ($course->versions()->where('status', CourseVersionStatus::Draft->value)->exists())
+                <flux:button :href="route('courses.editor', $course)" wire:navigate variant="primary" class="admin-primary-action">{{ __('Edit draft') }}</flux:button>
+            @else
+                <flux:button wire:click="createDraft" variant="primary" class="admin-primary-action">{{ __('New draft version') }}</flux:button>
+            @endif
+        @endcan
     </x-page-hero>
+
+    @if (session('status'))
+        <flux:callout variant="success" :heading="session('status')" />
+    @endif
 
     <div class="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
         <section class="detail-card">

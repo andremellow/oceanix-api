@@ -19,6 +19,7 @@ use App\Policies\UserTrainingAssignmentPolicy;
 use App\Services\SocialLogin\SocialLoginManager;
 use App\Services\SocialLogin\WorkosAuthKitIdentityProvider;
 use App\Services\Video\CloudflareStreamProvider;
+use App\Services\Video\FakeVideoProvider;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -36,7 +37,17 @@ class AppServiceProvider extends ServiceProvider
 
         // The domain depends on the contract, never on Cloudflare. Swapping providers is a
         // binding change here plus a new implementation — nothing else moves.
-        $this->app->bind(VideoProvider::class, CloudflareStreamProvider::class);
+        //
+        // Local development falls back to a file-backed stand-in so the editor, the
+        // publication rules and the player can be exercised before Cloudflare credentials
+        // exist. Any other environment always gets the real provider, configured or not:
+        // failing loudly beats silently serving fake video.
+        $this->app->bind(VideoProvider::class, function ($app) {
+            $useFake = $app->environment('local')
+                && blank(config('services.cloudflare_stream.account_id'));
+
+            return $app->make($useFake ? FakeVideoProvider::class : CloudflareStreamProvider::class);
+        });
     }
 
     public function boot(): void
