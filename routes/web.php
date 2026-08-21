@@ -19,6 +19,7 @@ use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\Platform\PlatformAccess;
+use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -114,12 +115,14 @@ Route::prefix('platform')
     ->group(function (): void {
         Route::livewire('/', 'platform.dashboard')->name('platform.dashboard');
         Route::livewire('/companies', 'platform.companies')->name('platform.companies');
+        Route::livewire('/companies/{company}', 'platform.company')->name('platform.companies.show');
         Route::post('/companies/{company}/enter', function (Company $company, EnterCompany $action) {
             $action->handle($company);
 
             return redirect()->route('dashboard', ['company' => $company]);
         })->name('platform.companies.enter');
         Route::post('/logout', function () {
+            Auth::logout();
             session()->invalidate();
             session()->regenerateToken();
 
@@ -127,11 +130,55 @@ Route::prefix('platform')
         })->name('platform.logout');
     });
 
+// Keep existing bookmarks and notification links useful while tenant URLs migrate to
+// /c/{slug}. These endpoints only redirect after the active company has been identified.
+Route::middleware([IdentifyCompany::class, 'auth'])->group(function (): void {
+    $legacyRoutes = [
+        '/dashboard' => 'dashboard',
+        '/my-training' => 'my-training',
+        '/my-training/{assignment}' => 'my-training.show',
+        '/my-training/{assignment}/lessons/{lesson}' => 'my-training.lesson',
+        '/certificates/{certificate}/download' => 'certificates.download',
+        '/courses' => 'courses.index',
+        '/courses/{course}' => 'courses.show',
+        '/courses/{course}/editor' => 'courses.editor',
+        '/requirements' => 'requirements.index',
+        '/assignments' => 'assignments.index',
+        '/assignments/export' => 'assignments.export',
+        '/assignments/{assignment}' => 'assignments.show',
+        '/certificates' => 'certificates.index',
+        '/people' => 'people.index',
+        '/people/import' => 'people.import',
+        '/people/{user}' => 'people.show',
+        '/departments' => 'departments.index',
+        '/job-functions' => 'job-functions.index',
+        '/settings' => 'settings',
+        '/audit-log' => 'audit-log',
+        '/admin/access-profiles' => 'admin.access-profiles',
+        '/admin/access-profiles/{role}' => 'admin.access-profiles.show',
+    ];
+
+    foreach ($legacyRoutes as $uri => $target) {
+        Route::get($uri, function () use ($target) {
+            $parameters = request()->route()->parameters();
+            $parameters['company'] = app(TenantContext::class)->get();
+
+            return redirect()->route($target, $parameters);
+        })->name('legacy.'.str_replace(['/', '{', '}'], ['.', '', ''], trim($uri, '/')));
+    }
+});
+
 Route::post('/switch-company/{targetCompany:slug}', function (Company $targetCompany, SwitchCompany $action) {
     $action->handle(request()->user(), $targetCompany);
 
     return redirect()->route('dashboard', ['company' => $targetCompany]);
 })->middleware([IdentifyCompany::class, 'auth'])->name('company.switch');
+
+Route::get('/c/{company:slug}', function (Company $company) {
+    return Auth::check()
+        ? redirect()->route('dashboard', ['company' => $company])
+        : redirect()->route('tenant.login', ['company' => $company]);
+})->middleware(IdentifyCompany::class)->name('company.entry');
 
 Route::prefix('c/{company:slug}')
     ->middleware([IdentifyCompany::class, 'auth'])

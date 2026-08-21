@@ -54,7 +54,7 @@ new #[Layout('layouts::platform')] class extends Component
         <section class="detail-card divide-y divide-[#e8edef]">
             @foreach ($companies as $company)
                 <div class="flex flex-col gap-4 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
-                    <div><p class="font-semibold">{{ $company->name }}</p><p class="text-xs text-[#7d878d]">{{ $company->slug }} · {{ $company->public_id }}</p></div>
+                    <div><a href="{{ route('platform.companies.show', ['company' => $company]) }}" wire:navigate class="font-semibold text-[#262d33] hover:text-[#1c6b84]">{{ $company->name }}</a><p class="text-xs text-[#7d878d]">{{ $company->slug }} · {{ $company->public_id }}</p></div>
                     <div class="flex items-center gap-3 sm:justify-end">
                         <div class="text-right"><span class="status-pill {{ $company->status === 'active' ? 'status-pill--accent' : '' }}">{{ __($company->status) }}</span><p class="mt-1 text-xs text-[#7d878d]">{{ $company->people_count }} {{ __('people') }}</p></div>
                         @if ($company->workos_organization_id)

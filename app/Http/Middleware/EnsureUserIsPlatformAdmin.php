@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Services\Platform\PlatformAccess;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureUserIsPlatformAdmin
@@ -13,7 +14,13 @@ class EnsureUserIsPlatformAdmin
 
     public function handle(Request $request, Closure $next): Response
     {
-        $this->access->authorize();
+        if ($this->access->account() === null) {
+            if (! Auth::check()) {
+                return redirect()->guest(route('login', ['platform' => 1]));
+            }
+
+            abort(403);
+        }
 
         return $next($request);
     }

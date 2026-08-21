@@ -10,9 +10,12 @@ new #[Layout('layouts::guest')] class extends Component
 
     public string $companyCode = '';
 
+    public bool $platform = false;
+
     public function mount(?Company $company = null): void
     {
         $this->company = $company;
+        $this->platform = $company === null && request()->boolean('platform');
     }
 
     public function selectCompany(): void
@@ -41,7 +44,9 @@ new #[Layout('layouts::guest')] class extends Component
             <img src="{{ asset('images/oceanix-logo.png') }}" alt="Oceanix" class="mx-auto h-auto w-48 sm:w-56">
             <flux:heading size="xl" class="mt-8 !text-[#16222a]">{{ __('ui.login_title') }}</flux:heading>
             <flux:text class="mx-auto mt-2 max-w-xs !text-[#5f6a71]">{{ __('ui.login_subtitle') }}</flux:text>
-            @if ($company)
+            @if ($platform)
+                <p class="mt-3 text-sm font-bold text-[#1c6b84]">{{ __('Platform administration') }}</p>
+            @elseif ($company)
                 <p class="mt-3 text-sm font-bold text-[#1c6b84]">{{ $company->name }}</p>
             @endif
         </div>
@@ -50,7 +55,13 @@ new #[Layout('layouts::guest')] class extends Component
             <flux:callout variant="danger" heading="{{ $errors->first() }}" class="mt-6" />
         @endif
 
-        @if ($company)
+        @if ($platform)
+            <flux:button href="{{ route('auth.workos.platform.redirect') }}" variant="primary" class="mt-7 !min-h-12 w-full !rounded-xl !bg-[#16222a] !font-bold hover:!bg-[#22333d]">
+                {{ __('Sign in as platform administrator') }}
+                <flux:icon.arrow-right class="ml-1 size-4" />
+            </flux:button>
+            <p class="mt-3 text-center text-xs text-[#7d878d]">{{ __('Access is restricted to authorized platform administrator emails.') }}</p>
+        @elseif ($company)
             <flux:button href="{{ route('auth.workos.redirect') }}" variant="primary" class="mt-7 !min-h-12 w-full !rounded-xl !bg-[#16222a] !font-bold hover:!bg-[#22333d]">
                 {{ __('ui.login_action') }}
                 <flux:icon.arrow-right class="ml-1 size-4" />

@@ -2,6 +2,7 @@
 
 namespace App\Services\Platform;
 
+use App\Enums\UserStatus;
 use App\Models\Company;
 use App\Models\Course;
 use App\Models\User;
@@ -14,9 +15,9 @@ class PlatformOverview
     {
         return [
             'companies' => Company::query()->count(),
-            'people' => User::withoutGlobalScope('company')->count(),
+            'people' => User::withoutGlobalScope('company')->where('status', UserStatus::Active)->count(),
             'courses' => Course::withoutGlobalScope('company')->count(),
-            'assignments' => UserTrainingAssignment::withoutGlobalScope('company')->count(),
+            'assignments' => UserTrainingAssignment::withoutGlobalScope('company')->open()->count(),
         ];
     }
 

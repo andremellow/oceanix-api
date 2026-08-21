@@ -19,6 +19,19 @@ it('allows the dedicated permission to assign an access profile from the person'
     expect($person->roles()->whereKey($role->id)->exists())->toBeTrue();
 });
 
+it('prevents a non-administrator from assigning a protected access profile', function (): void {
+    $operator = userWithPermissions([Permission::PeopleAssignAccessProfiles]);
+    $person = User::factory()->create();
+    $role = Role::factory()->create(['is_protected' => true]);
+
+    Livewire::actingAs($operator)
+        ->test('organization.person', ['user' => $person])
+        ->call('toggleRole', $role->id)
+        ->assertForbidden();
+
+    expect($person->roles()->whereKey($role->id)->exists())->toBeFalse();
+});
+
 it('denies role assignment without the dedicated permission', function (): void {
     $operator = userWithPermissions([Permission::PeopleView]);
     $person = User::factory()->create();
