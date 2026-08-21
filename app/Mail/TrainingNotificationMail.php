@@ -31,7 +31,7 @@ class TrainingNotificationMail extends Mailable
                 'type' => NotificationType::from($this->notification->type),
                 'name' => $this->notification->user->name,
                 'assignment' => $assignment,
-                'url' => $assignment !== null ? route('my-training.show', $assignment) : route('my-training'),
+                'url' => $assignment !== null ? route('my-training.show', ['assignment' => $assignment]) : route('my-training'),
             ],
         );
     }

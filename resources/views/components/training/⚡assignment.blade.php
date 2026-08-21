@@ -99,7 +99,7 @@ new class extends Component
                             {{ $lessonProgress?->completed_at ? __('Completed') : __('Not started') }}
                         </span>
                         @can('execute', $assignment)
-                            <flux:button :href="route('my-training.lesson', [$assignment, $lesson])" wire:navigate variant="primary" size="sm">
+                            <flux:button :href="route('my-training.lesson', ['assignment' => $assignment, 'lesson' => $lesson])" wire:navigate variant="primary" size="sm">
                                 {{ $lessonProgress?->completed_at ? __('Review') : (($lessonProgress?->percentage_watched ?? 0) > 0 ? __('Continue') : __('Start')) }}
                             </flux:button>
                         @endcan

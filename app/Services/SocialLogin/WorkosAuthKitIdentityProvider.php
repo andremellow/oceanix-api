@@ -5,6 +5,7 @@ namespace App\Services\SocialLogin;
 use App\Contracts\SocialIdentityProvider;
 use App\Data\SocialIdentity;
 use App\Exceptions\SocialLoginProviderException;
+use App\Tenancy\TenantContext;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Log;
 
 class WorkosAuthKitIdentityProvider implements SocialIdentityProvider
 {
+    public function __construct(private readonly TenantContext $tenant) {}
+
     public function redirectUrl(string $state, string $callbackUrl, ?string $codeChallenge = null): string
     {
         $query = [
@@ -28,6 +31,12 @@ class WorkosAuthKitIdentityProvider implements SocialIdentityProvider
         if ($codeChallenge !== null && $codeChallenge !== '') {
             $query['code_challenge'] = $codeChallenge;
             $query['code_challenge_method'] = 'S256';
+        }
+
+        $organizationId = $this->tenant->get()?->workos_organization_id;
+
+        if (filled($organizationId)) {
+            $query['organization_id'] = $organizationId;
         }
 
         return 'https://api.workos.com/user_management/authorize?'.http_build_query(

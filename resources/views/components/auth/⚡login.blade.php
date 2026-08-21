@@ -38,9 +38,8 @@ new #[Layout('layouts::guest')] class extends Component
 <div class="w-full max-w-md">
     <div class="rounded-[2rem] border border-white/70 bg-white/90 p-7 shadow-[0_30px_80px_-35px_rgba(11,32,44,.45)] backdrop-blur sm:p-10">
         <div class="text-center">
-            <img src="{{ asset('images/oceanix-logo.svg') }}" alt="Oceanix" class="mx-auto h-auto w-48 sm:w-56">
-            <img src="{{ asset('images/oceanix-mark.svg') }}" alt="" class="mx-auto mt-7 size-20 rounded-[1.4rem] shadow-[0_16px_32px_-16px_rgba(11,32,44,.65)]">
-            <flux:heading size="xl" class="mt-7 !text-[#16222a]">{{ __('ui.login_title') }}</flux:heading>
+            <img src="{{ asset('images/oceanix-logo.png') }}" alt="Oceanix" class="mx-auto h-auto w-48 sm:w-56">
+            <flux:heading size="xl" class="mt-8 !text-[#16222a]">{{ __('ui.login_title') }}</flux:heading>
             <flux:text class="mx-auto mt-2 max-w-xs !text-[#5f6a71]">{{ __('ui.login_subtitle') }}</flux:text>
             @if ($company)
                 <p class="mt-3 text-sm font-bold text-[#1c6b84]">{{ $company->name }}</p>
@@ -64,6 +63,11 @@ new #[Layout('layouts::guest')] class extends Component
                     <flux:icon.arrow-right class="ml-1 size-4" />
                 </flux:button>
             </form>
+            <div class="mt-5 border-t border-[#e5eaed] pt-5">
+                <flux:button href="{{ route('auth.workos.platform.redirect') }}" variant="ghost" class="w-full">
+                    {{ __('Platform administrator sign in') }}
+                </flux:button>
+            </div>
         @endif
         <p class="mt-4 flex items-center justify-center gap-1.5 text-[11px] font-medium text-[#868f95]">
             <flux:icon.lock-closed class="size-3.5" /> {{ __('ui.login_security') }}

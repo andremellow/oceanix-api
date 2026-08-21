@@ -200,6 +200,19 @@ Os vínculos devem manter datas efetivas (`starts_at`, `ends_at`) quando necess�
 
 ---
 
+## 5.1 Identidade global e administração da plataforma
+
+- `accounts` representa a identidade autenticada global do WorkOS. Ela não contém histórico de treinamento nem permissões de uma empresa.
+- `users` representa uma pessoa dentro de uma empresa. O mesmo `account` pode estar ligado a pessoas distintas em empresas diferentes; nome, status, perfis de acesso e histórico continuam independentes.
+- O e-mail é único dentro de cada empresa. Um login só é aceito quando a pessoa já foi criada/importada na empresa selecionada; autenticação nunca cria uma pessoa on the fly.
+- O privilégio `is_platform_admin` pertence ao `account`, fora do catálogo de permissões dos tenants, e não pode ser concedido por um administrador de empresa.
+- Em uma instalação vazia, um e-mail listado em `PLATFORM_ADMIN_EMAILS` pode autenticar diretamente na área global sem empresa ou pessoa pré-existente. Ao criar a primeira empresa, essa conta é vinculada automaticamente à primeira pessoa administradora do tenant.
+- A administração global fica em `/platform`; páginas operacionais ficam em `/c/{company_slug}/...`. O nome da empresa ativa deve permanecer visível no shell autenticado.
+- A empresa possui um `public_id` UUID estável para integrações (`external_id` no WorkOS) e pode armazenar o `workos_organization_id` devolvido pelo WorkOS.
+- A tela canônica para colaboradores é Pessoas. Perfis de acesso e vínculo de identidade são administrados no detalhe da pessoa; não existe um segundo cadastro concorrente chamado Usuários.
+
+---
+
 ## 6. Cursos, versões e lessons
 
 ### Estrutura

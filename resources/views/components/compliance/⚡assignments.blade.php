@@ -205,7 +205,7 @@ new class extends Component
                     @foreach ($assignments as $assignment)
                         <tr class="border-t">
                             <td>
-                                <a href="{{ route('people.show', $assignment->user) }}" wire:navigate class="font-semibold text-[#262d33] hover:text-[#1c6b84]">{{ $assignment->user->name }}</a>
+                                <a href="{{ route('people.show', ['user' => $assignment->user]) }}" wire:navigate class="font-semibold text-[#262d33] hover:text-[#1c6b84]">{{ $assignment->user->name }}</a>
                                 <span class="block text-xs text-[#8a9298]">{{ $assignment->user->email }}</span>
                             </td>
                             <td class="text-[#5f6a71]">{{ $assignment->user->departments->pluck('name')->join(', ') ?: '—' }}</td>
@@ -217,7 +217,7 @@ new class extends Component
                             <td class="text-[#5f6a71]">{{ $assignment->due_at?->locale(app()->getLocale())->translatedFormat('M j, Y') ?? '—' }}</td>
                             <td class="text-[#5f6a71]">{{ $assignment->origin_type->label() }}</td>
                             <td>
-                                <a href="{{ route('assignments.show', $assignment) }}" wire:navigate class="inline-flex">
+                                <a href="{{ route('assignments.show', ['assignment' => $assignment]) }}" wire:navigate class="inline-flex">
                                     <span class="status-pill {{ $assignment->status->pillModifier() }}">{{ $assignment->status->label() }}</span>
                                 </a>
                             </td>

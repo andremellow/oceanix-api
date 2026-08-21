@@ -115,7 +115,7 @@ new class extends Component
 
             session()->flash('status', __('ui.lesson_passed', ['title' => $this->lesson->title]));
 
-            $this->redirect(route('my-training.show', $this->assignment), navigate: true);
+            $this->redirect(route('my-training.show', ['assignment' => $this->assignment]), navigate: true);
 
             return;
         }
@@ -191,7 +191,7 @@ new class extends Component
         <span class="status-pill {{ $unlocked ? 'status-pill--positive' : 'status-pill--warning' }}">
             {{ $unlocked ? __('ui.assessment_unlocked') : __('ui.watch_to_unlock', ['percentage' => $lesson->minimum_watch_percentage]) }}
         </span>
-        <flux:button :href="route('my-training.show', $assignment)" wire:navigate variant="ghost" size="sm">{{ __('ui.back_to_assignment') }}</flux:button>
+        <flux:button :href="route('my-training.show', ['assignment' => $assignment])" wire:navigate variant="ghost" size="sm">{{ __('ui.back_to_assignment') }}</flux:button>
     </x-page-hero>
 
     @if ($lesson->video === null || ! $lesson->video->isPlayable())
@@ -205,8 +205,8 @@ new class extends Component
             x-data="lessonPlayer({
                 playbackUrl: @js($playbackUrl),
                 poster: @js($posterUrl),
-                eventsUrl: @js(route('my-training.events', [$assignment, $lesson])),
-                playbackAuthUrl: @js(route('my-training.playback', [$assignment, $lesson])),
+                eventsUrl: @js(route('my-training.events', ['assignment' => $assignment, 'lesson' => $lesson])),
+                playbackAuthUrl: @js(route('my-training.playback', ['assignment' => $assignment, 'lesson' => $lesson])),
                 sessionId: @js(session()->getId()),
                 unlocked: @js($unlocked),
             })"
@@ -249,7 +249,7 @@ new class extends Component
 
         @if ($lessonOutcome === 'failed')
             <flux:callout variant="danger" :heading="__('ui.lesson_failed')" :text="__('ui.lesson_failed_help')" class="mt-4">
-                <flux:button :href="route('my-training.lesson', [$assignment, $lesson])" variant="primary" class="mt-3">{{ __('ui.watch_again') }}</flux:button>
+                <flux:button :href="route('my-training.lesson', ['assignment' => $assignment, 'lesson' => $lesson])" variant="primary" class="mt-3">{{ __('ui.watch_again') }}</flux:button>
             </flux:callout>
         @elseif (! $unlocked)
             <div class="mt-5 rounded-[18px] border border-dashed border-[#d7dee3] p-8 text-center">

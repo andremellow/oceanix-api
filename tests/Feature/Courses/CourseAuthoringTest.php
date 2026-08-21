@@ -157,11 +157,11 @@ it('protects the editor with the update permission', function (): void {
     CourseVersion::factory()->create(['course_id' => $course->id]);
 
     $this->actingAs(userWithPermissions([Permission::CoursesView]))
-        ->get(route('courses.editor', $course))
+        ->get(route('courses.editor', ['course' => $course]))
         ->assertForbidden();
 
     $this->actingAs(userWithPermissions([Permission::CoursesUpdate]))
-        ->get(route('courses.editor', $course))
+        ->get(route('courses.editor', ['course' => $course]))
         ->assertOk();
 });
 
@@ -170,7 +170,7 @@ it('returns 404 when a course has no draft to edit', function (): void {
     app(PublishCourseVersion::class)->handle($version, adminUser()->id);
 
     $this->actingAs(adminUser())
-        ->get(route('courses.editor', $version->course))
+        ->get(route('courses.editor', ['course' => $version->course]))
         ->assertNotFound();
 });
 

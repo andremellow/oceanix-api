@@ -25,6 +25,11 @@ class UserPolicy
     /** Role assignment stays administrator-only, above the people permissions. */
     public function assignRoles(User $user, User $subject): bool
     {
-        return false;
+        return $user->hasPermission(Permission::PeopleAssignAccessProfiles);
+    }
+
+    public function invite(User $user, User $subject): bool
+    {
+        return $user->hasPermission(Permission::PeopleInvite);
     }
 }

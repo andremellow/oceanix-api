@@ -40,6 +40,8 @@ enum Permission: string
     case PeopleView = 'people.view';
     case PeopleManage = 'people.manage';
     case PeopleImport = 'people.import';
+    case PeopleAssignAccessProfiles = 'people.access-profiles.assign';
+    case PeopleInvite = 'people.invite';
     case DepartmentsView = 'departments.view';
     case DepartmentsManage = 'departments.manage';
     case JobFunctionsView = 'job-functions.view';
@@ -112,6 +114,8 @@ enum Permission: string
             self::PeopleView => 'View people',
             self::PeopleManage => 'Manage people and organizational links',
             self::PeopleImport => 'Import people from spreadsheets',
+            self::PeopleAssignAccessProfiles => 'Assign access profiles to people',
+            self::PeopleInvite => 'Invite people through WorkOS',
             self::DepartmentsView => 'View departments',
             self::DepartmentsManage => 'Manage departments',
             self::JobFunctionsView => 'View job functions',
@@ -162,6 +166,8 @@ enum Permission: string
 
             self::PeopleManage => [self::PeopleView, self::DepartmentsView, self::JobFunctionsView],
             self::PeopleImport => [self::PeopleView, self::DepartmentsView, self::JobFunctionsView],
+            self::PeopleAssignAccessProfiles => [self::PeopleView],
+            self::PeopleInvite => [self::PeopleView],
             self::DepartmentsManage => [self::DepartmentsView],
             self::JobFunctionsManage => [self::JobFunctionsView],
 

@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -18,8 +19,8 @@ use Illuminate\Support\Collection;
 use Laravel\Sanctum\HasApiTokens;
 
 #[Fillable([
-    'name', 'email', 'email_verified_at', 'password', 'avatar_url', 'provider', 'provider_id',
-    'workos_user_id', 'employee_id', 'status', 'hired_at', 'terminated_at',
+    'account_id', 'name', 'email', 'email_verified_at', 'password', 'avatar_url', 'provider', 'provider_id',
+    'workos_user_id', 'workos_invitation_id', 'invitation_sent_at', 'employee_id', 'status', 'hired_at', 'terminated_at',
 ])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
@@ -34,11 +35,23 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'invitation_sent_at' => 'datetime',
             'password' => 'hashed',
             'status' => UserStatus::class,
             'hired_at' => 'date',
             'terminated_at' => 'date',
         ];
+    }
+
+    /** @return BelongsTo<Account, $this> */
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class);
+    }
+
+    public function isPlatformAdmin(): bool
+    {
+        return (bool) $this->account?->is_platform_admin;
     }
 
     /**

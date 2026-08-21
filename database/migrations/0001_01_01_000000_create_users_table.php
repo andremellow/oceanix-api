@@ -10,15 +10,32 @@ return new class extends Migration
     {
         Schema::create('companies', function (Blueprint $table) {
             $table->id();
+            $table->uuid('public_id')->unique();
             $table->string('name');
             $table->string('slug')->unique();
+            $table->string('workos_organization_id')->nullable()->unique();
             $table->string('status')->default('active')->index();
             $table->timestamps();
+        });
+
+        Schema::create('accounts', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->string('email')->unique();
+            $table->string('provider')->nullable();
+            $table->string('provider_id')->nullable();
+            $table->string('workos_user_id')->nullable()->unique();
+            $table->string('avatar_url')->nullable();
+            $table->boolean('is_platform_admin')->default(false)->index();
+            $table->string('status')->default('active')->index();
+            $table->timestamps();
+            $table->unique(['provider', 'provider_id']);
         });
 
         Schema::create('users', function (Blueprint $table) {
             $table->id();
             $table->foreignId('company_id')->constrained()->restrictOnDelete();
+            $table->foreignId('account_id')->nullable()->constrained()->nullOnDelete();
             $table->string('name');
             $table->string('email');
             $table->timestamp('email_verified_at')->nullable();
@@ -42,6 +59,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['company_id', 'email']);
+            $table->unique(['company_id', 'account_id']);
             $table->unique(['company_id', 'provider', 'provider_id']);
             $table->unique(['company_id', 'workos_user_id']);
             $table->unique(['company_id', 'employee_id']);
@@ -66,6 +84,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('users');
+        Schema::dropIfExists('accounts');
         Schema::dropIfExists('companies');
         Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');

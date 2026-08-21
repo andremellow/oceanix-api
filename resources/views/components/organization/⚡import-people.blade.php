@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\People\ImportPeople;
+use App\Actions\People\QueueWorkosInvitations;
 use App\Enums\Permission;
 use App\Models\Department;
 use App\Models\JobFunction;
@@ -26,6 +27,8 @@ new class extends Component
 
     public ?array $result = null;
 
+    public bool $queueInvitesAfterImport = false;
+
     public function preview(PeopleSpreadsheetParser $parser, PeopleImportPreview $preview): void
     {
         Gate::authorize(Permission::PeopleImport->value);
@@ -49,7 +52,7 @@ new class extends Component
         $this->result = null;
     }
 
-    public function import(ImportPeople $action): void
+    public function import(ImportPeople $action, QueueWorkosInvitations $invitations): void
     {
         Gate::authorize(Permission::PeopleImport->value);
         abort_if($this->rows === [] || $this->previewErrors !== [], 422);
@@ -62,6 +65,11 @@ new class extends Component
             ->all();
 
         $this->result = $action->handle($this->rows, $jobFunctionMappings, $departmentMappings);
+
+        if ($this->queueInvitesAfterImport) {
+            $this->result['invitations_queued'] = $invitations->handle(allPending: true);
+        }
+
         $this->reset(['spreadsheet', 'rows', 'previewErrors', 'jobFunctionTerms', 'departmentTerms']);
     }
 
@@ -91,6 +99,9 @@ new class extends Component
                 'functions' => $result['job_functions_created'],
                 'departments' => $result['departments_created'],
             ]) }}
+            @if (isset($result['invitations_queued']))
+                {{ trans_choice(':count invitation queued|:count invitations queued', $result['invitations_queued'], ['count' => $result['invitations_queued']]) }}
+            @endif
         </flux:callout>
     @endif
 
@@ -175,6 +186,9 @@ new class extends Component
                 <div>
                     <h2 class="text-base font-bold text-[#262d33]">{{ trans_choice(':count person ready to import|:count people ready to import', count($rows), ['count' => count($rows)]) }}</h2>
                     <p class="mt-1 text-sm text-[#707a80]">{{ __('Existing people are matched by email and are not duplicated.') }}</p>
+                    @can(App\Enums\Permission::PeopleInvite->value)
+                        <flux:checkbox wire:model="queueInvitesAfterImport" class="mt-3" :label="__('Queue WorkOS invitations after importing')" />
+                    @endcan
                 </div>
                 <flux:button wire:click="import" variant="primary" class="admin-primary-action" :disabled="$previewErrors !== []">
                     <span wire:loading.remove wire:target="import">{{ __('Confirm import') }}</span>

@@ -30,7 +30,7 @@ new class extends Component
 
         $this->reset(['name', 'description']);
 
-        $this->redirect(route('admin.access-profiles.show', $role), navigate: true);
+        $this->redirect(route('admin.access-profiles.show', ['role' => $role]), navigate: true);
     }
 
     public function with(): array
@@ -62,7 +62,7 @@ new class extends Component
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         @foreach ($roles as $role)
-            <a href="{{ route('admin.access-profiles.show', $role) }}" wire:navigate class="saas-feature-card group">
+            <a href="{{ route('admin.access-profiles.show', ['role' => $role]) }}" wire:navigate class="saas-feature-card group">
                 <div class="flex items-start justify-between gap-3">
                     <span class="saas-feature-icon bg-[#e4f0f5] text-[#1c6b84]"><flux:icon.key class="size-5" /></span>
                     @if ($role->is_protected)

@@ -82,7 +82,7 @@ new class extends Component
                 @foreach ($users as $user)
                     <tr class="border-t">
                         <td>
-                            <a href="{{ route('people.show', $user) }}" wire:navigate class="font-semibold text-[#262d33] hover:text-[#1c6b84]">{{ $user->name }}</a>
+                            <a href="{{ route('people.show', ['user' => $user]) }}" wire:navigate class="font-semibold text-[#262d33] hover:text-[#1c6b84]">{{ $user->name }}</a>
                             <span class="block text-xs text-[#8a9298]">{{ $user->email }}</span>
                         </td>
                         <td><span class="status-pill {{ $user->status->pillModifier() }}">{{ $user->status->label() }}</span></td>
