@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\FrequencyType;
 use App\Enums\RenewalBasis;
 use App\Enums\RequirementStatus;
+use App\Models\Concerns\BelongsToCompany;
 use Database\Factories\TrainingRequirementFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -22,7 +23,7 @@ use Illuminate\Support\Carbon;
 class TrainingRequirement extends Model
 {
     /** @use HasFactory<TrainingRequirementFactory> */
-    use HasFactory;
+    use BelongsToCompany, HasFactory;
 
     protected function casts(): array
     {

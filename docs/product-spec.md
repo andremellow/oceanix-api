@@ -152,12 +152,30 @@ Department ──< department_job_function >── JobFunction
 
 ### Tabelas principais
 
+#### Multi-tenancy
+
+- Cada empresa é um tenant representado por `companies` e identificado por um `slug` único.
+- O usuário escolhe a empresa antes da autenticação (`/login/{company:slug}` ou pelo código na tela inicial).
+- Uma conta de usuário pertence a exatamente uma empresa. A mesma pessoa pode usar o mesmo e-mail em empresas diferentes, mas são contas independentes, com IDs, identidade WorkOS, permissões, treinamentos e históricos distintos.
+- Todo dado operacional possui `company_id` e é filtrado automaticamente pelo tenant da requisição. Sem um tenant resolvido, consultas a dados operacionais não retornam registros e gravações são recusadas.
+- Cursos, setores, funções, perfis de acesso, requisitos, assignments, evidências, certificados, notificações, auditoria e configurações são isolados por empresa.
+- Processos de fila carregam o `company_id`; comandos agendados percorrem cada empresa ativa explicitamente.
+
 #### `users`
 
 - `id`
 - `workos_user_id` nullable/unique durante provisionamento
 - `name`
-- `email`
+- `email` único por empresa
+
+### Importação de pessoas
+
+- A importação aceita arquivos `.xlsx` e é sempre executada dentro da empresa ativa.
+- O formato é posicional: a primeira linha é ignorada como cabeçalho; coluna A é nome, B é e-mail, C é função e D é setor. Títulos e colunas adicionais não participam da leitura.
+- Linhas totalmente vazias são ignoradas. Nome e e-mail válido são obrigatórios; função e setor podem ficar vazios.
+- Antes de gravar, a aplicação apresenta uma reconciliação das funções e setores encontrados. Valores normalizados equivalentes podem ser mapeados automaticamente; valores novos podem ser criados ou mapeados manualmente para um cadastro existente.
+- Pessoas existentes na mesma empresa são reconciliadas pelo e-mail e não são duplicadas. O mesmo e-mail em outra empresa continua sendo uma conta independente.
+- A gravação acontece em uma única transação e produz registro de auditoria com os totais processados.
 - `employee_id` nullable/unique por organização
 - `status` (`invited`, `active`, `suspended`, `terminated`)
 - `hired_at` nullable

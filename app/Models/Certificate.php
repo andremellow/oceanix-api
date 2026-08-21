@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Database\Factories\CertificateFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
@@ -22,7 +23,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Certificate extends Model
 {
     /** @use HasFactory<CertificateFactory> */
-    use HasFactory;
+    use BelongsToCompany, HasFactory;
 
     protected function casts(): array
     {

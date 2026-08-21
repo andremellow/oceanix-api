@@ -3,6 +3,7 @@
 use App\Enums\ComplianceEventType;
 use App\Enums\Permission as PermissionEnum;
 use App\Enums\QuestionType;
+use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
@@ -15,6 +16,7 @@ use App\Models\UserTrainingAssignment;
 use App\Models\Video;
 use App\Services\Compliance\ComplianceEventRecorder;
 use App\Services\Training\LessonProgressProjector;
+use App\Tenancy\TenantContext;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -28,6 +30,11 @@ pest()->extend(TestCase::class)
     ->in('Feature');
 
 pest()->extend(TestCase::class)->in('Unit');
+
+function currentCompany(): Company
+{
+    return app(TenantContext::class)->get() ?? throw new RuntimeException('No test company selected.');
+}
 
 /**
  * Grant a set of permissions through a throwaway access profile — the same path the

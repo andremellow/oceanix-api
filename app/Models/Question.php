@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\QuestionType;
+use App\Models\Concerns\BelongsToCompany;
 use Database\Factories\QuestionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Question extends Model
 {
     /** @use HasFactory<QuestionFactory> */
-    use HasFactory;
+    use BelongsToCompany, HasFactory;
 
     protected function casts(): array
     {

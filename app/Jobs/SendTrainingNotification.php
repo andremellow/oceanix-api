@@ -4,9 +4,11 @@ namespace App\Jobs;
 
 use App\Enums\ComplianceEventType;
 use App\Mail\TrainingNotificationMail;
+use App\Models\Company;
 use App\Models\NotificationDelivery;
 use App\Models\ScheduledNotification;
 use App\Services\Compliance\ComplianceEventRecorder;
+use App\Tenancy\TenantContext;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Mail;
@@ -24,10 +26,23 @@ class SendTrainingNotification implements ShouldQueue
 
     public int $tries = 3;
 
-    public function __construct(public readonly int $notificationId) {}
+    public readonly int $companyId;
+
+    public function __construct(public readonly int $notificationId, ?int $companyId = null)
+    {
+        $this->companyId = $companyId ?? app(TenantContext::class)->id();
+    }
 
     public function handle(ComplianceEventRecorder $events): void
     {
+        $company = Company::query()->find($this->companyId);
+
+        if ($company === null) {
+            return;
+        }
+
+        app(TenantContext::class)->set($company);
+
         $notification = ScheduledNotification::query()
             ->with(['user', 'assignment.course'])
             ->find($this->notificationId);

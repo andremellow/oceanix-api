@@ -39,6 +39,7 @@ enum Permission: string
     // People and organization
     case PeopleView = 'people.view';
     case PeopleManage = 'people.manage';
+    case PeopleImport = 'people.import';
     case DepartmentsView = 'departments.view';
     case DepartmentsManage = 'departments.manage';
     case JobFunctionsView = 'job-functions.view';
@@ -110,6 +111,7 @@ enum Permission: string
             self::AssignmentsWaive => 'Waive assignments',
             self::PeopleView => 'View people',
             self::PeopleManage => 'Manage people and organizational links',
+            self::PeopleImport => 'Import people from spreadsheets',
             self::DepartmentsView => 'View departments',
             self::DepartmentsManage => 'Manage departments',
             self::JobFunctionsView => 'View job functions',
@@ -159,6 +161,7 @@ enum Permission: string
             self::AssignmentsWaive => [self::AssignmentsView],
 
             self::PeopleManage => [self::PeopleView, self::DepartmentsView, self::JobFunctionsView],
+            self::PeopleImport => [self::PeopleView, self::DepartmentsView, self::JobFunctionsView],
             self::DepartmentsManage => [self::DepartmentsView],
             self::JobFunctionsManage => [self::JobFunctionsView],
 

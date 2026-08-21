@@ -6,8 +6,16 @@ use App\Services\SocialLogin\OauthStateSigner;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 
+beforeEach(function (): void {
+    $this->withSession(['company_id' => currentCompany()->id]);
+});
+
 it('shows the sign-in page to guests', function (): void {
     $this->get(route('login'))
+        ->assertOk()
+        ->assertSee(__('Company code'));
+
+    $this->get(route('tenant.login', currentCompany()))
         ->assertOk()
         ->assertSee(__('ui.login_action'));
 });
@@ -30,7 +38,7 @@ it('rejects a callback whose state was not minted for this session', function ()
 
     $this->withSession(['workos_oauth_state' => 'expected-nonce'])
         ->get(route('auth.workos.callback', ['code' => 'abc', 'state' => 'forged']))
-        ->assertRedirect(route('login'))
+        ->assertRedirect(route('tenant.login', currentCompany()))
         ->assertSessionHasErrors('workos');
 
     expect(auth()->check())->toBeFalse();
@@ -82,7 +90,7 @@ it('refuses to adopt an existing account when the provider has not verified the 
 
     $this->withSession(['workos_oauth_state' => 'nonce-value'])
         ->get(route('auth.workos.callback', ['code' => 'abc', 'state' => $state]))
-        ->assertRedirect(route('login'))
+        ->assertRedirect(route('tenant.login', currentCompany()))
         ->assertSessionHasErrors('workos');
 
     expect(auth()->check())->toBeFalse();
@@ -105,7 +113,7 @@ it('blocks a terminated person from signing in', function (): void {
 
     $this->withSession(['workos_oauth_state' => 'nonce-value'])
         ->get(route('auth.workos.callback', ['code' => 'abc', 'state' => $state]))
-        ->assertRedirect(route('login'));
+        ->assertRedirect(route('tenant.login', currentCompany()));
 
     expect(auth()->check())->toBeFalse();
 });
@@ -123,7 +131,7 @@ it('refuses to provision an unknown identity when auto-provisioning is off', fun
 
     $this->withSession(['workos_oauth_state' => 'nonce-value'])
         ->get(route('auth.workos.callback', ['code' => 'abc', 'state' => $state]))
-        ->assertRedirect(route('login'));
+        ->assertRedirect(route('tenant.login', currentCompany()));
 
     expect(User::query()->where('email', 'stranger@example.com')->exists())->toBeFalse();
 });

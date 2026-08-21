@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
@@ -17,6 +18,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable(['user_id', 'assignment_id', 'type', 'scheduled_for', 'sent_at', 'payload'])]
 class ScheduledNotification extends Model
 {
+    use BelongsToCompany;
+
     protected function casts(): array
     {
         return [

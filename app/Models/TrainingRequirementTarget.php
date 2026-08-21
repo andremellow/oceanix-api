@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\TargetScope;
+use App\Models\Concerns\BelongsToCompany;
 use Database\Factories\TrainingRequirementTargetFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -18,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class TrainingRequirementTarget extends Model
 {
     /** @use HasFactory<TrainingRequirementTargetFactory> */
-    use HasFactory;
+    use BelongsToCompany, HasFactory;
 
     protected function casts(): array
     {

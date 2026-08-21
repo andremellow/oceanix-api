@@ -7,6 +7,7 @@ use App\Exceptions\SocialLoginProviderException;
 use App\Http\Controllers\Controller;
 use App\Services\SocialLogin\OauthStateSigner;
 use App\Services\SocialLogin\SocialLoginManager;
+use App\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -33,7 +34,8 @@ class WorkosController extends Controller
                 route('auth.workos.callback'),
             );
         } catch (SocialLoginProviderException $e) {
-            return redirect()->route('login')->withErrors(['workos' => $e->getMessage()]);
+            return redirect()->route('tenant.login', app(TenantContext::class)->get())
+                ->withErrors(['workos' => $e->getMessage()]);
         }
 
         return redirect()->away($url);
@@ -59,7 +61,8 @@ class WorkosController extends Controller
             // account, unverified email), so keep it inside the catch.
             $user = $this->authenticate->handle($identity);
         } catch (SocialLoginProviderException $e) {
-            return redirect()->route('login')->withErrors(['workos' => $e->getMessage()]);
+            return redirect()->route('tenant.login', app(TenantContext::class)->get())
+                ->withErrors(['workos' => $e->getMessage()]);
         }
 
         Auth::login($user, remember: true);

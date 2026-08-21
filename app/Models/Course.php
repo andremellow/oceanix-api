@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
+use App\Models\Concerns\BelongsToCompany;
 use Database\Factories\CourseFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Course extends Model
 {
     /** @use HasFactory<CourseFactory> */
-    use HasFactory;
+    use BelongsToCompany, HasFactory;
 
     protected function casts(): array
     {

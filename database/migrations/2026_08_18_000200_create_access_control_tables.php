@@ -14,13 +14,15 @@ return new class extends Migration
     {
         Schema::create('roles', function (Blueprint $table) {
             $table->id();
-            $table->string('key')->unique();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
+            $table->string('key');
             $table->string('name');
             $table->string('description')->nullable();
             // Protected roles (admin, employee) cannot be deleted from the UI.
             $table->boolean('is_protected')->default(false);
             $table->timestamp('archived_at')->nullable();
             $table->timestamps();
+            $table->unique(['company_id', 'key']);
         });
 
         Schema::create('permissions', function (Blueprint $table) {

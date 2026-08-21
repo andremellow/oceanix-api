@@ -8,10 +8,19 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('users', function (Blueprint $table) {
+        Schema::create('companies', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->string('email')->unique();
+            $table->string('slug')->unique();
+            $table->string('status')->default('active')->index();
+            $table->timestamps();
+        });
+
+        Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('company_id')->constrained()->restrictOnDelete();
+            $table->string('name');
+            $table->string('email');
             $table->timestamp('email_verified_at')->nullable();
             // Sign-in is delegated to WorkOS AuthKit; local passwords stay unused.
             $table->string('password')->nullable();
@@ -21,10 +30,10 @@ return new class extends Migration
             // provisioning, so training rules never depend on the provider being reachable.
             $table->string('provider')->nullable();
             $table->string('provider_id')->nullable();
-            $table->string('workos_user_id')->nullable()->unique();
+            $table->string('workos_user_id')->nullable();
 
             // Corporate identity.
-            $table->string('employee_id')->nullable()->unique();
+            $table->string('employee_id')->nullable();
             $table->string('status')->default('active')->index();
             $table->date('hired_at')->nullable();
             $table->date('terminated_at')->nullable();
@@ -32,7 +41,10 @@ return new class extends Migration
             $table->rememberToken();
             $table->timestamps();
 
-            $table->unique(['provider', 'provider_id']);
+            $table->unique(['company_id', 'email']);
+            $table->unique(['company_id', 'provider', 'provider_id']);
+            $table->unique(['company_id', 'workos_user_id']);
+            $table->unique(['company_id', 'employee_id']);
         });
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {
@@ -54,6 +66,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('users');
+        Schema::dropIfExists('companies');
         Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');
     }

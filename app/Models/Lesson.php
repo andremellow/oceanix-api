@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\LessonType;
+use App\Models\Concerns\BelongsToCompany;
 use Database\Factories\LessonFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -18,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class Lesson extends Model
 {
     /** @use HasFactory<LessonFactory> */
-    use HasFactory;
+    use BelongsToCompany, HasFactory;
 
     protected function casts(): array
     {

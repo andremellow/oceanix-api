@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\AssignmentOrigin;
 use App\Enums\AssignmentStatus;
+use App\Models\Concerns\BelongsToCompany;
 use Database\Factories\UserTrainingAssignmentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -26,7 +27,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class UserTrainingAssignment extends Model
 {
     /** @use HasFactory<UserTrainingAssignmentFactory> */
-    use HasFactory;
+    use BelongsToCompany, HasFactory;
 
     protected function casts(): array
     {

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Database\Factories\JobFunctionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class JobFunction extends Model
 {
     /** @use HasFactory<JobFunctionFactory> */
-    use HasFactory;
+    use BelongsToCompany, HasFactory;
 
     /**
      * @return BelongsToMany<User, $this>

@@ -2,17 +2,24 @@
 
 namespace Database\Seeders;
 
+use App\Models\Company;
+use App\Tenancy\TenantContext;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // Catalog seeders are idempotent and belong in every environment.
-        $this->call([
-            PermissionSeeder::class,
-            RoleSeeder::class,
-        ]);
+        $this->call(PermissionSeeder::class);
+
+        $company = Company::query()->firstOrCreate(
+            ['slug' => 'oceanix-demo'],
+            ['name' => 'Oceanix Demo', 'status' => 'active'],
+        );
+
+        app(TenantContext::class)->set($company);
+
+        $this->call(RoleSeeder::class);
 
         // Sample content stays out of production.
         if (app()->environment('local', 'testing')) {

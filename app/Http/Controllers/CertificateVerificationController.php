@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Certificate;
+use App\Models\Company;
+use App\Tenancy\TenantContext;
 use Illuminate\Contracts\View\View;
 
 /**
@@ -20,9 +22,20 @@ class CertificateVerificationController extends Controller
     public function __invoke(?string $code = null): View
     {
         $certificate = $code === null ? null : Certificate::query()
-            ->with(['user:id,name', 'course:id,title'])
+            ->withoutGlobalScope('company')
             ->where('verification_code', $code)
             ->first();
+
+        if ($certificate !== null) {
+            $company = Company::query()->find($certificate->company_id);
+
+            if ($company !== null) {
+                app(TenantContext::class)->set($company);
+                $certificate->load(['user:id,name', 'course:id,title']);
+            } else {
+                $certificate = null;
+            }
+        }
 
         return view('certificates.verify', [
             'certificate' => $certificate,

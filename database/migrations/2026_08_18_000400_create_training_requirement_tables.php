@@ -17,6 +17,7 @@ return new class extends Migration
     {
         Schema::create('training_requirements', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
             $table->foreignId('course_id')->constrained()->cascadeOnDelete();
             $table->string('name');
             $table->string('status')->default('draft')->index();
@@ -34,6 +35,7 @@ return new class extends Migration
 
         Schema::create('training_requirement_targets', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
             $table->foreignId('training_requirement_id')->constrained()->cascadeOnDelete();
             $table->string('scope_type');
             $table->foreignId('department_id')->nullable()->constrained()->cascadeOnDelete();

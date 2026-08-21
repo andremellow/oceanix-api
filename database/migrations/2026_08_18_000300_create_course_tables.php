@@ -18,16 +18,19 @@ return new class extends Migration
     {
         Schema::create('courses', function (Blueprint $table) {
             $table->id();
-            $table->string('code')->unique();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
+            $table->string('code');
             $table->string('title');
             $table->text('description')->nullable();
             $table->string('status')->default('draft')->index();
             $table->unsignedBigInteger('current_published_version_id')->nullable();
             $table->timestamps();
+            $table->unique(['company_id', 'code']);
         });
 
         Schema::create('course_versions', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
             $table->foreignId('course_id')->constrained()->cascadeOnDelete();
             $table->unsignedInteger('version_number');
             $table->string('status')->default('draft')->index();
@@ -50,6 +53,7 @@ return new class extends Migration
 
         Schema::create('lessons', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
             $table->foreignId('course_version_id')->constrained()->cascadeOnDelete();
             $table->string('title');
             $table->text('description')->nullable();
@@ -67,6 +71,7 @@ return new class extends Migration
 
         Schema::create('videos', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
             $table->foreignId('lesson_id')->constrained()->cascadeOnDelete();
             $table->string('provider')->default('cloudflare_stream');
             // Stable provider identifiers only — never a permanent public URL, since
@@ -83,6 +88,7 @@ return new class extends Migration
 
         Schema::create('questions', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
             $table->foreignId('lesson_id')->constrained()->cascadeOnDelete();
             $table->string('type')->default('single_choice');
             $table->text('prompt');
@@ -96,6 +102,7 @@ return new class extends Migration
 
         Schema::create('question_options', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
             $table->foreignId('question_id')->constrained()->cascadeOnDelete();
             $table->text('text');
             $table->boolean('is_correct')->default(false);

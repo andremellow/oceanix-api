@@ -15,6 +15,7 @@ return new class extends Migration
     {
         Schema::create('user_training_assignments', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('course_id')->constrained()->cascadeOnDelete();
             // Frozen at materialization: republishing a course never rewrites history.
@@ -49,6 +50,7 @@ return new class extends Migration
 
         Schema::create('course_attempts', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
             $table->foreignId('assignment_id')->constrained('user_training_assignments')->cascadeOnDelete();
             $table->foreignId('course_version_id')->constrained()->restrictOnDelete();
             $table->unsignedInteger('attempt_number')->default(1);
@@ -63,6 +65,7 @@ return new class extends Migration
 
         Schema::create('lesson_attempts', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
             $table->foreignId('course_attempt_id')->constrained()->cascadeOnDelete();
             $table->foreignId('lesson_id')->constrained()->restrictOnDelete();
             $table->unsignedInteger('attempt_number')->default(1);
@@ -77,6 +80,7 @@ return new class extends Migration
 
         Schema::create('question_attempts', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
             $table->foreignId('lesson_attempt_id')->constrained()->cascadeOnDelete();
             $table->foreignId('question_id')->constrained()->restrictOnDelete();
             $table->unsignedInteger('attempt_number')->default(1);
@@ -92,6 +96,7 @@ return new class extends Migration
         // append-only compliance events, which remain the evidence of record.
         Schema::create('lesson_progress', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
             $table->foreignId('assignment_id')->constrained('user_training_assignments')->cascadeOnDelete();
             $table->foreignId('lesson_id')->constrained()->cascadeOnDelete();
             $table->timestamp('started_at')->nullable();

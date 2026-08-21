@@ -14,9 +14,11 @@ return new class extends Migration
     {
         Schema::create('settings', function (Blueprint $table) {
             $table->id();
-            $table->string('key')->unique();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
+            $table->string('key');
             $table->text('value')->nullable();
             $table->timestamps();
+            $table->unique(['company_id', 'key']);
         });
     }
 

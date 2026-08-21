@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Actions\Videos\SyncVideoAsset;
+use App\Console\Commands\Concerns\RunsForEachCompany;
 use App\Enums\VideoStatus;
 use App\Models\Video;
 use Illuminate\Console\Command;
@@ -13,21 +14,25 @@ use Illuminate\Console\Command;
  */
 class SyncVideoAssets extends Command
 {
+    use RunsForEachCompany;
+
     protected $signature = 'oceanix:sync-videos';
 
     protected $description = 'Reconcile videos still encoding with the video provider';
 
     public function handle(SyncVideoAsset $action): int
     {
-        $pending = Video::query()
-            ->whereIn('status', [VideoStatus::Uploading->value, VideoStatus::Processing->value])
-            ->get();
+        $this->forEachCompany(function () use ($action): void {
+            $pending = Video::query()
+                ->whereIn('status', [VideoStatus::Uploading->value, VideoStatus::Processing->value])
+                ->get();
 
-        foreach ($pending as $video) {
-            $action->handle($video);
-        }
+            foreach ($pending as $video) {
+                $action->handle($video);
+            }
 
-        $this->info("Videos reconciled: {$pending->count()}.");
+            $this->info("Videos reconciled: {$pending->count()}.");
+        });
 
         return self::SUCCESS;
     }

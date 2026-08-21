@@ -67,7 +67,12 @@ new class extends Component
         :kicker="__('ui.organization')"
         :title="__('People')"
         :description="__('ui.people_page_description')">
-        <span class="status-pill status-pill--accent">{{ trans_choice('ui.results_count', $people->total(), ['count' => $people->total()]) }}</span>
+        <div class="flex items-center gap-3">
+            <span class="status-pill status-pill--accent">{{ trans_choice('ui.results_count', $people->total(), ['count' => $people->total()]) }}</span>
+            @can(App\Enums\Permission::PeopleImport->value)
+                <flux:button href="{{ route('people.import') }}" wire:navigate variant="primary" class="admin-primary-action">{{ __('Import people') }}</flux:button>
+            @endcan
+        </div>
     </x-page-hero>
 
     <div class="form-panel rounded-[20px] border border-[#dde3e7] p-4 sm:p-5">

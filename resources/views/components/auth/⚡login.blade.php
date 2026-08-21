@@ -1,11 +1,37 @@
 <?php
 
+use App\Models\Company;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
 new #[Layout('layouts::guest')] class extends Component
 {
-    //
+    public ?Company $company = null;
+
+    public string $companyCode = '';
+
+    public function mount(?Company $company = null): void
+    {
+        $this->company = $company;
+    }
+
+    public function selectCompany(): void
+    {
+        $this->validate(['companyCode' => ['required', 'string', 'max:100']]);
+
+        $company = Company::query()
+            ->where('slug', str($this->companyCode)->slug()->toString())
+            ->where('status', 'active')
+            ->first();
+
+        if ($company === null) {
+            $this->addError('companyCode', __('Company not found.'));
+
+            return;
+        }
+
+        $this->redirectRoute('tenant.login', ['company' => $company]);
+    }
 };
 ?>
 
@@ -16,21 +42,34 @@ new #[Layout('layouts::guest')] class extends Component
             <img src="{{ asset('images/oceanix-mark.svg') }}" alt="" class="mx-auto mt-7 size-20 rounded-[1.4rem] shadow-[0_16px_32px_-16px_rgba(11,32,44,.65)]">
             <flux:heading size="xl" class="mt-7 !text-[#16222a]">{{ __('ui.login_title') }}</flux:heading>
             <flux:text class="mx-auto mt-2 max-w-xs !text-[#5f6a71]">{{ __('ui.login_subtitle') }}</flux:text>
+            @if ($company)
+                <p class="mt-3 text-sm font-bold text-[#1c6b84]">{{ $company->name }}</p>
+            @endif
         </div>
 
         @if ($errors->any())
             <flux:callout variant="danger" heading="{{ $errors->first() }}" class="mt-6" />
         @endif
 
-        <flux:button href="{{ route('auth.workos.redirect') }}" variant="primary" class="mt-7 !min-h-12 w-full !rounded-xl !bg-[#16222a] !font-bold hover:!bg-[#22333d]">
-            {{ __('ui.login_action') }}
-            <flux:icon.arrow-right class="ml-1 size-4" />
-        </flux:button>
+        @if ($company)
+            <flux:button href="{{ route('auth.workos.redirect') }}" variant="primary" class="mt-7 !min-h-12 w-full !rounded-xl !bg-[#16222a] !font-bold hover:!bg-[#22333d]">
+                {{ __('ui.login_action') }}
+                <flux:icon.arrow-right class="ml-1 size-4" />
+            </flux:button>
+        @else
+            <form wire:submit="selectCompany" class="mt-7 space-y-3">
+                <flux:input wire:model="companyCode" label="{{ __('Company code') }}" autocomplete="organization" />
+                <flux:button type="submit" variant="primary" class="!min-h-12 w-full !rounded-xl !bg-[#16222a] !font-bold hover:!bg-[#22333d]">
+                    {{ __('Continue') }}
+                    <flux:icon.arrow-right class="ml-1 size-4" />
+                </flux:button>
+            </form>
+        @endif
         <p class="mt-4 flex items-center justify-center gap-1.5 text-[11px] font-medium text-[#868f95]">
             <flux:icon.lock-closed class="size-3.5" /> {{ __('ui.login_security') }}
         </p>
 
-        @if (Route::has('auth.local'))
+        @if ($company && Route::has('auth.local'))
             {{-- Visible only in local development, while WorkOS is not configured yet. --}}
             <div class="mt-7 border-t border-[#e5eaed] pt-5 text-center">
                 <p class="text-[10px] font-bold uppercase tracking-[.14em] text-[#9aa3a9]">{{ __('ui.local_development') }}</p>

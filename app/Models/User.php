@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\Permission;
 use App\Enums\UserStatus;
+use App\Models\Concerns\BelongsToCompany;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -24,7 +25,7 @@ use Laravel\Sanctum\HasApiTokens;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable;
+    use BelongsToCompany, HasApiTokens, HasFactory, Notifiable;
 
     /**
      * @return array<string, string>

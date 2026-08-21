@@ -2,6 +2,7 @@
 
 use App\Models\Certificate;
 use App\Models\User;
+use App\Tenancy\TenantContext;
 
 it('verifies a certificate without exposing internal identifiers', function (): void {
     $holder = User::factory()->create([
@@ -14,6 +15,8 @@ it('verifies a certificate without exposing internal identifiers', function (): 
         'user_id' => $holder->id,
         'certificate_number' => 'OCX-100042',
     ]);
+
+    app(TenantContext::class)->clear();
 
     $this->get(route('certificates.verify', $certificate))
         ->assertOk()

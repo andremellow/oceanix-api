@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Commands\Concerns\RunsForEachCompany;
 use App\Enums\AssignmentStatus;
 use App\Models\UserTrainingAssignment;
 use Illuminate\Console\Command;
@@ -14,19 +15,23 @@ use Illuminate\Console\Command;
  */
 class UpdateOverdueAssignments extends Command
 {
+    use RunsForEachCompany;
+
     protected $signature = 'oceanix:update-overdue';
 
     protected $description = 'Mark open assignments whose deadline has passed as overdue';
 
     public function handle(): int
     {
-        $updated = UserTrainingAssignment::query()
-            ->whereIn('status', [AssignmentStatus::Pending->value, AssignmentStatus::InProgress->value])
-            ->whereNotNull('due_at')
-            ->where('due_at', '<', now())
-            ->update(['status' => AssignmentStatus::Overdue->value]);
+        $this->forEachCompany(function (): void {
+            $updated = UserTrainingAssignment::query()
+                ->whereIn('status', [AssignmentStatus::Pending->value, AssignmentStatus::InProgress->value])
+                ->whereNotNull('due_at')
+                ->where('due_at', '<', now())
+                ->update(['status' => AssignmentStatus::Overdue->value]);
 
-        $this->info("Assignments marked overdue: {$updated}.");
+            $this->info("Assignments marked overdue: {$updated}.");
+        });
 
         return self::SUCCESS;
     }

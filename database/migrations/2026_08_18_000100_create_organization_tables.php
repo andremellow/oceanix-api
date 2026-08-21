@@ -16,18 +16,22 @@ return new class extends Migration
     {
         Schema::create('departments', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
             $table->string('name');
-            $table->string('code')->unique();
+            $table->string('code');
             $table->string('status')->default('active')->index();
             $table->timestamps();
+            $table->unique(['company_id', 'code']);
         });
 
         Schema::create('job_functions', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
             $table->string('name');
-            $table->string('code')->unique();
+            $table->string('code');
             $table->string('status')->default('active')->index();
             $table->timestamps();
+            $table->unique(['company_id', 'code']);
         });
 
         Schema::create('department_job_function', function (Blueprint $table) {

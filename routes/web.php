@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\UserStatus;
 use App\Http\Controllers\Auth\WorkosController;
 use App\Http\Controllers\CertificateDownloadController;
 use App\Http\Controllers\CertificateVerificationController;
@@ -9,6 +10,8 @@ use App\Http\Controllers\TrainingPlaybackController;
 use App\Http\Middleware\EnsureUserCanAccessControlCenter;
 use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\EnsureUserIsAdmin;
+use App\Http\Middleware\IdentifyCompany;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -43,30 +46,42 @@ if (app()->environment('local')) {
 
 Route::middleware('guest')->group(function (): void {
     Route::livewire('/login', 'auth.login')->name('login');
+    Route::livewire('/login/{company:slug}', 'auth.login')
+        ->middleware(IdentifyCompany::class)
+        ->name('tenant.login');
 
     // Local-only bypass so the application can be opened before WorkOS is configured.
     // Registered only in the local environment and only for the single configured
     // address; it authenticates nobody else.
     if (app()->environment('local') && filled(config('oceanix.local_auth_email'))) {
         Route::get('/auth/local', function () {
-            $user = User::query()->firstWhere('email', config('oceanix.local_auth_email'));
+            $email = strtolower((string) config('oceanix.local_auth_email'));
+            $user = User::query()->firstOrCreate(
+                ['email' => $email],
+                [
+                    'name' => str($email)->before('@')->replace(['.', '_'], ' ')->title()->toString(),
+                    'email_verified_at' => now(),
+                    'status' => UserStatus::Active,
+                ],
+            );
 
-            abort_if($user === null, 404);
+            $admin = Role::query()->where('key', 'admin')->firstOrFail();
+            $user->roles()->syncWithoutDetaching($admin);
 
             Auth::login($user, remember: true);
             request()->session()->regenerate();
 
             return redirect()->intended(route('dashboard'));
-        })->name('auth.local');
+        })->middleware(IdentifyCompany::class)->name('auth.local');
     }
 
-    Route::middleware('throttle:auth')->group(function (): void {
+    Route::middleware([IdentifyCompany::class, 'throttle:auth'])->group(function (): void {
         Route::get('/auth/workos/redirect', [WorkosController::class, 'redirect'])->name('auth.workos.redirect');
         Route::get('/auth/workos/callback', [WorkosController::class, 'callback'])->name('auth.workos.callback');
     });
 });
 
-Route::middleware('auth')->group(function (): void {
+Route::middleware([IdentifyCompany::class, 'auth'])->group(function (): void {
     // Every authenticated person lands here. The component renders the compliance overview
     // for operators and the personal training board for everyone else.
     Route::livewire('/dashboard', 'dashboard')->name('dashboard');
@@ -118,6 +133,9 @@ Route::middleware('auth')->group(function (): void {
         Route::livewire('/people', 'organization.people')
             ->middleware(EnsureUserHasPermission::class.':people.view')
             ->name('people.index');
+        Route::livewire('/people/import', 'organization.import-people')
+            ->middleware(EnsureUserHasPermission::class.':people.import')
+            ->name('people.import');
         Route::livewire('/people/{user}', 'organization.person')
             ->middleware(EnsureUserHasPermission::class.':people.view')
             ->name('people.show');

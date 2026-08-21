@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ComplianceEventType;
+use App\Models\Concerns\BelongsToCompany;
 use Database\Factories\ComplianceEventFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -23,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ComplianceEvent extends Model
 {
     /** @use HasFactory<ComplianceEventFactory> */
-    use HasFactory;
+    use BelongsToCompany, HasFactory;
 
     public const UPDATED_AT = null;
 

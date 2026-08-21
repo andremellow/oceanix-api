@@ -3,7 +3,9 @@
 namespace App\Jobs;
 
 use App\Models\Certificate;
+use App\Models\Company;
 use App\Services\Certificates\CertificateRenderer;
+use App\Tenancy\TenantContext;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
@@ -17,10 +19,23 @@ class GenerateCertificateDocument implements ShouldQueue
 
     public int $tries = 3;
 
-    public function __construct(public readonly int $certificateId) {}
+    public readonly int $companyId;
+
+    public function __construct(public readonly int $certificateId, ?int $companyId = null)
+    {
+        $this->companyId = $companyId ?? app(TenantContext::class)->id();
+    }
 
     public function handle(CertificateRenderer $renderer): void
     {
+        $company = Company::query()->find($this->companyId);
+
+        if ($company === null) {
+            return;
+        }
+
+        app(TenantContext::class)->set($company);
+
         $certificate = Certificate::query()->find($this->certificateId);
 
         if ($certificate === null || $renderer->exists($certificate)) {

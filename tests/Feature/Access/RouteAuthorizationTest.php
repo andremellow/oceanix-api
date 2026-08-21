@@ -4,7 +4,7 @@ use App\Enums\Permission;
 
 it('sends guests to sign-in', function (string $route): void {
     $this->get(route($route))->assertRedirect(route('login'));
-})->with(['dashboard', 'my-training', 'courses.index', 'assignments.index', 'people.index', 'admin.users']);
+})->with(['dashboard', 'my-training', 'courses.index', 'assignments.index', 'people.index', 'people.import', 'admin.users']);
 
 it('denies operational screens to an employee without permissions', function (string $route): void {
     $this->actingAs(employeeUser())->get(route($route))->assertForbidden();
@@ -14,6 +14,7 @@ it('denies operational screens to an employee without permissions', function (st
     'assignments.index',
     'certificates.index',
     'people.index',
+    'people.import',
     'departments.index',
     'job-functions.index',
     'audit-log',
@@ -44,6 +45,7 @@ it('lets an administrator through every screen', function (string $route): void 
     'assignments.index',
     'certificates.index',
     'people.index',
+    'people.import',
     'departments.index',
     'job-functions.index',
     'audit-log',
