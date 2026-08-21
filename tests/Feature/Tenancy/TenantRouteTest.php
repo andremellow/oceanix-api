@@ -15,6 +15,17 @@ it('redirects an authenticated root request into its company workspace', functio
         ->assertRedirect(route('dashboard'));
 });
 
+it('turns the bare company URL into the correct tenant entry point', function (): void {
+    $company = currentCompany();
+
+    $this->get(route('company.entry', ['company' => $company]))
+        ->assertRedirect(route('tenant.login', ['company' => $company]));
+
+    $this->actingAs(employeeUser())
+        ->get(route('company.entry', ['company' => $company]))
+        ->assertRedirect(route('dashboard', ['company' => $company]));
+});
+
 it('does not allow a person from one company into another company route', function (): void {
     $user = employeeUser();
     $other = Company::factory()->create();

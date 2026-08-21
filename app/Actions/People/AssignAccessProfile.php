@@ -12,6 +12,8 @@ class AssignAccessProfile
 
     public function toggle(User $person, Role $role): void
     {
+        abort_if($role->is_protected && ! auth()->user()?->isAdmin(), 403);
+
         $before = $person->roles()->pluck('key')->all();
         $person->roles()->toggle($role);
 

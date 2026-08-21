@@ -7,6 +7,7 @@ use App\Models\Account;
 use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\Audit\AuditLogger;
 use App\Tenancy\TenantContext;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
@@ -14,7 +15,10 @@ use Illuminate\Support\Str;
 
 class CreateCompany
 {
-    public function __construct(private readonly TenantContext $context) {}
+    public function __construct(
+        private readonly TenantContext $context,
+        private readonly AuditLogger $audit,
+    ) {}
 
     public function handle(string $name, ?string $slug = null, ?Account $owner = null): Company
     {
@@ -43,6 +47,12 @@ class CreateCompany
                 ]);
                 $person->roles()->attach(Role::query()->where('key', 'admin')->firstOrFail());
             }
+
+            $this->audit->log('platform.company_created', $company, after: [
+                'name' => $company->name,
+                'slug' => $company->slug,
+                'status' => $company->status,
+            ], metadata: ['platform_account_id' => $owner?->id]);
         } finally {
             $previous === null ? $this->context->clear() : $this->context->set($previous);
         }
