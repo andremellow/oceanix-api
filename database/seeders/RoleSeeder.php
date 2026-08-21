@@ -42,6 +42,7 @@ class RoleSeeder extends Seeder
                     PermissionEnum::AssignmentsWaive,
                     PermissionEnum::PeopleManage,
                     PermissionEnum::PeopleImport,
+                    PermissionEnum::PeopleInvite,
                     PermissionEnum::DepartmentsManage,
                     PermissionEnum::JobFunctionsManage,
                     PermissionEnum::CertificatesView,

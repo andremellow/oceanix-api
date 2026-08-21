@@ -1,5 +1,8 @@
 <?php
 
+use App\Actions\People\AssignAccessProfile;
+use App\Actions\People\SendWorkosInvitation;
+use App\Models\Role;
 use App\Models\User;
 use Livewire\Component;
 
@@ -17,12 +20,32 @@ new class extends Component
     public function with(): array
     {
         return [
+            'roles' => Role::query()->active()->orderBy('name')->get(),
             'assignments' => $this->user->assignments()
                 ->with(['course', 'courseVersion', 'certificate'])
                 ->orderByRaw('due_at is null')
                 ->orderBy('due_at')
                 ->get(),
         ];
+    }
+
+    public function toggleRole(int $roleId, AssignAccessProfile $action): void
+    {
+        $this->authorize('assignRoles', $this->user);
+        $action->toggle($this->user, Role::query()->findOrFail($roleId));
+        $this->user->load('roles');
+    }
+
+    public function sendInvitation(SendWorkosInvitation $action): void
+    {
+        $this->authorize('invite', $this->user);
+
+        try {
+            $this->user = $action->handle($this->user);
+            session()->flash('status', __('Invitation sent through WorkOS.'));
+        } catch (\RuntimeException $exception) {
+            $this->addError('invitation', $exception->getMessage());
+        }
     }
 };
 ?>
@@ -33,8 +56,20 @@ new class extends Component
         :title="$user->name"
         :description="$user->email">
         <span class="status-pill {{ $user->status->pillModifier() }}">{{ $user->status->label() }}</span>
+        @can('invite', $user)
+            <flux:button wire:click="sendInvitation" wire:loading.attr="disabled" variant="primary" size="sm">
+                {{ $user->invitation_sent_at ? __('Resend invitation') : __('Send invitation') }}
+            </flux:button>
+        @endcan
         <flux:button :href="route('people.index')" wire:navigate variant="ghost" size="sm">{{ __('ui.back_to_people') }}</flux:button>
     </x-page-hero>
+
+    @if (session('status')) <flux:callout variant="success" :heading="session('status')" /> @endif
+    @error('invitation') <flux:callout variant="danger" :heading="$message" /> @enderror
+
+    @if ($user->invitation_sent_at)
+        <p class="text-sm text-[#6f797f]">{{ __('Last invitation sent :date', ['date' => $user->invitation_sent_at->locale(app()->getLocale())->translatedFormat('M j, Y H:i')]) }}</p>
+    @endif
 
     <div class="grid gap-5 lg:grid-cols-3">
         <section class="detail-card">
@@ -78,6 +113,22 @@ new class extends Component
             </dl>
         </section>
     </div>
+
+    <section class="detail-card">
+        <span class="detail-card-icon"><flux:icon.key class="size-5" /></span>
+        <h2 class="detail-card-title">{{ __('Access profiles') }}</h2>
+        <p class="mt-1 text-sm text-[#6f797f]">{{ __('Access belongs to this person in this company only.') }}</p>
+        <div class="mt-4 flex flex-wrap gap-2">
+            @foreach ($roles as $role)
+                @php($assigned = $user->roles->contains($role))
+                @can('assignRoles', $user)
+                    <button type="button" wire:click="toggleRole({{ $role->id }})" class="status-pill {{ $assigned ? 'status-pill--accent' : 'status-pill--neutral' }}" aria-pressed="{{ $assigned ? 'true' : 'false' }}">{{ $role->name }}</button>
+                @else
+                    <span class="status-pill {{ $assigned ? 'status-pill--accent' : 'status-pill--neutral' }}">{{ $role->name }}</span>
+                @endcan
+            @endforeach
+        </div>
+    </section>
 
     <section class="detail-card">
         <span class="detail-card-icon"><flux:icon.rectangle-stack class="size-5" /></span>

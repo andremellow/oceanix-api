@@ -150,7 +150,7 @@ it('publishes from the editor once every rule is satisfied', function (): void {
         ->call('confirmPublish')
         ->assertSet('publishProblems', [])
         ->call('publish')
-        ->assertRedirect(route('courses.show', $course));
+        ->assertRedirect(route('courses.show', ['course' => $course]));
 
     expect($version->fresh()->status)->toBe(CourseVersionStatus::Published)
         ->and($course->fresh()->current_published_version_id)->toBe($version->id);

@@ -118,7 +118,7 @@ new class extends Component
                             </td>
                             <td class="text-right">
                                 <div class="flex justify-end gap-2">
-                                    <flux:button :href="route('certificates.download', $certificate)" variant="ghost" size="sm" icon="arrow-down-tray">{{ __('PDF') }}</flux:button>
+                                    <flux:button :href="route('certificates.download', ['certificate' => $certificate])" variant="ghost" size="sm" icon="arrow-down-tray">{{ __('PDF') }}</flux:button>
                                     @can('revoke', $certificate)
                                         <flux:button wire:click="startRevoking({{ $certificate->id }})" variant="ghost" size="sm">{{ __('Revoke') }}</flux:button>
                                     @endcan

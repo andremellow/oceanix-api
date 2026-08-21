@@ -36,7 +36,7 @@ new class extends Component
 
         $course = $action->handle($validated['code'], $validated['title'], $validated['description'] ?: null);
 
-        $this->redirect(route('courses.editor', $course), navigate: true);
+        $this->redirect(route('courses.editor', ['course' => $course]), navigate: true);
     }
 
     public function updatedSearch(): void
@@ -111,7 +111,7 @@ new class extends Component
     @else
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             @foreach ($courses as $course)
-                <a href="{{ route('courses.show', $course) }}" wire:navigate class="saas-feature-card group flex flex-col">
+                <a href="{{ route('courses.show', ['course' => $course]) }}" wire:navigate class="saas-feature-card group flex flex-col">
                     <div class="flex items-start justify-between gap-3">
                         <span class="saas-feature-icon bg-[#e4f0f5] text-[#1c6b84]"><flux:icon.book-open class="size-5" /></span>
                         <span class="status-pill {{ $course->status->pillModifier() }}">{{ $course->status->label() }}</span>

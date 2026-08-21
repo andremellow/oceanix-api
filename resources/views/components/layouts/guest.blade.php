@@ -6,7 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $title ?? config('app.name') }}</title>
 
-    <link rel="icon" href="{{ asset('images/oceanix-mark.svg') }}" type="image/svg+xml">
+    <link rel="icon" href="{{ asset('images/oceanix-mark.png') }}" type="image/png">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @fluxAppearance
 </head>

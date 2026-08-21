@@ -49,7 +49,7 @@ it('lets the holder download their own certificate', function (): void {
     $certificate = Certificate::factory()->create();
 
     $this->actingAs($certificate->user)
-        ->get(route('certificates.download', $certificate))
+        ->get(route('certificates.download', ['certificate' => $certificate]))
         ->assertOk()
         ->assertHeader('content-type', 'application/pdf');
 });
@@ -59,7 +59,7 @@ it('refuses the download to an unrelated employee', function (): void {
     $certificate = Certificate::factory()->create();
 
     $this->actingAs(employeeUser())
-        ->get(route('certificates.download', $certificate))
+        ->get(route('certificates.download', ['certificate' => $certificate]))
         ->assertForbidden();
 });
 

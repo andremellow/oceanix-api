@@ -2,10 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Actions\Platform\CreateCompany as CreateCompanyAction;
 use App\Models\Company;
-use App\Tenancy\TenantContext;
-use Database\Seeders\PermissionSeeder;
-use Database\Seeders\RoleSeeder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 
@@ -15,7 +13,7 @@ class CreateCompany extends Command
 
     protected $description = 'Create a tenant and its baseline access profiles';
 
-    public function handle(): int
+    public function handle(CreateCompanyAction $action): int
     {
         $name = trim((string) $this->argument('name'));
         $slug = Str::slug((string) ($this->option('slug') ?: $name));
@@ -32,15 +30,7 @@ class CreateCompany extends Command
             return self::FAILURE;
         }
 
-        $company = Company::query()->create([
-            'name' => $name,
-            'slug' => $slug,
-            'status' => 'active',
-        ]);
-
-        app(TenantContext::class)->set($company);
-        (new PermissionSeeder)->run();
-        (new RoleSeeder)->run();
+        $company = $action->handle($name, $slug);
 
         $this->info('Company created. Login URL: '.route('tenant.login', $company));
 

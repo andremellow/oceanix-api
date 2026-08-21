@@ -18,18 +18,10 @@ return [
         explode(',', (string) env('ADMIN_EMAILS', '')),
     ))),
 
-    /*
-    |--------------------------------------------------------------------------
-    | User provisioning
-    |--------------------------------------------------------------------------
-    |
-    | When false, only people who already exist locally can sign in — the expected mode
-    | once WorkOS Directory Sync provisions the workforce. Keep it true while onboarding
-    | an environment by hand.
-    |
-    */
-
-    'auto_provision_users' => filter_var(env('OCEANIX_AUTO_PROVISION_USERS', true), FILTER_VALIDATE_BOOL),
+    'platform_admin_emails' => array_values(array_filter(array_map(
+        fn (string $email): string => strtolower(trim($email)),
+        explode(',', (string) env('PLATFORM_ADMIN_EMAILS', '')),
+    ))),
 
     /*
     |--------------------------------------------------------------------------

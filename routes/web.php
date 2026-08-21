@@ -1,5 +1,7 @@
 <?php
 
+use App\Actions\Platform\EnterCompany;
+use App\Actions\Tenancy\SwitchCompany;
 use App\Enums\UserStatus;
 use App\Http\Controllers\Auth\WorkosController;
 use App\Http\Controllers\CertificateDownloadController;
@@ -10,15 +12,25 @@ use App\Http\Controllers\TrainingPlaybackController;
 use App\Http\Middleware\EnsureUserCanAccessControlCenter;
 use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\EnsureUserIsAdmin;
+use App\Http\Middleware\EnsureUserIsPlatformAdmin;
 use App\Http\Middleware\IdentifyCompany;
+use App\Models\Account;
+use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\Platform\PlatformAccess;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', fn () => Auth::check()
-    ? redirect()->route('dashboard')
-    : redirect()->route('login'))->name('home');
+Route::get('/', function () {
+    if (Auth::check()) {
+        return redirect()->route('dashboard');
+    }
+
+    return app(PlatformAccess::class)->account() !== null
+        ? redirect()->route('platform.dashboard')
+        : redirect()->route('login');
+})->middleware(IdentifyCompany::class)->name('home');
 
 // Public certificate verification. Exposes only validity, holder, course and dates —
 // never employee id, department, answers or history. See docs/product-spec.md §17.
@@ -65,6 +77,19 @@ Route::middleware('guest')->group(function (): void {
                 ],
             );
 
+            $account = Account::query()->firstOrCreate(
+                ['email' => $email],
+                [
+                    'name' => $user->name,
+                    'status' => 'active',
+                ],
+            );
+            $account->forceFill([
+                'is_platform_admin' => $account->is_platform_admin
+                    || in_array($email, config('oceanix.platform_admin_emails', []), true),
+            ])->save();
+            $user->forceFill(['account_id' => $account->id])->save();
+
             $admin = Role::query()->where('key', 'admin')->firstOrFail();
             $user->roles()->syncWithoutDetaching($admin);
 
@@ -79,96 +104,124 @@ Route::middleware('guest')->group(function (): void {
         Route::get('/auth/workos/redirect', [WorkosController::class, 'redirect'])->name('auth.workos.redirect');
         Route::get('/auth/workos/callback', [WorkosController::class, 'callback'])->name('auth.workos.callback');
     });
+    Route::get('/auth/workos/platform/redirect', [WorkosController::class, 'platformRedirect'])
+        ->middleware('throttle:auth')
+        ->name('auth.workos.platform.redirect');
 });
 
-Route::middleware([IdentifyCompany::class, 'auth'])->group(function (): void {
-    // Every authenticated person lands here. The component renders the compliance overview
-    // for operators and the personal training board for everyone else.
-    Route::livewire('/dashboard', 'dashboard')->name('dashboard');
-    Route::livewire('/my-training', 'training.my-training')->name('my-training');
-    Route::livewire('/my-training/{assignment}', 'training.assignment')->name('my-training.show');
-    Route::get('/certificates/{certificate}/download', CertificateDownloadController::class)
-        ->name('certificates.download');
-    Route::livewire('/my-training/{assignment}/lessons/{lesson}', 'training.lesson')->name('my-training.lesson');
+Route::prefix('platform')
+    ->middleware(EnsureUserIsPlatformAdmin::class)
+    ->group(function (): void {
+        Route::livewire('/', 'platform.dashboard')->name('platform.dashboard');
+        Route::livewire('/companies', 'platform.companies')->name('platform.companies');
+        Route::post('/companies/{company}/enter', function (Company $company, EnterCompany $action) {
+            $action->handle($company);
 
-    // Playback authorization and event ingestion for the player. Both re-authorize the
-    // assignment on every call and are rate limited: they are the two endpoints a client
-    // touches most.
-    Route::post('/my-training/{assignment}/lessons/{lesson}/playback', [TrainingPlaybackController::class, 'authorizePlayback'])
-        ->middleware('throttle:playback')
-        ->name('my-training.playback');
-    Route::post('/my-training/{assignment}/lessons/{lesson}/events', [TrainingPlaybackController::class, 'ingest'])
-        ->middleware('throttle:compliance-events')
-        ->name('my-training.events');
+            return redirect()->route('dashboard', ['company' => $company]);
+        })->name('platform.companies.enter');
+        Route::post('/logout', function () {
+            session()->invalidate();
+            session()->regenerateToken();
 
-    Route::middleware(EnsureUserCanAccessControlCenter::class)->group(function (): void {
-        Route::livewire('/courses', 'courses.index')
-            ->middleware(EnsureUserHasPermission::class.':courses.view')
-            ->name('courses.index');
-        Route::livewire('/courses/{course}', 'courses.show')
-            ->middleware(EnsureUserHasPermission::class.':courses.view')
-            ->name('courses.show');
-        Route::livewire('/courses/{course}/editor', 'courses.editor')
-            ->middleware(EnsureUserHasPermission::class.':courses.update')
-            ->name('courses.editor');
-
-        Route::livewire('/requirements', 'compliance.requirements')
-            ->middleware(EnsureUserHasPermission::class.':training-requirements.view')
-            ->name('requirements.index');
-
-        Route::livewire('/assignments', 'compliance.assignments')
-            ->middleware(EnsureUserHasPermission::class.':assignments.view')
-            ->name('assignments.index');
-        Route::get('/assignments/export', ComplianceExportController::class)
-            ->middleware(EnsureUserHasPermission::class.':compliance-reports.export')
-            ->name('assignments.export');
-        Route::livewire('/assignments/{assignment}', 'compliance.assignment')
-            ->middleware(EnsureUserHasPermission::class.':assignments.view')
-            ->name('assignments.show');
-
-        Route::livewire('/certificates', 'compliance.certificates')
-            ->middleware(EnsureUserHasPermission::class.':certificates.view')
-            ->name('certificates.index');
-
-        Route::livewire('/people', 'organization.people')
-            ->middleware(EnsureUserHasPermission::class.':people.view')
-            ->name('people.index');
-        Route::livewire('/people/import', 'organization.import-people')
-            ->middleware(EnsureUserHasPermission::class.':people.import')
-            ->name('people.import');
-        Route::livewire('/people/{user}', 'organization.person')
-            ->middleware(EnsureUserHasPermission::class.':people.view')
-            ->name('people.show');
-
-        Route::livewire('/departments', 'organization.departments')
-            ->middleware(EnsureUserHasPermission::class.':departments.view')
-            ->name('departments.index');
-
-        Route::livewire('/job-functions', 'organization.job-functions')
-            ->middleware(EnsureUserHasPermission::class.':job-functions.view')
-            ->name('job-functions.index');
-
-        Route::livewire('/settings', 'admin.settings')
-            ->middleware(EnsureUserHasPermission::class.':app-settings.view')
-            ->name('settings');
-        Route::livewire('/audit-log', 'admin.audit-log')
-            ->middleware(EnsureUserHasPermission::class.':audit-logs.view')
-            ->name('audit-log');
+            return redirect()->route('login');
+        })->name('platform.logout');
     });
 
-    Route::middleware([EnsureUserCanAccessControlCenter::class, EnsureUserIsAdmin::class])
-        ->prefix('admin')
-        ->group(function (): void {
-            Route::livewire('/users', 'admin.users')->name('admin.users');
-            Route::livewire('/access-profiles', 'admin.access-profiles')->name('admin.access-profiles');
-            Route::livewire('/access-profiles/{role}', 'admin.access-profile')->name('admin.access-profiles.show');
+Route::post('/switch-company/{targetCompany:slug}', function (Company $targetCompany, SwitchCompany $action) {
+    $action->handle(request()->user(), $targetCompany);
+
+    return redirect()->route('dashboard', ['company' => $targetCompany]);
+})->middleware([IdentifyCompany::class, 'auth'])->name('company.switch');
+
+Route::prefix('c/{company:slug}')
+    ->middleware([IdentifyCompany::class, 'auth'])
+    ->group(function (): void {
+        // Every authenticated person lands here. The component renders the compliance overview
+        // for operators and the personal training board for everyone else.
+        Route::livewire('/dashboard', 'dashboard')->name('dashboard');
+        Route::livewire('/my-training', 'training.my-training')->name('my-training');
+        Route::livewire('/my-training/{assignment}', 'training.assignment')->name('my-training.show');
+        Route::get('/certificates/{certificate}/download', CertificateDownloadController::class)
+            ->name('certificates.download');
+        Route::livewire('/my-training/{assignment}/lessons/{lesson}', 'training.lesson')->name('my-training.lesson');
+
+        // Playback authorization and event ingestion for the player. Both re-authorize the
+        // assignment on every call and are rate limited: they are the two endpoints a client
+        // touches most.
+        Route::post('/my-training/{assignment}/lessons/{lesson}/playback', [TrainingPlaybackController::class, 'authorizePlayback'])
+            ->middleware('throttle:playback')
+            ->name('my-training.playback');
+        Route::post('/my-training/{assignment}/lessons/{lesson}/events', [TrainingPlaybackController::class, 'ingest'])
+            ->middleware('throttle:compliance-events')
+            ->name('my-training.events');
+
+        Route::middleware(EnsureUserCanAccessControlCenter::class)->group(function (): void {
+            Route::livewire('/courses', 'courses.index')
+                ->middleware(EnsureUserHasPermission::class.':courses.view')
+                ->name('courses.index');
+            Route::livewire('/courses/{course}', 'courses.show')
+                ->middleware(EnsureUserHasPermission::class.':courses.view')
+                ->name('courses.show');
+            Route::livewire('/courses/{course}/editor', 'courses.editor')
+                ->middleware(EnsureUserHasPermission::class.':courses.update')
+                ->name('courses.editor');
+
+            Route::livewire('/requirements', 'compliance.requirements')
+                ->middleware(EnsureUserHasPermission::class.':training-requirements.view')
+                ->name('requirements.index');
+
+            Route::livewire('/assignments', 'compliance.assignments')
+                ->middleware(EnsureUserHasPermission::class.':assignments.view')
+                ->name('assignments.index');
+            Route::get('/assignments/export', ComplianceExportController::class)
+                ->middleware(EnsureUserHasPermission::class.':compliance-reports.export')
+                ->name('assignments.export');
+            Route::livewire('/assignments/{assignment}', 'compliance.assignment')
+                ->middleware(EnsureUserHasPermission::class.':assignments.view')
+                ->name('assignments.show');
+
+            Route::livewire('/certificates', 'compliance.certificates')
+                ->middleware(EnsureUserHasPermission::class.':certificates.view')
+                ->name('certificates.index');
+
+            Route::livewire('/people', 'organization.people')
+                ->middleware(EnsureUserHasPermission::class.':people.view')
+                ->name('people.index');
+            Route::livewire('/people/import', 'organization.import-people')
+                ->middleware(EnsureUserHasPermission::class.':people.import')
+                ->name('people.import');
+            Route::livewire('/people/{user}', 'organization.person')
+                ->middleware(EnsureUserHasPermission::class.':people.view')
+                ->name('people.show');
+
+            Route::livewire('/departments', 'organization.departments')
+                ->middleware(EnsureUserHasPermission::class.':departments.view')
+                ->name('departments.index');
+
+            Route::livewire('/job-functions', 'organization.job-functions')
+                ->middleware(EnsureUserHasPermission::class.':job-functions.view')
+                ->name('job-functions.index');
+
+            Route::livewire('/settings', 'admin.settings')
+                ->middleware(EnsureUserHasPermission::class.':app-settings.view')
+                ->name('settings');
+            Route::livewire('/audit-log', 'admin.audit-log')
+                ->middleware(EnsureUserHasPermission::class.':audit-logs.view')
+                ->name('audit-log');
         });
 
-    Route::post('/logout', function () {
-        Auth::logout();
-        request()->session()->invalidate();
-        request()->session()->regenerateToken();
+        Route::middleware([EnsureUserCanAccessControlCenter::class, EnsureUserIsAdmin::class])
+            ->prefix('admin')
+            ->group(function (): void {
+                Route::livewire('/access-profiles', 'admin.access-profiles')->name('admin.access-profiles');
+                Route::livewire('/access-profiles/{role}', 'admin.access-profile')->name('admin.access-profiles.show');
+            });
 
-        return redirect()->route('login');
-    })->name('logout');
-});
+        Route::post('/logout', function () {
+            Auth::logout();
+            request()->session()->invalidate();
+            request()->session()->regenerateToken();
+
+            return redirect()->route('login');
+        })->name('logout');
+    });

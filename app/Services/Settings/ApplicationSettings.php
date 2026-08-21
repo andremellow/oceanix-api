@@ -21,7 +21,6 @@ class ApplicationSettings
         'oceanix.critical_overdue_days' => ['integer', 'min:1', 'max:365'],
         'oceanix.overdue_reminder_days' => ['integer', 'min:1', 'max:90'],
         'oceanix.playback_token_minutes' => ['integer', 'min:5', 'max:120'],
-        'oceanix.auto_provision_users' => ['boolean'],
     ];
 
     public function get(string $key, mixed $default = null): mixed

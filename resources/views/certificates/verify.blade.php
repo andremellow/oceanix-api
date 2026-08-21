@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex">
     <title>{{ __('ui.verify_title') }} · {{ config('app.name') }}</title>
-    <link rel="icon" href="{{ asset('images/oceanix-mark.svg') }}" type="image/svg+xml">
+    <link rel="icon" href="{{ asset('images/oceanix-mark.png') }}" type="image/png">
     @vite(['resources/css/app.css'])
 </head>
 <body class="min-h-screen bg-[#e9f0f4] text-[#16222a] antialiased">
@@ -15,7 +15,7 @@
 
         <div class="relative w-full max-w-lg">
             <div class="rounded-[2rem] border border-white/70 bg-white/95 p-7 shadow-[0_30px_80px_-35px_rgba(11,32,44,.45)] backdrop-blur sm:p-10">
-                <img src="{{ asset('images/oceanix-logo.svg') }}" alt="Oceanix" class="mx-auto h-auto w-44">
+                <img src="{{ asset('images/oceanix-logo.png') }}" alt="Oceanix" class="mx-auto h-auto w-44">
 
                 @if ($certificate === null)
                     <div class="mt-8 text-center">

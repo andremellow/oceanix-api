@@ -56,7 +56,7 @@ it('opens the drill-down for someone who can view assignments', function (): voi
     [$assignment] = trainableAssignment();
 
     $this->actingAs(userWithPermissions([Permission::AssignmentsView]))
-        ->get(route('assignments.show', $assignment))
+        ->get(route('assignments.show', ['assignment' => $assignment]))
         ->assertOk()
         ->assertSee($assignment->user->name)
         ->assertSee(__('ui.watch_evidence'));
@@ -66,12 +66,12 @@ it('hides the raw trail from someone without the evidence permission', function 
     [$assignment] = trainableAssignment();
 
     $this->actingAs(userWithPermissions([Permission::AssignmentsView]))
-        ->get(route('assignments.show', $assignment))
+        ->get(route('assignments.show', ['assignment' => $assignment]))
         ->assertOk()
         ->assertDontSee(__('ui.evidence_trail'));
 
     $this->actingAs(userWithPermissions([Permission::ComplianceEventsView]))
-        ->get(route('assignments.show', $assignment))
+        ->get(route('assignments.show', ['assignment' => $assignment]))
         ->assertOk()
         ->assertSee(__('ui.evidence_trail'));
 });
@@ -80,6 +80,6 @@ it('denies the drill-down to an employee looking at someone else', function (): 
     [$assignment] = trainableAssignment();
 
     $this->actingAs(employeeUser())
-        ->get(route('assignments.show', $assignment))
+        ->get(route('assignments.show', ['assignment' => $assignment]))
         ->assertForbidden();
 });

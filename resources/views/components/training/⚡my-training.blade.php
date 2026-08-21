@@ -72,7 +72,7 @@ new class extends Component
                                 <td class="text-[#5f6a71]">{{ $assignment->expires_at?->locale(app()->getLocale())->translatedFormat('M j, Y') ?? __('No expiry') }}</td>
                                 <td>
                                     @if ($assignment->certificate)
-                                        <a href="{{ route('certificates.download', $assignment->certificate) }}" class="font-semibold text-[#1c6b84] underline underline-offset-2">{{ $assignment->certificate->certificate_number }}</a>
+                                        <a href="{{ route('certificates.download', ['certificate' => $assignment->certificate]) }}" class="font-semibold text-[#1c6b84] underline underline-offset-2">{{ $assignment->certificate->certificate_number }}</a>
                                         <a href="{{ route('certificates.verify', $assignment->certificate) }}" class="ml-2 text-xs text-[#8a9298] underline underline-offset-2">{{ __('ui.verify') }}</a>
                                     @else
                                         <span class="text-[#8a9298]">—</span>

@@ -9,7 +9,7 @@
     $progress = $assignment->progressPercentage();
 @endphp
 
-<a href="{{ route('my-training.show', $assignment) }}" wire:navigate
+<a href="{{ route('my-training.show', ['assignment' => $assignment]) }}" wire:navigate
    class="saas-feature-card group flex flex-col"
    style="border-color: {{ $accent['border'] }}">
     <div class="flex items-start justify-between gap-3">

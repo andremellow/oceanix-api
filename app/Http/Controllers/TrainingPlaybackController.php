@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\IngestComplianceEventsRequest;
+use App\Models\Company;
 use App\Models\Lesson;
 use App\Models\UserTrainingAssignment;
 use App\Services\Compliance\ComplianceEventRecorder;
@@ -19,6 +20,7 @@ use Illuminate\Http\JsonResponse;
 class TrainingPlaybackController extends Controller
 {
     public function authorizePlayback(
+        Company $company,
         UserTrainingAssignment $assignment,
         Lesson $lesson,
         PlaybackAuthorizationService $playback,
@@ -36,6 +38,7 @@ class TrainingPlaybackController extends Controller
 
     public function ingest(
         IngestComplianceEventsRequest $request,
+        Company $company,
         UserTrainingAssignment $assignment,
         Lesson $lesson,
         ComplianceEventRecorder $recorder,

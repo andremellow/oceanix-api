@@ -272,7 +272,7 @@ new class extends Component
 
         session()->flash('status', __('ui.version_published', ['number' => $this->version->version_number]));
 
-        $this->redirect(route('courses.show', $this->course), navigate: true);
+        $this->redirect(route('courses.show', ['course' => $this->course]), navigate: true);
     }
 
     public function with(CourseVersionValidator $validator, App\Contracts\VideoProvider $videoProvider): array
@@ -480,7 +480,7 @@ new class extends Component
             @endif
         </span>
         <span class="text-xs font-semibold text-[#1c6b84]" wire:loading wire:target="addLesson,addQuestion,addOption,syncVideos">{{ __('Saving…') }}</span>
-        <flux:button :href="route('courses.show', $course)" wire:navigate variant="ghost" size="sm">{{ __('ui.back_to_course') }}</flux:button>
+        <flux:button :href="route('courses.show', ['course' => $course])" wire:navigate variant="ghost" size="sm">{{ __('ui.back_to_course') }}</flux:button>
         @can('publish', $course)
             <flux:button wire:click="confirmPublish" variant="primary" class="admin-primary-action">{{ __('Publish version') }}</flux:button>
         @endcan

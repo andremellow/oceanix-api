@@ -1,8 +1,11 @@
 <?php
 
+use App\Models\Account;
+use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\SocialLogin\OauthStateSigner;
+use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 
@@ -33,6 +36,13 @@ it('sends the user to WorkOS with a session-bound state', function (): void {
     expect(session('workos_oauth_state'))->toBeString()->not->toBeEmpty();
 });
 
+it('scopes WorkOS sign-in to the selected company organization', function (): void {
+    currentCompany()->update(['workos_organization_id' => 'org_company']);
+
+    $this->get(route('auth.workos.redirect'))
+        ->assertRedirectContains('organization_id=org_company');
+});
+
 it('rejects a callback whose state was not minted for this session', function (): void {
     Http::fake();
 
@@ -44,8 +54,14 @@ it('rejects a callback whose state was not minted for this session', function ()
     expect(auth()->check())->toBeFalse();
 });
 
-it('signs in and provisions a local user from a verified identity', function (): void {
+it('signs in a pre-provisioned person and links the global account', function (): void {
     Role::factory()->create(['key' => 'employee', 'name' => 'Employee', 'is_protected' => true]);
+    $person = User::factory()->create([
+        'email' => 'nova.pessoa@example.com',
+        'provider' => null,
+        'provider_id' => null,
+        'workos_user_id' => null,
+    ]);
 
     Http::fake([
         'api.workos.com/user_management/authenticate' => Http::response([
@@ -65,9 +81,12 @@ it('signs in and provisions a local user from a verified identity', function ():
         ->get(route('auth.workos.callback', ['code' => 'abc', 'state' => $state]))
         ->assertRedirect(route('dashboard'));
 
-    $user = User::query()->firstWhere('email', 'nova.pessoa@example.com');
+    $user = $person->fresh();
+    $account = Account::query()->firstWhere('email', 'nova.pessoa@example.com');
 
     expect($user)->not->toBeNull()
+        ->and($account)->not->toBeNull()
+        ->and($user->account_id)->toBe($account->id)
         ->and($user->workos_user_id)->toBe('user_01HX')
         ->and($user->hasRole('employee'))->toBeTrue()
         ->and(auth()->id())->toBe($user->id);
@@ -118,9 +137,7 @@ it('blocks a terminated person from signing in', function (): void {
     expect(auth()->check())->toBeFalse();
 });
 
-it('refuses to provision an unknown identity when auto-provisioning is off', function (): void {
-    config()->set('oceanix.auto_provision_users', false);
-
+it('refuses to provision an unknown identity', function (): void {
     Http::fake([
         'api.workos.com/user_management/authenticate' => Http::response([
             'user' => ['id' => 'user_new', 'email' => 'stranger@example.com', 'email_verified' => true],
@@ -134,6 +151,59 @@ it('refuses to provision an unknown identity when auto-provisioning is off', fun
         ->assertRedirect(route('tenant.login', currentCompany()));
 
     expect(User::query()->where('email', 'stranger@example.com')->exists())->toBeFalse();
+});
+
+it('marks a configured identity as a platform administrator', function (): void {
+    config()->set('oceanix.platform_admin_emails', ['platform@example.com']);
+    User::factory()->create(['email' => 'platform@example.com']);
+
+    Http::fake([
+        'api.workos.com/user_management/authenticate' => Http::response([
+            'user' => ['id' => 'user_platform', 'email' => 'platform@example.com', 'email_verified' => true],
+        ]),
+    ]);
+
+    $state = app(OauthStateSigner::class)->issue('nonce-value');
+
+    $this->withSession(['workos_oauth_state' => 'nonce-value'])
+        ->get(route('auth.workos.callback', ['code' => 'abc', 'state' => $state]))
+        ->assertRedirect(route('dashboard'));
+
+    expect(Account::query()->firstWhere('email', 'platform@example.com')?->is_platform_admin)->toBeTrue();
+});
+
+it('bootstraps a configured platform account without any company', function (): void {
+    config()->set('oceanix.platform_admin_emails', ['bootstrap@example.com']);
+    Company::query()->delete();
+    app(TenantContext::class)->clear();
+
+    Http::fake([
+        'api.workos.com/user_management/authenticate' => Http::response([
+            'user' => [
+                'id' => 'user_bootstrap',
+                'email' => 'bootstrap@example.com',
+                'first_name' => 'Bootstrap',
+                'last_name' => 'Admin',
+                'email_verified' => true,
+            ],
+        ]),
+    ]);
+
+    $state = app(OauthStateSigner::class)->issue('nonce-value');
+
+    $this->withSession([
+        'workos_oauth_state' => 'nonce-value',
+        'workos_login_mode' => 'platform',
+    ])->get(route('auth.workos.callback', ['code' => 'abc', 'state' => $state]))
+        ->assertRedirect(route('platform.dashboard'));
+
+    $account = Account::query()->firstWhere('email', 'bootstrap@example.com');
+
+    expect($account?->is_platform_admin)->toBeTrue()
+        ->and(session('platform_account_id'))->toBe($account?->id)
+        ->and(auth()->check())->toBeFalse();
+
+    $this->get(route('platform.dashboard'))->assertOk();
 });
 
 it('does not register the local sign-in bypass outside the local environment', function (): void {

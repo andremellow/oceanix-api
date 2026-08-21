@@ -7,6 +7,7 @@ use App\Services\Settings\ApplicationSettings;
 use App\Tenancy\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\URL;
 use Symfony\Component\HttpFoundation\Response;
 
 class IdentifyCompany
@@ -30,7 +31,7 @@ class IdentifyCompany
         }
 
         if ($company === null) {
-            abort_if($request->routeIs('tenant.login', 'auth.local', 'auth.workos.*'), 404);
+            abort_if($request->routeIs('tenant.login', 'auth.local'), 404);
 
             return $next($request);
         }
@@ -39,7 +40,12 @@ class IdentifyCompany
 
         $this->context->set($company);
         $request->session()->put('company_id', $company->getKey());
+        URL::defaults(['company' => $company->slug]);
         $this->settings->apply();
+
+        if ($request->user() !== null && (int) $request->user()->company_id !== (int) $company->getKey()) {
+            abort(404);
+        }
 
         return $next($request);
     }

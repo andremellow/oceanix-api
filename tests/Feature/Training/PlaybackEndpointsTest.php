@@ -21,7 +21,7 @@ it('ingests player events for the assignee', function (): void {
     [$assignment, $lesson] = trainableAssignment();
 
     $this->actingAs($assignment->user)
-        ->postJson(route('my-training.events', [$assignment, $lesson]), ['events' => [eventPayload()]])
+        ->postJson(route('my-training.events', ['assignment' => $assignment, 'lesson' => $lesson]), ['events' => [eventPayload()]])
         ->assertOk()
         ->assertJsonStructure(['percentage_watched', 'assessment_unlocked']);
 
@@ -32,7 +32,7 @@ it('rejects a batch from anyone but the assignee', function (): void {
     [$assignment, $lesson] = trainableAssignment();
 
     $this->actingAs(User::factory()->create())
-        ->postJson(route('my-training.events', [$assignment, $lesson]), ['events' => [eventPayload()]])
+        ->postJson(route('my-training.events', ['assignment' => $assignment, 'lesson' => $lesson]), ['events' => [eventPayload()]])
         ->assertForbidden();
 
     expect(ComplianceEvent::query()->count())->toBe(0);
@@ -42,7 +42,7 @@ it('rejects server-authored event types submitted by a client', function (): voi
     [$assignment, $lesson] = trainableAssignment();
 
     $this->actingAs($assignment->user)
-        ->postJson(route('my-training.events', [$assignment, $lesson]), [
+        ->postJson(route('my-training.events', ['assignment' => $assignment, 'lesson' => $lesson]), [
             'events' => [eventPayload(['event_type' => ComplianceEventType::CourseCompleted->value])],
         ])
         ->assertUnprocessable()
@@ -54,7 +54,7 @@ it('binds every event to the assignment in the URL, not the payload', function (
     [$other] = trainableAssignment();
 
     $this->actingAs($assignment->user)
-        ->postJson(route('my-training.events', [$assignment, $lesson]), [
+        ->postJson(route('my-training.events', ['assignment' => $assignment, 'lesson' => $lesson]), [
             'events' => [eventPayload(['assignment_id' => $other->id, 'lesson_id' => 999999])],
         ])
         ->assertOk();
@@ -69,8 +69,8 @@ it('ignores a replayed batch', function (): void {
     [$assignment, $lesson] = trainableAssignment();
     $payload = ['events' => [eventPayload(), eventPayload()]];
 
-    $this->actingAs($assignment->user)->postJson(route('my-training.events', [$assignment, $lesson]), $payload)->assertOk();
-    $this->actingAs($assignment->user)->postJson(route('my-training.events', [$assignment, $lesson]), $payload)->assertOk();
+    $this->actingAs($assignment->user)->postJson(route('my-training.events', ['assignment' => $assignment, 'lesson' => $lesson]), $payload)->assertOk();
+    $this->actingAs($assignment->user)->postJson(route('my-training.events', ['assignment' => $assignment, 'lesson' => $lesson]), $payload)->assertOk();
 
     expect(ComplianceEvent::query()->count())->toBe(2);
 });
@@ -80,7 +80,7 @@ it('refuses a lesson from another course version', function (): void {
     $foreign = Lesson::factory()->create();
 
     $this->actingAs($assignment->user)
-        ->postJson(route('my-training.events', [$assignment, $foreign]), ['events' => [eventPayload()]])
+        ->postJson(route('my-training.events', ['assignment' => $assignment, 'lesson' => $foreign]), ['events' => [eventPayload()]])
         ->assertNotFound();
 });
 
@@ -89,12 +89,12 @@ it('mints playback only for the assignee', function (): void {
     [$assignment, $lesson] = trainableAssignment();
 
     $this->actingAs($assignment->user)
-        ->postJson(route('my-training.playback', [$assignment, $lesson]))
+        ->postJson(route('my-training.playback', ['assignment' => $assignment, 'lesson' => $lesson]))
         ->assertOk()
         ->assertJsonStructure(['url', 'expires_in']);
 
     $this->actingAs(User::factory()->create())
-        ->postJson(route('my-training.playback', [$assignment, $lesson]))
+        ->postJson(route('my-training.playback', ['assignment' => $assignment, 'lesson' => $lesson]))
         ->assertForbidden();
 });
 
@@ -103,7 +103,7 @@ it('records the playback authorization as evidence', function (): void {
     [$assignment, $lesson] = trainableAssignment();
 
     $this->actingAs($assignment->user)
-        ->postJson(route('my-training.playback', [$assignment, $lesson]))
+        ->postJson(route('my-training.playback', ['assignment' => $assignment, 'lesson' => $lesson]))
         ->assertOk();
 
     expect(ComplianceEvent::query()

@@ -54,7 +54,6 @@ new class extends Component
                 'oceanix.critical_overdue_days' => [__('ui.setting_critical'), __('ui.setting_critical_help')],
                 'oceanix.overdue_reminder_days' => [__('ui.setting_reminder'), __('ui.setting_reminder_help')],
                 'oceanix.playback_token_minutes' => [__('ui.setting_token'), __('ui.setting_token_help')],
-                'oceanix.auto_provision_users' => [__('ui.setting_provisioning'), __('ui.setting_provisioning_help')],
             ],
         ];
     }
@@ -79,18 +78,11 @@ new class extends Component
         <div class="grid gap-5 lg:grid-cols-2">
             @foreach ($labels as $key => [$label, $help])
                 <div wire:key="setting-{{ $key }}">
-                    @if ($key === 'oceanix.auto_provision_users')
-                        <flux:field variant="inline">
-                            <flux:checkbox wire:model="values.{{ $key }}" :disabled="! auth()->user()->can(App\Enums\Permission::AppSettingsUpdate->value)" />
-                            <x-field-label :hint="$help">{{ $label }}</x-field-label>
-                        </flux:field>
-                    @else
-                        <flux:field>
-                            <x-field-label :hint="$help">{{ $label }}</x-field-label>
-                            <flux:input type="number" wire:model="values.{{ $key }}" class="admin-control" :disabled="! auth()->user()->can(App\Enums\Permission::AppSettingsUpdate->value)" />
-                            <flux:error name="values.{{ $key }}" />
-                        </flux:field>
-                    @endif
+                    <flux:field>
+                        <x-field-label :hint="$help">{{ $label }}</x-field-label>
+                        <flux:input type="number" wire:model="values.{{ $key }}" class="admin-control" :disabled="! auth()->user()->can(App\Enums\Permission::AppSettingsUpdate->value)" />
+                        <flux:error name="values.{{ $key }}" />
+                    </flux:field>
                 </div>
             @endforeach
         </div>

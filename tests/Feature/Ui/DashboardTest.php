@@ -67,7 +67,7 @@ it('denies opening an assignment that belongs to someone else', function (): voi
     ]);
 
     $this->actingAs(employeeUser())
-        ->get(route('my-training.show', $assignment))
+        ->get(route('my-training.show', ['assignment' => $assignment]))
         ->assertForbidden();
 });
 
@@ -76,7 +76,7 @@ it('lets the assignee open their own assignment', function (): void {
     $assignment = UserTrainingAssignment::factory()->forCourse(assignableCourse())->create(['user_id' => $user->id]);
 
     $this->actingAs($user)
-        ->get(route('my-training.show', $assignment))
+        ->get(route('my-training.show', ['assignment' => $assignment]))
         ->assertOk()
         ->assertSee($assignment->course->title);
 });
@@ -87,6 +87,6 @@ it('lets an operator open an assignment for review', function (): void {
     ]);
 
     $this->actingAs(userWithPermissions([Permission::AssignmentsView]))
-        ->get(route('my-training.show', $assignment))
+        ->get(route('my-training.show', ['assignment' => $assignment]))
         ->assertOk();
 });

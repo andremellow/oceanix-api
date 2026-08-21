@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 
 abstract class TestCase extends BaseTestCase
@@ -21,6 +22,7 @@ abstract class TestCase extends BaseTestCase
             ]);
 
             app(TenantContext::class)->set($company);
+            URL::defaults(['company' => $company->slug]);
         }
     }
 }

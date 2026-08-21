@@ -41,7 +41,7 @@ it('returns a 404 when a user requests a record owned by another company', funct
 
     $this->actingAs($user)
         ->withSession(['company_id' => $second->id])
-        ->get(route('courses.show', $foreignCourse->getKey()))
+        ->get(route('courses.show', ['course' => $foreignCourse->getKey()]))
         ->assertNotFound();
 });
 

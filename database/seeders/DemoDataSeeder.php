@@ -11,6 +11,7 @@ use App\Enums\RenewalBasis;
 use App\Enums\RequirementStatus;
 use App\Enums\TargetScope;
 use App\Enums\UserStatus;
+use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Department;
@@ -168,10 +169,15 @@ class DemoDataSeeder extends Seeder
         ];
 
         foreach ($people as $index => $person) {
+            $account = Account::query()->firstOrCreate(
+                ['email' => $person['email']],
+                ['name' => $person['name'], 'status' => 'active'],
+            );
             $user = User::query()->updateOrCreate(
                 ['email' => $person['email']],
                 [
                     'name' => $person['name'],
+                    'account_id' => $account->id,
                     'email_verified_at' => now(),
                     'employee_id' => (string) (48200 + $index),
                     'status' => UserStatus::Active,

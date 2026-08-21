@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#f2f5f7">
     <title>{{ $title ?? config('app.name') }}</title>
 
-    <link rel="icon" href="{{ asset('images/oceanix-mark.svg') }}" type="image/svg+xml">
+    <link rel="icon" href="{{ asset('images/oceanix-mark.png') }}" type="image/png">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @fluxAppearance
     <script>
@@ -20,6 +20,7 @@
     @auth
         @php($user = auth()->user())
         @php($operator = $user->canAccessControlCenter())
+        @php($workspaces = $user->account?->people()->withoutGlobalScope('company')->with('company')->where('status', 'active')->get() ?? collect())
         <div class="min-h-screen lg:grid lg:grid-cols-[256px_minmax(0,1fr)]">
             <input id="mobile-navigation" type="checkbox" class="peer sr-only">
 
@@ -27,14 +28,9 @@
 
             <aside class="fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col border-r border-[#e2e7ea] bg-[#f9fbfc] px-4 py-5 transition-all duration-200 peer-checked:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0">
                 <div class="flex items-center justify-between px-2">
-                    <a href="{{ route('dashboard') }}" wire:navigate class="group flex items-center gap-3">
-                        <span class="grid size-10 place-items-center overflow-hidden rounded-xl shadow-sm transition-transform group-hover:-rotate-3">
-                            <img src="{{ asset('images/oceanix-mark.svg') }}" alt="" class="size-10">
-                        </span>
-                        <span>
-                            <span class="block text-[15px] font-bold tracking-tight">Oceanix</span>
-                            <span class="block text-[10px] font-semibold uppercase tracking-[.18em] text-[#8a9298]">{{ __('ui.control_center') }}</span>
-                        </span>
+                    <a href="{{ route('dashboard') }}" wire:navigate class="group block">
+                        <img src="{{ asset('images/oceanix-logo.png') }}" alt="Oceanix" class="h-auto w-36 transition-transform group-hover:-translate-y-0.5">
+                        <span class="mt-1 block text-[9px] font-semibold uppercase tracking-[.18em] text-[#8a9298]">{{ __('ui.control_center') }}</span>
                     </a>
                     <label for="mobile-navigation" class="grid size-8 cursor-pointer place-items-center rounded-lg text-zinc-500 hover:bg-zinc-100 lg:hidden" aria-label="{{ __('ui.close_menu') }}">
                         <flux:icon.x-mark class="size-5" />
@@ -128,10 +124,6 @@
                             <p class="px-3 text-[10px] font-bold uppercase tracking-[.16em] text-[#9ea6ac]">{{ __('ui.administration') }}</p>
                             <div class="mt-2 space-y-1">
                                 @if ($user->isAdmin())
-                                    <a href="{{ route('admin.users') }}" wire:navigate class="saas-nav-item {{ request()->routeIs('admin.users*') ? 'is-active' : '' }}">
-                                        <flux:icon.users class="size-[18px]" />
-                                        <span>{{ __('ui.users') }}</span>
-                                    </a>
                                     <a href="{{ route('admin.access-profiles') }}" wire:navigate class="saas-nav-item {{ request()->routeIs('admin.access-profiles*') ? 'is-active' : '' }}">
                                         <flux:icon.key class="size-[18px]" />
                                         <span>{{ __('ui.access_profiles') }}</span>
@@ -155,6 +147,19 @@
                 </nav>
 
                 <div class="mt-4 shrink-0 rounded-2xl border border-[#d9e5ea] bg-[#eef6f9] p-3.5">
+                    @if ($workspaces->count() > 1)
+                        <div class="mb-3 border-b border-[#d9e5ea] pb-3">
+                            <p class="mb-2 text-[10px] font-bold uppercase tracking-[.14em] text-[#8a9298]">{{ __('Switch company') }}</p>
+                            <div class="space-y-1">
+                                @foreach ($workspaces as $workspace)
+                                    <form method="POST" action="{{ route('company.switch', ['targetCompany' => $workspace->company]) }}">
+                                        @csrf
+                                        <button class="w-full truncate rounded-lg px-2 py-1.5 text-left text-xs font-semibold hover:bg-white" type="submit">{{ $workspace->company->name }}</button>
+                                    </form>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
                     <div class="flex items-center gap-3">
                         <div class="grid size-9 shrink-0 place-items-center rounded-xl bg-white text-sm font-bold text-[#1c6b84] shadow-sm ring-1 ring-[#d5e4ea]">
                             {{ $user->initial() }}
@@ -183,6 +188,10 @@
                         <p class="truncate text-sm font-semibold text-[#394147]">{{ $operator ? __('ui.ready_operator') : __('ui.ready_employee') }}</p>
                     </div>
                     <div class="ml-auto flex items-center gap-2">
+                        <span class="hidden rounded-full border border-[#d5e4ea] bg-white px-3 py-1.5 text-xs font-semibold text-[#394147] sm:inline-flex">{{ app(\App\Tenancy\TenantContext::class)->get()?->name }}</span>
+                        @if ($user->isPlatformAdmin())
+                            <a href="{{ route('platform.dashboard') }}" class="hidden rounded-full bg-[#16222a] px-3 py-1.5 text-xs font-semibold text-white sm:inline-flex">{{ __('Platform') }}</a>
+                        @endif
                         <span class="hidden items-center gap-2 rounded-full border border-[#d5e4ea] bg-[#eaf4f8] px-3 py-1.5 text-xs font-semibold text-[#286d84] sm:flex">
                             <span class="size-1.5 rounded-full bg-[#3e9cb8] shadow-[0_0_0_3px_rgba(62,156,184,.15)]"></span>
                             {{ __('ui.system_operational') }}

@@ -3,8 +3,8 @@
 namespace App\Actions\Auth;
 
 use App\Data\SocialIdentity;
-use App\Enums\UserStatus;
 use App\Exceptions\SocialLoginProviderException;
+use App\Models\Account;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
  * Resolves the local corporate user behind an identity-provider sign-in.
  *
  * Identity lives in WorkOS; the training obligations live here. A local user must exist for
- * every person, so an unprovisioned identity is rejected unless auto-provisioning is on.
+ * every person, so an unprovisioned identity is always rejected.
  */
 class AuthenticateSocialLogin
 {
@@ -23,46 +23,56 @@ class AuthenticateSocialLogin
             $provider = strtolower($identity->provider);
             $email = strtolower($identity->email);
 
-            $user = User::query()
+            $user = User::query()->whereRaw('lower(email) = ?', [$email])->first();
+
+            if ($user === null) {
+                throw SocialLoginProviderException::accountNotProvisioned();
+            }
+
+            if (! $identity->emailVerified) {
+                throw SocialLoginProviderException::emailNotVerified();
+            }
+
+            $account = Account::query()
                 ->where('provider', $provider)
                 ->where('provider_id', $identity->providerId)
-                ->first();
+                ->first() ?? Account::query()->whereRaw('lower(email) = ?', [$email])->first();
 
-            if ($user === null) {
-                $user = User::query()->whereRaw('lower(email) = ?', [$email])->first();
-
-                if ($user !== null) {
-                    // Only adopt an existing local account when the provider asserts the
-                    // email is verified; otherwise an unverified identity could bind itself
-                    // to someone else's account.
-                    if (! $identity->emailVerified) {
-                        throw SocialLoginProviderException::emailNotVerified();
-                    }
-
-                    $user->forceFill([
-                        'provider' => $provider,
-                        'provider_id' => $identity->providerId,
-                        'workos_user_id' => $provider === 'workos' ? $identity->providerId : $user->workos_user_id,
-                    ])->save();
-                }
+            if ($account !== null && strtolower($account->email) !== $email) {
+                throw SocialLoginProviderException::accountNotProvisioned();
             }
 
-            if ($user === null) {
-                if (! config('oceanix.auto_provision_users')) {
-                    throw SocialLoginProviderException::accountNotProvisioned();
-                }
+            $account ??= Account::query()->create([
+                'name' => $identity->name ?: $user->name,
+                'email' => $email,
+                'status' => 'active',
+            ]);
 
-                $user = User::query()->create([
-                    'name' => $identity->name ?: $email,
-                    'email' => $email,
-                    'email_verified_at' => now(),
-                    'avatar_url' => $identity->avatarUrl,
-                    'provider' => $provider,
-                    'provider_id' => $identity->providerId,
-                    'workos_user_id' => $provider === 'workos' ? $identity->providerId : null,
-                    'status' => UserStatus::Active,
-                ]);
+            if ($account->status !== 'active') {
+                throw SocialLoginProviderException::accountInactive();
             }
+
+            $account->forceFill([
+                'name' => $identity->name ?: $account->name,
+                'provider' => $provider,
+                'provider_id' => $identity->providerId,
+                'workos_user_id' => $provider === 'workos' ? $identity->providerId : $account->workos_user_id,
+                'avatar_url' => $identity->avatarUrl ?: $account->avatar_url,
+                'is_platform_admin' => $account->is_platform_admin || in_array($email, config('oceanix.platform_admin_emails', []), true),
+            ])->save();
+
+            if ($user->account_id !== null && $user->account_id !== $account->id) {
+                throw SocialLoginProviderException::accountNotProvisioned();
+            }
+
+            $user->forceFill([
+                'account_id' => $account->id,
+                'provider' => $provider,
+                'provider_id' => $identity->providerId,
+                'workos_user_id' => $provider === 'workos' ? $identity->providerId : $user->workos_user_id,
+                'email_verified_at' => now(),
+                'avatar_url' => $identity->avatarUrl ?: $user->avatar_url,
+            ])->save();
 
             // A terminated or suspended person keeps their historical evidence but cannot
             // sign in — revoking access is part of the compliance boundary, and it applies
