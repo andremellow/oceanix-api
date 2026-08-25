@@ -68,9 +68,7 @@ new class extends Component
         </flux:button>
     </x-page-hero>
 
-    @if (session('status'))
-        <flux:callout variant="success" :heading="session('status')" />
-    @endif
+    <x-status-message />
 
     <div class="grid gap-4 lg:grid-cols-2">
         @foreach ($catalog as $group => $permissions)
@@ -84,12 +82,7 @@ new class extends Component
                             <input type="checkbox" wire:model="selected" value="{{ $permission->value }}" class="mt-1 size-4 rounded border-[#8e989f] text-[#1c6b84] focus:ring-[#3e8ba3]">
                             <span class="min-w-0">
                                 <span class="block text-sm font-semibold text-[#262d33]">{{ $permission->label() }}</span>
-                                <span class="mt-0.5 block text-xs text-[#8a9298]"><code>{{ $permission->value }}</code></span>
-                                @if ($permission->prerequisites() !== [])
-                                    <span class="mt-1 block text-xs text-[#6f797f]">
-                                        {{ __('Requires: :list', ['list' => collect($permission->prerequisites())->map(fn ($p) => $p->label())->join(', ')]) }}
-                                    </span>
-                                @endif
+                                <span class="mt-1 block text-xs leading-relaxed text-[#6f797f]">{{ $permission->description() }}</span>
                             </span>
                         </label>
                     @endforeach

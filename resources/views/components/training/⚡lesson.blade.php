@@ -6,6 +6,7 @@ use App\Actions\Training\StartLessonAttempt;
 use App\Enums\AttemptStatus;
 use App\Enums\ComplianceEventType;
 use App\Enums\QuestionType;
+use App\Exceptions\VideoProviderException;
 use App\Models\Lesson;
 use App\Models\Question;
 use App\Models\UserTrainingAssignment;
@@ -31,6 +32,8 @@ new class extends Component
 
     public ?string $posterUrl = null;
 
+    public ?string $playbackError = null;
+
     /** @var array<int, list<int>> */
     public array $selected = [];
 
@@ -48,9 +51,15 @@ new class extends Component
         $this->assignment = $assignment;
         $this->lesson = $lesson->load(['video', 'questions.options']);
 
-        $authorization = $playback->authorize($assignment, $this->lesson);
-        $this->playbackUrl = $authorization->playbackUrl;
-        $this->posterUrl = $authorization->posterUrl;
+        try {
+            $authorization = $playback->authorize($assignment, $this->lesson);
+            $this->playbackUrl = $authorization->playbackUrl;
+            $this->posterUrl = $authorization->posterUrl;
+        } catch (VideoProviderException) {
+            // A provider outage or a missing remote asset must not expose an exception page
+            // to the employee. The provider already logs the diagnostic details.
+            $this->playbackError = __('ui.video_playback_failed_help');
+        }
 
         // Seeded per question so Livewire binds a multiple-choice question to an array and
         // a single-choice one to a scalar, instead of inferring a boolean from an absent key.
@@ -184,6 +193,7 @@ new class extends Component
 ?>
 
 <div class="space-y-7">
+    <x-status-message />
     <x-page-hero
         :kicker="$assignment->course->title"
         :title="$lesson->title"
@@ -194,7 +204,12 @@ new class extends Component
         <flux:button :href="route('my-training.show', ['assignment' => $assignment])" wire:navigate variant="ghost" size="sm">{{ __('ui.back_to_assignment') }}</flux:button>
     </x-page-hero>
 
-    @if ($lesson->video === null || ! $lesson->video->isPlayable())
+    @if ($playbackError !== null)
+        <x-empty-state
+            icon="exclamation-triangle"
+            :title="__('ui.video_playback_failed')"
+            :description="$playbackError" />
+    @elseif ($lesson->video === null || ! $lesson->video->isPlayable())
         <x-empty-state
             icon="film"
             :title="__('ui.video_unavailable')"

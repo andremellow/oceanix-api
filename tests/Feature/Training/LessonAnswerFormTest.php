@@ -1,12 +1,24 @@
 <?php
 
 use App\Enums\QuestionType;
+use App\Enums\VideoStatus;
 use App\Models\Question;
 use App\Models\QuestionAttempt;
 use App\Models\QuestionOption;
 use Livewire\Livewire;
 
 beforeEach(fn () => fakeCloudflarePlayback());
+
+it('shows a useful unavailable state when playback authorization fails', function (): void {
+    [$assignment, $lesson] = trainableAssignment();
+    $lesson->video->update(['status' => VideoStatus::Processing]);
+
+    Livewire::actingAs($assignment->user)
+        ->test('training.lesson', ['assignment' => $assignment, 'lesson' => $lesson])
+        ->assertSet('playbackUrl', null)
+        ->assertSet('playbackError', __('ui.video_playback_failed_help'))
+        ->assertSee(__('ui.video_playback_failed'));
+});
 
 it('seeds a multiple-choice question with an array so one tick does not select them all', function (): void {
     [$assignment, $lesson] = trainableAssignment();

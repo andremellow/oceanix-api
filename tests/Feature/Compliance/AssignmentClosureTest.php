@@ -6,6 +6,7 @@ use App\Enums\ComplianceEventType;
 use App\Enums\Permission;
 use App\Models\AuditLog;
 use App\Models\ComplianceEvent;
+use App\Models\Department;
 use Livewire\Livewire;
 
 beforeEach(fn () => fakeCloudflarePlayback());
@@ -40,13 +41,19 @@ it('refuses to close an assignment as anything else', function (): void {
 
 it('requires the matching permission for each closure', function (): void {
     [$assignment] = trainableAssignment();
+    $department = Department::factory()->create();
+    $assignment->user->departments()->attach($department);
+    $viewer = userWithPermissions([Permission::AssignmentsView]);
+    $viewer->managedDepartments()->attach($department);
+    $operator = userWithPermissions([Permission::AssignmentsWaive]);
+    $operator->managedDepartments()->attach($department);
 
-    Livewire::actingAs(userWithPermissions([Permission::AssignmentsView]))
+    Livewire::actingAs($viewer)
         ->test('compliance.assignment', ['assignment' => $assignment])
         ->call('startClosing', 'waived')
         ->assertForbidden();
 
-    Livewire::actingAs(userWithPermissions([Permission::AssignmentsWaive]))
+    Livewire::actingAs($operator)
         ->test('compliance.assignment', ['assignment' => $assignment])
         ->call('startClosing', 'waived')
         ->set('closeReason', 'Equivalent training completed elsewhere')
@@ -58,13 +65,25 @@ it('requires the matching permission for each closure', function (): void {
 
 it('exports the filtered table as csv and records who pulled it', function (): void {
     [$assignment] = trainableAssignment();
+    $department = Department::factory()->create();
+    $nestedDepartment = Department::factory()->create();
+    $assignment->user->departments()->attach($department);
+    $assignment->user->managedDepartments()->attach($nestedDepartment);
+    [$nestedAssignment] = trainableAssignment();
+    $nestedAssignment->user->departments()->attach($nestedDepartment);
+    [$outsideAssignment] = trainableAssignment();
+    $manager = userWithPermissions([Permission::ComplianceReportsExport]);
+    $manager->managedDepartments()->attach($department);
 
-    $response = $this->actingAs(userWithPermissions([Permission::ComplianceReportsExport]))
+    $response = $this->actingAs($manager)
         ->get(route('assignments.export'));
 
     $response->assertOk()->assertHeader('content-type', 'text/csv; charset=UTF-8');
 
-    expect($response->streamedContent())->toContain($assignment->user->name)
+    expect($response->streamedContent())
+        ->toContain($assignment->user->name)
+        ->toContain($nestedAssignment->user->name)
+        ->not->toContain($outsideAssignment->user->name)
         ->and(AuditLog::query()->where('action', 'compliance_report.exported')->count())->toBe(1);
 });
 

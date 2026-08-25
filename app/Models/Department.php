@@ -34,6 +34,11 @@ class Department extends Model
         return $this->belongsToMany(JobFunction::class)->withTimestamps();
     }
 
+    public function managers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'department_manager')->withTimestamps();
+    }
+
     public function scopeActive(Builder $query): void
     {
         $query->where('status', 'active');

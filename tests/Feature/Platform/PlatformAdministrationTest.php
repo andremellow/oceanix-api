@@ -1,10 +1,11 @@
 <?php
 
+use App\Actions\Auth\AuthenticatePlatformAccount;
+use App\Data\SocialIdentity;
 use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Company;
 use App\Models\User;
-use App\Models\UserTrainingAssignment;
 use App\Services\Platform\PlatformOverview;
 use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Http;
@@ -20,9 +21,9 @@ it('offers platform sign-in instead of forbidding an unauthenticated visitor', f
     session()->forget('platform_account_id');
 
     $this->get(route('platform.dashboard'))
-        ->assertRedirect(route('login', ['platform' => 1]));
+        ->assertRedirect(route('platform.login'));
 
-    $this->get(route('login', ['platform' => 1]))
+    $this->get(route('platform.login'))
         ->assertOk()
         ->assertSee(__('Sign in as platform administrator'));
 });
@@ -39,6 +40,91 @@ it('allows a platform administrator to view cross-company metrics', function ():
         ->assertSee(__('Global overview'))
         ->assertSee(__('Sign out'))
         ->assertSee(route('platform.logout'), escape: false);
+});
+
+it('links each company on the platform dashboard to its administration page', function (): void {
+    $company = Company::factory()->create(['name' => 'Linked Maritime']);
+    $viewer = Account::factory()->platformAdmin()->create();
+    $this->withSession(['platform_account_id' => $viewer->id]);
+
+    Livewire\Livewire::test('platform.dashboard')
+        ->assertSee('Linked Maritime')
+        ->assertSee(route('platform.companies.show', ['company' => $company]), escape: false);
+});
+
+it('lists every platform administrator and excludes regular accounts', function (): void {
+    $viewer = Account::factory()->platformAdmin()->create([
+        'name' => 'Platform Owner',
+        'email' => 'owner@platform.example',
+    ]);
+    Account::factory()->platformAdmin()->create([
+        'name' => 'Platform Operator',
+        'email' => 'operator@platform.example',
+    ]);
+    Account::factory()->create([
+        'name' => 'Regular Account',
+        'email' => 'regular@example.com',
+    ]);
+
+    $this->withSession(['platform_account_id' => $viewer->id]);
+
+    Livewire\Livewire::test('platform.users')
+        ->assertSee(__('Platform administrators'))
+        ->assertSee('Platform Owner')
+        ->assertSee('owner@platform.example')
+        ->assertSee('Platform Operator')
+        ->assertDontSee('Regular Account');
+});
+
+it('invites and authorizes a new platform administrator without an environment allowlist', function (): void {
+    config()->set('services.workos.api_key', 'sk_test');
+    config()->set('oceanix.platform_admin_emails', []);
+    $viewer = Account::factory()->platformAdmin()->create();
+    $this->withSession(['platform_account_id' => $viewer->id]);
+    Http::fake([
+        'api.workos.com/user_management/invitations' => Http::response(['id' => 'inv_platform'], 201),
+    ]);
+
+    Livewire\Livewire::test('platform.users')
+        ->set('administratorName', 'New Platform Admin')
+        ->set('administratorEmail', 'new-platform@example.com')
+        ->call('inviteAdministrator')
+        ->assertHasNoErrors()
+        ->assertSee('new-platform@example.com');
+
+    $invited = Account::query()->where('email', 'new-platform@example.com')->firstOrFail();
+    expect($invited->is_platform_admin)->toBeTrue();
+
+    $authenticated = app(AuthenticatePlatformAccount::class)->handle(new SocialIdentity(
+        provider: 'workos',
+        providerId: 'user_new_platform',
+        email: 'new-platform@example.com',
+        name: 'New Platform Admin',
+        emailVerified: true,
+    ));
+
+    expect($authenticated->id)->toBe($invited->id);
+    Http::assertSent(fn ($request): bool => $request['email'] === 'new-platform@example.com'
+        && ! isset($request['organization_id']));
+});
+
+it('keeps platform users limited to platform administrators', function (): void {
+    $viewer = Account::factory()->platformAdmin()->create();
+    $companyPerson = User::factory()->create([
+        'name' => 'Tenant Only Person',
+        'email' => 'tenant-only@example.com',
+    ]);
+    $this->withSession(['platform_account_id' => $viewer->id]);
+
+    Livewire\Livewire::test('platform.users')
+        ->assertSee($viewer->email)
+        ->assertDontSee($companyPerson->email);
+});
+
+it('denies platform users to a company administrator', function (): void {
+    $this->actingAs(adminUser())
+        ->get(route('platform.users'))
+        ->assertForbidden();
 });
 
 it('allows a platform administrator to create a company', function (): void {
@@ -63,22 +149,22 @@ it('allows a platform administrator to create a company', function (): void {
     expect(AuditLog::query()->where('action', 'platform.company_created')->exists())->toBeTrue();
 });
 
-it('shows only active people and open assignments in platform metrics', function (): void {
+it('shows only platform-owned metrics on the global dashboard', function (): void {
     $user = adminUser();
     $account = Account::factory()->platformAdmin()->create(['email' => $user->email]);
     $user->update(['account_id' => $account->id]);
-    User::factory()->create(['status' => 'suspended']);
-    UserTrainingAssignment::factory()->create(['status' => 'pending']);
-    UserTrainingAssignment::factory()->completed()->create();
 
     $this->actingAs($user)
         ->get(route('platform.dashboard'))
-        ->assertOk();
+        ->assertOk()
+        ->assertDontSee(__('Assignments'))
+        ->assertDontSee(__('Courses'))
+        ->assertDontSee(__('People'));
 
     $metrics = app(PlatformOverview::class)->metrics();
 
-    expect($metrics['people'])->toBe(User::withoutGlobalScope('company')->where('status', 'active')->count())
-        ->and($metrics['assignments'])->toBe(1);
+    expect(array_keys($metrics))->toBe(['companies', 'platform_administrators'])
+        ->and($metrics['platform_administrators'])->toBe(1);
 });
 
 it('allows a platform administrator to suspend and reactivate a company with an audit trail', function (): void {
@@ -114,6 +200,35 @@ it('logs out the tenant guard when leaving the platform', function (): void {
         ->assertRedirect(route('login'));
 
     $this->assertGuest();
+});
+
+it('offers every linked company identity instead of an ambiguous return button', function (): void {
+    $firstCompany = currentCompany();
+    $firstPerson = adminUser();
+    $account = Account::factory()->platformAdmin()->create(['email' => $firstPerson->email]);
+    $firstPerson->update(['account_id' => $account->id, 'employee_id' => 'FIRST-CPF']);
+
+    $secondCompany = Company::factory()->create(['name' => 'Second Maritime']);
+    app(TenantContext::class)->set($secondCompany);
+    User::factory()->create([
+        'account_id' => $account->id,
+        'employee_id' => 'SECOND-CPF',
+        'email' => $firstPerson->email,
+    ]);
+    app(TenantContext::class)->set($firstCompany);
+
+    $this->actingAs($firstPerson)
+        ->withSession(['platform_account_id' => $account->id, 'company_id' => $firstCompany->id])
+        ->get(route('platform.users'))
+        ->assertOk()
+        ->assertSee(__('Choose company'))
+        ->assertSee($firstCompany->name)
+        ->assertSee('FIRST-CPF')
+        ->assertSee('Second Maritime')
+        ->assertSee('SECOND-CPF')
+        ->assertSee(route('platform.companies.enter', ['company' => $firstCompany]), escape: false)
+        ->assertSee(route('platform.companies.enter', ['company' => $secondCompany]), escape: false)
+        ->assertDontSee(__('Return to company'));
 });
 
 it('redirects an old unscoped tenant URL to its company-scoped equivalent', function (): void {
@@ -236,6 +351,30 @@ it('lets a platform administrator invite another company administrator', functio
 
     Http::assertSent(fn ($request): bool => $request['email'] === 'tenant-admin@example.com'
         && $request['organization_id'] === 'org_company');
+});
+
+it('lists every administrator for the selected company and no one from another company', function (): void {
+    $company = currentCompany();
+    $first = adminUser();
+    $first->update(['name' => 'Alpha Administrator', 'email' => 'alpha-admin@example.com']);
+    $second = adminUser();
+    $second->update(['name' => 'Beta Administrator', 'email' => 'beta-admin@example.com']);
+
+    $otherCompany = Company::factory()->create();
+    app(TenantContext::class)->set($otherCompany);
+    $foreign = adminUser();
+    $foreign->update(['name' => 'Foreign Administrator', 'email' => 'foreign-admin@example.com']);
+    app(TenantContext::class)->set($company);
+
+    $platformAccount = Account::factory()->platformAdmin()->create();
+    $this->withSession(['platform_account_id' => $platformAccount->id]);
+
+    Livewire\Livewire::test('platform.company', ['company' => $company])
+        ->assertSee(__('Company administrators'))
+        ->assertSee('Alpha Administrator')
+        ->assertSee('alpha-admin@example.com')
+        ->assertSee('Beta Administrator')
+        ->assertDontSee('Foreign Administrator');
 });
 
 it('provisions a company in WorkOS with its stable public id', function (): void {

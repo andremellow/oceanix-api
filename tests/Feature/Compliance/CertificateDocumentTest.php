@@ -7,6 +7,7 @@ use App\Enums\Permission;
 use App\Jobs\GenerateCertificateDocument;
 use App\Models\Certificate;
 use App\Models\ComplianceEvent;
+use App\Models\Department;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
 use App\Services\Certificates\CertificateRenderer;
@@ -84,13 +85,19 @@ it('keeps a revoked certificate verifiable instead of deleting it', function ():
 it('only lets the revoke permission revoke', function (): void {
     Storage::fake('local');
     $certificate = Certificate::factory()->create();
+    $department = Department::factory()->create();
+    $certificate->user->departments()->attach($department);
+    $viewer = userWithPermissions([Permission::CertificatesView]);
+    $viewer->managedDepartments()->attach($department);
+    $operator = userWithPermissions([Permission::CertificatesRevoke]);
+    $operator->managedDepartments()->attach($department);
 
-    Livewire\Livewire::actingAs(userWithPermissions([Permission::CertificatesView]))
+    Livewire\Livewire::actingAs($viewer)
         ->test('compliance.certificates')
         ->call('startRevoking', $certificate->id)
         ->assertForbidden();
 
-    Livewire\Livewire::actingAs(userWithPermissions([Permission::CertificatesRevoke]))
+    Livewire\Livewire::actingAs($operator)
         ->test('compliance.certificates')
         ->call('startRevoking', $certificate->id)
         ->set('revocationReason', 'Superseded by a corrected issue')
@@ -98,4 +105,37 @@ it('only lets the revoke permission revoke', function (): void {
         ->assertHasNoErrors();
 
     expect($certificate->fresh()->isRevoked())->toBeTrue();
+});
+
+it('lets a manager view recursive reports certificates but not unrelated certificates', function (): void {
+    Storage::fake('local');
+    $department = Department::factory()->create();
+    $nestedDepartment = Department::factory()->create();
+    $manager = userWithPermissions([Permission::CertificatesView]);
+    $direct = User::factory()->create();
+    $nested = User::factory()->create();
+    $outside = User::factory()->create();
+
+    $manager->managedDepartments()->attach($department);
+    $direct->departments()->attach($department);
+    $direct->managedDepartments()->attach($nestedDepartment);
+    $nested->departments()->attach($nestedDepartment);
+
+    $directCertificate = Certificate::factory()->create(['user_id' => $direct]);
+    $nestedCertificate = Certificate::factory()->create(['user_id' => $nested]);
+    $outsideCertificate = Certificate::factory()->create(['user_id' => $outside]);
+
+    Livewire\Livewire::actingAs($manager)
+        ->test('compliance.certificates')
+        ->assertSee($directCertificate->certificate_number)
+        ->assertSee($nestedCertificate->certificate_number)
+        ->assertDontSee($outsideCertificate->certificate_number);
+
+    $this->actingAs($manager)
+        ->get(route('certificates.download', ['certificate' => $nestedCertificate]))
+        ->assertOk();
+
+    $this->actingAs(userWithPermissions([Permission::CertificatesView]))
+        ->get(route('certificates.download', ['certificate' => $nestedCertificate]))
+        ->assertForbidden();
 });

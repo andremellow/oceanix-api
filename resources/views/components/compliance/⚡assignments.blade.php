@@ -3,11 +3,10 @@
 use App\Actions\Assignments\CreateManualAssignment;
 use App\Enums\AssignmentStatus;
 use App\Models\Course;
-use App\Models\Department;
-use App\Models\JobFunction;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
 use App\Services\Compliance\ComplianceOverview;
+use App\Services\Organization\ManagedPeopleScope;
 use Illuminate\Support\Carbon;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -52,7 +51,7 @@ new class extends Component
     }
 
     /** Assigns a course to one person without a requirement — docs/product-spec.md §9. */
-    public function assign(CreateManualAssignment $action): void
+    public function assign(CreateManualAssignment $action, ManagedPeopleScope $managedPeople): void
     {
         $this->authorize('create', UserTrainingAssignment::class);
 
@@ -64,6 +63,9 @@ new class extends Component
         ])['assignment'];
 
         $course = Course::query()->findOrFail($validated['course_id']);
+        $person = User::query()->findOrFail($validated['user_id']);
+
+        abort_unless($managedPeople->canView(auth()->user(), $person), 403);
 
         if ($course->current_published_version_id === null) {
             $this->addError('assignment.course_id', __('ui.course_not_publishable'));
@@ -72,7 +74,7 @@ new class extends Component
         }
 
         $action->handle(
-            User::query()->findOrFail($validated['user_id']),
+            $person,
             $course,
             dueAt: $validated['due_at'] ? Carbon::parse($validated['due_at'])->endOfDay() : null,
             availableAt: $validated['available_at'] ? Carbon::parse($validated['available_at'])->startOfDay() : null,
@@ -91,8 +93,10 @@ new class extends Component
         $this->resetPage();
     }
 
-    public function with(ComplianceOverview $overview): array
+    public function with(ComplianceOverview $overview, ManagedPeopleScope $managedPeople): array
     {
+        $facets = $overview->assignmentFacets(auth()->user());
+
         return [
             'assignments' => $overview->assignments([
                 'search' => $this->search,
@@ -101,12 +105,16 @@ new class extends Component
                 'course_id' => $this->course_id ?: null,
                 'status' => $this->status ?: null,
                 'due_bucket' => $this->due_bucket ?: null,
-            ])->paginate(25),
-            'departments' => Department::query()->active()->orderBy('name')->get(),
-            'jobFunctions' => JobFunction::query()->active()->orderBy('name')->get(),
-            'courses' => Course::query()->orderBy('title')->get(),
+            ], auth()->user())->paginate(25),
+            ...$facets,
             'assignableCourses' => Course::query()->assignable()->orderBy('title')->get(),
-            'people' => User::query()->eligibleForTraining()->orderBy('name')->get(),
+            'people' => auth()->user()->can('create', UserTrainingAssignment::class)
+                ? User::query()
+                    ->whereKey($managedPeople->userIds(auth()->user()))
+                    ->eligibleForTraining()
+                    ->orderBy('name')
+                    ->get()
+                : collect(),
             'buckets' => $overview->dueBuckets(),
         ];
     }
@@ -137,9 +145,7 @@ new class extends Component
         @endcan
     </x-page-hero>
 
-    @if (session('status'))
-        <flux:callout variant="success" :heading="session('status')" />
-    @endif
+    <x-status-message />
 
     <div class="form-panel rounded-[20px] border border-[#dde3e7] p-4 sm:p-5">
         <div class="grid gap-3 lg:grid-cols-3 xl:grid-cols-6">
@@ -205,7 +211,11 @@ new class extends Component
                     @foreach ($assignments as $assignment)
                         <tr class="border-t">
                             <td>
-                                <a href="{{ route('people.show', ['user' => $assignment->user]) }}" wire:navigate class="font-semibold text-[#262d33] hover:text-[#1c6b84]">{{ $assignment->user->name }}</a>
+                                @can('view', $assignment->user)
+                                    <a href="{{ route('people.show', ['company' => app(App\Tenancy\TenantContext::class)->get(), 'user' => $assignment->user]) }}" wire:navigate class="font-semibold text-[#262d33] hover:text-[#1c6b84]">{{ $assignment->user->name }}</a>
+                                @else
+                                    <span class="font-semibold text-[#262d33]">{{ $assignment->user->name }}</span>
+                                @endcan
                                 <span class="block text-xs text-[#8a9298]">{{ $assignment->user->email }}</span>
                             </td>
                             <td class="text-[#5f6a71]">{{ $assignment->user->departments->pluck('name')->join(', ') ?: '—' }}</td>
@@ -233,8 +243,9 @@ new class extends Component
         <div>{{ $assignments->links() }}</div>
     @endif
 
-    <flux:modal wire:model.self="assigning" class="max-w-lg">
-        <form wire:submit="assign" class="space-y-5">
+    @can('create', App\Models\UserTrainingAssignment::class)
+        <flux:modal wire:model.self="assigning" class="max-w-lg">
+            <form wire:submit="assign" class="space-y-5">
             <div>
                 <flux:heading size="lg">{{ __('Assign training') }}</flux:heading>
                 <flux:text class="mt-2">{{ __('ui.manual_assignment_help') }}</flux:text>
@@ -263,6 +274,7 @@ new class extends Component
                 <flux:button x-on:click="$wire.assigning = false" variant="ghost" type="button">{{ __('Cancel') }}</flux:button>
                 <flux:button type="submit" variant="primary" class="admin-primary-action">{{ __('Create assignment') }}</flux:button>
             </div>
-        </form>
-    </flux:modal>
+            </form>
+        </flux:modal>
+    @endcan
 </div>

@@ -5,7 +5,9 @@ use App\Actions\Platform\GrantPlatformCompanyAccess;
 use App\Actions\Platform\InviteCompanyAdministrator;
 use App\Actions\Platform\ProvisionCompanyInWorkos;
 use App\Models\Company;
+use App\Models\User;
 use App\Services\Platform\PlatformAccess;
+use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -67,6 +69,22 @@ new #[Layout('layouts::platform')] class extends Component
         }
     }
 
+    public function with(): array
+    {
+        return [
+            'administrators' => User::query()
+                ->withoutGlobalScope('company')
+                ->where('company_id', $this->company->id)
+                ->whereHas('roles', fn (Builder $query): Builder => $query
+                    ->withoutGlobalScope('company')
+                    ->where('roles.company_id', $this->company->id)
+                    ->where('key', 'admin'))
+                ->orderBy('name')
+                ->orderBy('email')
+                ->get(),
+        ];
+    }
+
     private function refreshCompanyAccess(PlatformAccess $access): void
     {
         $this->hasCompanyAccess = $this->company->users()
@@ -83,7 +101,7 @@ new #[Layout('layouts::platform')] class extends Component
         <flux:button :href="route('platform.companies')" wire:navigate variant="ghost">{{ __('Back to companies') }}</flux:button>
     </x-page-hero>
 
-    @if (session('status')) <flux:callout variant="success" :heading="session('status')" /> @endif
+    <x-status-message />
     @error('workos') <flux:callout variant="danger" :heading="$message" /> @enderror
 
     <div class="grid gap-5 lg:grid-cols-2">
@@ -115,6 +133,37 @@ new #[Layout('layouts::platform')] class extends Component
             @endif
         </section>
     </div>
+
+    <section class="detail-card space-y-4">
+        <div class="flex flex-wrap items-end justify-between gap-3">
+            <div>
+                <h2 class="detail-card-title">{{ __('Company administrators') }}</h2>
+                <p class="mt-1 text-sm text-[#5f6a71]">{{ __('People with the protected Administrator profile in this company.') }}</p>
+            </div>
+            <span class="status-pill status-pill--neutral">{{ trans_choice('{0} No administrators|{1} :count administrator|[2,*] :count administrators', $administrators->count(), ['count' => $administrators->count()]) }}</span>
+        </div>
+
+        @if ($administrators->isEmpty())
+            <x-empty-state icon="users" :title="__('No company administrators')" :description="__('Invite the first administrator using the form below.')" />
+        @else
+            <div class="overflow-x-auto rounded-[16px] border border-[#dde3e7]">
+                <table class="min-w-full divide-y divide-[#e5eaed] text-left text-sm">
+                    <thead class="bg-[#f8fafb] text-[10px] font-bold uppercase tracking-[.12em] text-[#7a858b]">
+                        <tr><th class="px-4 py-3">{{ __('Name') }}</th><th class="px-4 py-3">{{ __('Email') }}</th><th class="px-4 py-3">{{ __('Status') }}</th></tr>
+                    </thead>
+                    <tbody class="divide-y divide-[#edf0f2] bg-white">
+                        @foreach ($administrators as $administrator)
+                            <tr wire:key="company-administrator-{{ $administrator->id }}">
+                                <td class="px-4 py-3 font-semibold text-[#262d33]">{{ $administrator->name }}</td>
+                                <td class="px-4 py-3 text-[#5f6a71]">{{ $administrator->email }}</td>
+                                <td class="px-4 py-3"><span class="status-pill {{ $administrator->status->pillModifier() }}">{{ $administrator->status->label() }}</span></td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </section>
 
     <section class="detail-card max-w-2xl space-y-4">
         <div>

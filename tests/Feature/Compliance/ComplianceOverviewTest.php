@@ -3,6 +3,7 @@
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Department;
+use App\Models\JobFunction;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
 use App\Services\Compliance\ComplianceOverview;
@@ -86,4 +87,60 @@ it('bands overdue assignments into the reporting buckets', function (): void {
     expect($overview->assignments(['due_bucket' => 'overdue_1_7'])->count())->toBe(1)
         ->and($overview->assignments(['due_bucket' => 'overdue_8_30'])->count())->toBe(1)
         ->and($overview->assignments(['due_bucket' => 'overdue_60_plus'])->count())->toBe(1);
+});
+
+it('limits metrics and assignments to the managers recursive organization tree', function (): void {
+    $course = publishedCourse();
+    $department = Department::factory()->create();
+    $nestedFunction = JobFunction::factory()->create();
+    $manager = User::factory()->create();
+    $direct = User::factory()->create();
+    $nested = User::factory()->create();
+    $outside = User::factory()->create();
+
+    $manager->managedDepartments()->attach($department);
+    $direct->departments()->attach($department);
+    $direct->managedJobFunctions()->attach($nestedFunction);
+    $nested->jobFunctions()->attach($nestedFunction);
+
+    UserTrainingAssignment::factory()->forCourse($course)->overdue()->create(['user_id' => $direct]);
+    UserTrainingAssignment::factory()->forCourse($course)->create(['user_id' => $nested]);
+    UserTrainingAssignment::factory()->forCourse($course)->create(['user_id' => $outside]);
+
+    $overview = app(ComplianceOverview::class);
+    $metrics = $overview->metrics($manager);
+    $visibleUserIds = $overview->assignments(viewer: $manager)->pluck('user_id')->all();
+
+    expect($metrics['people'])->toBe(2)
+        ->and($metrics['overdue'])->toBe(1)
+        ->and($visibleUserIds)->toContain($direct->id, $nested->id)
+        ->not->toContain($outside->id);
+});
+
+it('builds assignment filters only from assignments in the managers scope', function (): void {
+    $visibleCourse = publishedCourse('VISIBLE');
+    $hiddenCourse = publishedCourse('HIDDEN');
+    $unusedCourse = publishedCourse('UNUSED');
+    $visibleDepartment = Department::factory()->create(['name' => 'Visible Department']);
+    $hiddenDepartment = Department::factory()->create(['name' => 'Hidden Department']);
+    $visibleFunction = JobFunction::factory()->create(['name' => 'Visible Function']);
+    $hiddenFunction = JobFunction::factory()->create(['name' => 'Hidden Function']);
+    $manager = User::factory()->create();
+    $visible = User::factory()->create();
+    $hidden = User::factory()->create();
+
+    $manager->managedDepartments()->attach($visibleDepartment);
+    $visible->departments()->attach($visibleDepartment);
+    $visible->jobFunctions()->attach($visibleFunction);
+    $hidden->departments()->attach($hiddenDepartment);
+    $hidden->jobFunctions()->attach($hiddenFunction);
+    UserTrainingAssignment::factory()->forCourse($visibleCourse)->create(['user_id' => $visible]);
+    UserTrainingAssignment::factory()->forCourse($hiddenCourse)->create(['user_id' => $hidden]);
+
+    $facets = app(ComplianceOverview::class)->assignmentFacets($manager);
+
+    expect($facets['departments']->modelKeys())->toBe([$visibleDepartment->id])
+        ->and($facets['jobFunctions']->modelKeys())->toBe([$visibleFunction->id])
+        ->and($facets['courses']->modelKeys())->toBe([$visibleCourse->id])
+        ->and($facets['courses']->modelKeys())->not->toContain($hiddenCourse->id, $unusedCourse->id);
 });

@@ -14,10 +14,14 @@ use App\Models\TrainingRequirement;
 use App\Models\TrainingRequirementTarget;
 use App\Services\Audit\AuditLogger;
 use App\Services\Requirements\RequirementEligibilityService;
+use App\Services\Requirements\RequirementSchedulePreview;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 new class extends Component
 {
+    use WithPagination;
+
     public bool $editing = false;
 
     public ?int $editingId = null;
@@ -26,6 +30,8 @@ new class extends Component
     public array $form = [];
 
     public ?int $targetingId = null;
+
+    public ?int $scheduleRequirementId = null;
 
     /** @var array<string, mixed> */
     public array $targetForm = [];
@@ -84,6 +90,21 @@ new class extends Component
             'form.due_days_after_assignment' => ['required', 'integer', 'min:1', 'max:365'],
             'form.effective_from' => ['nullable', 'date'],
             'form.effective_until' => ['nullable', 'date', 'after_or_equal:form.effective_from'],
+        ], [
+            'form.name.required' => __('Enter a name for the requirement.'),
+            'form.name.max' => __('The requirement name may not exceed 200 characters.'),
+            'form.course_id.required' => __('Select a course.'),
+            'form.course_id.exists' => __('The selected course is no longer available.'),
+            'form.frequency_value.integer' => __('Enter a whole number for the frequency.'),
+            'form.frequency_value.min' => __('The frequency must be at least 1.'),
+            'form.frequency_value.max' => __('The frequency may not exceed 120.'),
+            'form.assignment_lead_days.required' => __('Enter how many days before the deadline the training should be assigned.'),
+            'form.assignment_lead_days.integer' => __('Assignment lead time must be a whole number of days.'),
+            'form.due_days_after_assignment.required' => __('Enter how many days the person has to complete the training.'),
+            'form.due_days_after_assignment.integer' => __('The completion deadline must be a whole number of days.'),
+            'form.effective_from.date' => __('Enter a valid start date.'),
+            'form.effective_until.date' => __('Enter a valid end date.'),
+            'form.effective_until.after_or_equal' => __('The end date must be on or after the start date.'),
         ])['form'];
 
         $action->handle($validated, $requirement);
@@ -121,6 +142,14 @@ new class extends Component
         $this->targetForm = ['scope_type' => TargetScope::Department->value, 'department_id' => '', 'job_function_id' => ''];
     }
 
+    public function showSchedule(int $requirementId): void
+    {
+        $requirement = TrainingRequirement::query()->findOrFail($requirementId);
+        $this->authorize('view', $requirement);
+        $this->scheduleRequirementId = $requirement->id;
+        $this->resetPage('requirementSchedulePage');
+    }
+
     public function addTarget(AuditLogger $audit): void
     {
         $requirement = TrainingRequirement::query()->findOrFail($this->targetingId);
@@ -132,6 +161,11 @@ new class extends Component
         $this->validate([
             'targetForm.department_id' => [$scope->requiresDepartment() ? 'required' : 'nullable', 'nullable', 'exists:departments,id'],
             'targetForm.job_function_id' => [$scope->requiresJobFunction() ? 'required' : 'nullable', 'nullable', 'exists:job_functions,id'],
+        ], [
+            'targetForm.department_id.required' => __('Select a department.'),
+            'targetForm.department_id.exists' => __('The selected department is no longer available.'),
+            'targetForm.job_function_id.required' => __('Select a job function.'),
+            'targetForm.job_function_id.exists' => __('The selected job function is no longer available.'),
         ]);
 
         $target = TrainingRequirementTarget::query()->create([
@@ -163,7 +197,7 @@ new class extends Component
         $target->delete();
     }
 
-    public function with(RequirementEligibilityService $eligibility): array
+    public function with(RequirementEligibilityService $eligibility, RequirementSchedulePreview $schedulePreview): array
     {
         $requirements = TrainingRequirement::query()
             ->with(['course', 'targets.department', 'targets.jobFunction'])
@@ -180,6 +214,15 @@ new class extends Component
             'courses' => Course::query()->orderBy('title')->get(),
             'departments' => Department::query()->active()->orderBy('name')->get(),
             'jobFunctions' => JobFunction::query()->active()->orderBy('name')->get(),
+            'scheduledRequirement' => $this->scheduleRequirementId === null
+                ? null
+                : TrainingRequirement::query()->with('course')->findOrFail($this->scheduleRequirementId),
+            'scheduleRows' => $this->scheduleRequirementId === null
+                ? null
+                : $schedulePreview->paginateForRequirement(
+                    TrainingRequirement::query()->findOrFail($this->scheduleRequirementId),
+                    $this->getPage('requirementSchedulePage'),
+                ),
         ];
     }
 
@@ -212,9 +255,7 @@ new class extends Component
         @endcan
     </x-page-hero>
 
-    @if (session('status'))
-        <flux:callout variant="success" :heading="session('status')" />
-    @endif
+    <x-status-message />
 
     @error('activation')
         <flux:callout variant="danger" :heading="$message" />
@@ -279,6 +320,7 @@ new class extends Component
                         <span class="text-[#8a9298]">{{ trans_choice('ui.people_in_scope', $inScope[$requirement->id], ['count' => $inScope[$requirement->id]]) }}</span>
                         <div class="flex items-center gap-2">
                             <span class="font-bold text-[#1c6b84]">{{ trans_choice('ui.assignments_count', $requirement->assignments_count, ['count' => $requirement->assignments_count]) }}</span>
+                            <flux:button wire:click="showSchedule({{ $requirement->id }})" variant="ghost" size="sm" icon="calendar-days">{{ __('View schedule') }}</flux:button>
                             @can('update', $requirement)
                                 <flux:button wire:click="startEditing({{ $requirement->id }})" variant="ghost" size="sm">{{ __('Edit') }}</flux:button>
                             @endcan
@@ -344,6 +386,40 @@ new class extends Component
                 <flux:button type="submit" variant="primary" class="admin-primary-action">{{ __('Save requirement') }}</flux:button>
             </div>
         </form>
+    </flux:modal>
+
+    <flux:modal wire:model.self="scheduleRequirementId" class="max-w-4xl">
+        @if ($scheduledRequirement)
+            <div class="space-y-5">
+                <div>
+                    <flux:heading size="lg">{{ __('Upcoming schedule') }}</flux:heading>
+                    <flux:text class="mt-2">{{ __('Next 3 months for :requirement. This preview does not create assignments.', ['requirement' => $scheduledRequirement->name]) }}</flux:text>
+                </div>
+                @if ($scheduleRows->isEmpty())
+                    <x-empty-state icon="calendar-days" :title="__('No upcoming occurrences')" :description="__('No eligible people or occurrences were found in the next 3 months.')" />
+                @else
+                    <div class="overflow-x-auto rounded-[20px] border border-[#dde3e7]">
+                        <table class="w-full text-left text-sm">
+                            <thead><tr><th>{{ __('Person') }}</th><th>{{ __('Cycle') }}</th><th>{{ __('Available') }}</th><th>{{ __('Due date') }}</th><th>{{ __('Status') }}</th></tr></thead>
+                            <tbody>
+                                @foreach ($scheduleRows as $row)
+                                    <tr class="border-t" wire:key="schedule-{{ $row['person_id'] }}-{{ $row['cycle'] }}">
+                                        <td class="font-semibold text-[#262d33]">{{ $row['person_name'] }}</td>
+                                        <td>{{ $row['cycle'] }}</td>
+                                        <td>{{ $row['available_at']?->locale(app()->getLocale())->translatedFormat('M j, Y') ?? '—' }}</td>
+                                        <td>{{ $row['due_at']->locale(app()->getLocale())->translatedFormat('M j, Y') }}</td>
+                                        <td><span class="status-pill {{ $row['materialized'] ? 'status-pill--accent' : 'status-pill--neutral' }}">{{ $row['status'] }}{{ $row['estimated'] ? ' · '.__('Estimated') : '' }}</span></td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>{{ $scheduleRows->links() }}</div>
+                @endif
+                <p class="text-xs text-[#6f797f]">{{ __('Dates based on completion are estimates until the previous training is completed.') }}</p>
+                <div class="flex justify-end"><flux:button wire:click="$set('scheduleRequirementId', null)" variant="ghost">{{ __('Close') }}</flux:button></div>
+            </div>
+        @endif
     </flux:modal>
 
     {{-- Target form --}}

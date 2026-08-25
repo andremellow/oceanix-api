@@ -2,6 +2,7 @@
 
 use App\Actions\Certificates\RevokeCertificate;
 use App\Models\Certificate;
+use App\Services\Organization\ManagedPeopleScope;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -45,9 +46,12 @@ new class extends Component
         $this->resetPage();
     }
 
-    public function with(): array
+    public function with(ManagedPeopleScope $managedPeople): array
     {
-        $query = Certificate::query()->with(['user', 'course', 'courseVersion']);
+        $visibleIds = auth()->user()->isAdmin() ? null : [...$managedPeople->userIds(auth()->user()), auth()->id()];
+        $query = Certificate::query()
+            ->when($visibleIds !== null, fn ($scoped) => $scoped->whereIn('user_id', $visibleIds))
+            ->with(['user', 'course', 'courseVersion']);
 
         if ($this->search !== '') {
             $term = '%'.strtolower($this->search).'%';
@@ -69,9 +73,7 @@ new class extends Component
         <span class="status-pill status-pill--accent">{{ trans_choice('ui.results_count', $certificates->total(), ['count' => $certificates->total()]) }}</span>
     </x-page-hero>
 
-    @if (session('status'))
-        <flux:callout variant="success" :heading="session('status')" />
-    @endif
+    <x-status-message />
 
     <div class="form-panel rounded-[20px] border border-[#dde3e7] p-4 sm:p-5">
         <flux:input wire:model.live.debounce.400ms="search" class="admin-control" icon="magnifying-glass" :label="__('Search')" :placeholder="__('Certificate number or holder')" />

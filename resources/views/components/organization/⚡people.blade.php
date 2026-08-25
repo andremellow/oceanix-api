@@ -114,7 +114,7 @@ new class extends Component
         </div>
     </x-page-hero>
 
-    @if (session('status')) <flux:callout variant="success" :heading="session('status')" /> @endif
+    <x-status-message />
     @error('invitations') <flux:callout variant="danger" :heading="$message" /> @enderror
 
     <div class="form-panel rounded-[20px] border border-[#dde3e7] p-4 sm:p-5">
@@ -168,7 +168,7 @@ new class extends Component
                                 <td><flux:checkbox wire:model.live="selected" value="{{ $person->id }}" :disabled="! in_array($person->status, [App\Enums\UserStatus::Active, App\Enums\UserStatus::Invited], true)" :aria-label="__('Select :name', ['name' => $person->name])" /></td>
                             @endcan
                             <td>
-                                <a href="{{ route('people.show', ['user' => $person]) }}" wire:navigate class="font-semibold text-[#262d33] hover:text-[#1c6b84]">{{ $person->name }}</a>
+                                <a href="{{ route('people.show', ['company' => app(App\Tenancy\TenantContext::class)->get(), 'user' => $person]) }}" wire:navigate class="font-semibold text-[#262d33] hover:text-[#1c6b84]">{{ $person->name }}</a>
                                 <span class="block text-xs text-[#8a9298]">{{ $person->email }}</span>
                             </td>
                             <td class="text-[#5f6a71]">{{ $person->departments->pluck('name')->join(', ') ?: '—' }}</td>

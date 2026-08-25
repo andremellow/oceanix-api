@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\AssignmentStatus;
 use App\Enums\CourseVersionStatus;
 use App\Enums\Permission;
 use App\Enums\QuestionType;
@@ -9,6 +10,7 @@ use App\Models\CourseVersion;
 use App\Models\Lesson;
 use App\Models\Question;
 use App\Models\QuestionOption;
+use App\Models\UserTrainingAssignment;
 use App\Models\Video;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
@@ -80,6 +82,38 @@ it('keeps exactly one correct answer on a single-choice question', function (): 
 
     expect($first->fresh()->is_correct)->toBeFalse()
         ->and($second->fresh()->is_correct)->toBeTrue();
+});
+
+it('keeps typed option text when adding an option and selecting the correct answer', function (): void {
+    $course = draftCourse();
+    $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id]);
+    $question = Question::factory()->create(['lesson_id' => $lesson->id]);
+    $first = QuestionOption::factory()->create([
+        'question_id' => $question->id,
+        'position' => 1,
+        'text' => '',
+    ]);
+    $second = QuestionOption::factory()->create([
+        'question_id' => $question->id,
+        'position' => 2,
+        'text' => '',
+    ]);
+
+    Livewire::actingAs(adminUser())
+        ->test('courses.editor', ['course' => $course])
+        ->set('lessons.0.questions.0.options.0.text', 'Option 1')
+        ->set('lessons.0.questions.0.options.1.text', 'Option 2')
+        ->call('addOption', 0, 0)
+        ->assertSet('lessons.0.questions.0.options.0.text', 'Option 1')
+        ->assertSet('lessons.0.questions.0.options.1.text', 'Option 2')
+        ->call('selectSingleCorrect', 0, 0, 0)
+        ->assertSet('lessons.0.questions.0.options.0.text', 'Option 1')
+        ->assertSet('lessons.0.questions.0.options.0.is_correct', true);
+
+    expect($first->fresh()->text)->toBe('Option 1')
+        ->and($first->fresh()->is_correct)->toBeTrue()
+        ->and($second->fresh()->text)->toBe('Option 2')
+        ->and($question->options()->count())->toBe(3);
 });
 
 it('reorders lessons and renumbers their positions', function (): void {
@@ -154,6 +188,48 @@ it('publishes from the editor once every rule is satisfied', function (): void {
 
     expect($version->fresh()->status)->toBe(CourseVersionStatus::Published)
         ->and($course->fresh()->current_published_version_id)->toBe($version->id);
+});
+
+it('can replace every open assignment when publishing a new version', function (): void {
+    $course = draftCourse();
+    $draft = $course->versions()->first();
+    $draft->update(['version_number' => 2]);
+    $previous = CourseVersion::factory()->published()->create([
+        'course_id' => $course->id,
+        'version_number' => 1,
+    ]);
+    $course->update(['current_published_version_id' => $previous->id]);
+
+    $lesson = Lesson::factory()->create(['course_version_id' => $draft->id]);
+    Video::factory()->create(['lesson_id' => $lesson->id]);
+    $question = Question::factory()->create(['lesson_id' => $lesson->id]);
+    QuestionOption::factory()->correct()->create(['question_id' => $question->id, 'position' => 1]);
+    QuestionOption::factory()->create(['question_id' => $question->id, 'position' => 2]);
+
+    $first = UserTrainingAssignment::factory()->create([
+        'course_id' => $course->id,
+        'course_version_id' => $previous->id,
+    ]);
+    $second = UserTrainingAssignment::factory()->inProgress()->create([
+        'course_id' => $course->id,
+        'course_version_id' => $previous->id,
+    ]);
+    $completed = UserTrainingAssignment::factory()->completed()->create([
+        'course_id' => $course->id,
+        'course_version_id' => $previous->id,
+    ]);
+
+    Livewire::actingAs(adminUser())
+        ->test('courses.editor', ['course' => $course])
+        ->assertSet('assignmentUpdateMode', 'replace_open')
+        ->call('publish')
+        ->assertRedirect();
+
+    expect($first->fresh()->status)->toBe(AssignmentStatus::Cancelled)
+        ->and($second->fresh()->status)->toBe(AssignmentStatus::Cancelled)
+        ->and($completed->fresh()->status)->toBe(AssignmentStatus::Completed)
+        ->and(UserTrainingAssignment::query()->where('course_version_id', $draft->id)->count())->toBe(2)
+        ->and(UserTrainingAssignment::query()->where('supersedes_assignment_id', $first->id)->exists())->toBeTrue();
 });
 
 it('reports what is missing instead of publishing an incomplete version', function (): void {

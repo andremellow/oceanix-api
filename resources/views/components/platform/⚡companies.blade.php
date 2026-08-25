@@ -42,7 +42,7 @@ new #[Layout('layouts::platform')] class extends Component
 
 <div class="space-y-7">
     <x-page-hero :kicker="__('Platform administration')" :title="__('Companies')" :description="__('Create and inspect tenant workspaces.')" />
-    @if (session('status')) <flux:callout variant="success" :heading="session('status')" /> @endif
+    <x-status-message />
     @error('workos') <flux:callout variant="danger" :heading="$message" /> @enderror
     <div class="grid gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
         <form wire:submit="create" class="form-panel space-y-4 rounded-[20px] border border-[#dde3e7] p-5">

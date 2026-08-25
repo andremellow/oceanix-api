@@ -21,7 +21,7 @@ new class extends Component
         $this->showsCompliance = auth()->user()->can(Permission::ComplianceDashboardView->value);
 
         if ($this->showsCompliance) {
-            $this->metrics = $overview->metrics();
+            $this->metrics = $overview->metrics(auth()->user());
         }
 
         $personal = $board->build(auth()->user());
@@ -37,8 +37,8 @@ new class extends Component
     {
         return [
             'attention' => $this->showsCompliance
-                ? $overview->assignments(['due_bucket' => 'overdue_60_plus'])->limit(8)->get()
-                    ->concat($overview->assignments(['status' => 'open'])->limit(8)->get())
+                ? $overview->assignments(['due_bucket' => 'overdue_60_plus'], auth()->user())->limit(8)->get()
+                    ->concat($overview->assignments(['status' => 'open'], auth()->user())->limit(8)->get())
                     ->unique('id')
                     ->take(8)
                 : collect(),
@@ -93,12 +93,24 @@ new class extends Component
             </div>
 
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <div class="metric-card metric-card--teal">
+                @can(\App\Enums\Permission::AssignmentsView->value)
+                    <a
+                        href="{{ route('assignments.index', ['company' => app(App\Tenancy\TenantContext::class)->get(), 'status' => 'open']) }}"
+                        wire:navigate
+                        class="metric-card metric-card--teal transition hover:-translate-y-0.5 hover:border-[#acd9e4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1c6b84]"
+                        aria-label="{{ __('View all open training for people in my scope') }}">
+                @else
+                    <div class="metric-card metric-card--teal">
+                @endcan
                     <span class="metric-icon"><flux:icon.users class="size-5" /></span>
                     <p class="metric-label">{{ __('ui.active_people') }}</p>
                     <p class="metric-value">{{ $metrics['people'] }}</p>
                     <p class="metric-detail">{{ __('ui.compliant_count', ['count' => $metrics['compliant']]) }}</p>
-                </div>
+                @can(\App\Enums\Permission::AssignmentsView->value)
+                    </a>
+                @else
+                    </div>
+                @endcan
                 <div class="metric-card metric-card--amber">
                     <span class="metric-icon"><flux:icon.clock class="size-5" /></span>
                     <p class="metric-label">{{ __('ui.due_soon') }}</p>

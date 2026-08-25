@@ -30,6 +30,10 @@ class WorkosController extends Controller
 
     public function platformRedirect(Request $request): RedirectResponse
     {
+        // Platform identity is global. Never leak a previously selected tenant into the
+        // WorkOS authorization URL for this flow.
+        app(TenantContext::class)->clear();
+
         return $this->startRedirect($request, 'platform');
     }
 
@@ -47,7 +51,7 @@ class WorkosController extends Controller
                 route('auth.workos.callback'),
             );
         } catch (SocialLoginProviderException $e) {
-            return $this->failedLoginRedirect()
+            return $this->failedLoginRedirect($mode)
                 ->withErrors(['workos' => $e->getMessage()]);
         }
 
@@ -79,7 +83,7 @@ class WorkosController extends Controller
                 $user = $this->authenticate->handle($identity);
             }
         } catch (SocialLoginProviderException $e) {
-            return $this->failedLoginRedirect()
+            return $this->failedLoginRedirect($mode)
                 ->withErrors(['workos' => $e->getMessage()]);
         }
 
@@ -96,8 +100,12 @@ class WorkosController extends Controller
         return redirect()->intended(route('dashboard'));
     }
 
-    private function failedLoginRedirect(): RedirectResponse
+    private function failedLoginRedirect(string $mode = 'tenant'): RedirectResponse
     {
+        if ($mode === 'platform') {
+            return redirect()->route('platform.login');
+        }
+
         $company = app(TenantContext::class)->get();
 
         return $company === null

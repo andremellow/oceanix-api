@@ -83,9 +83,7 @@ new class extends Component
         @endcan
     </x-page-hero>
 
-    @if (session('status'))
-        <flux:callout variant="success" :heading="session('status')" />
-    @endif
+    <x-status-message />
 
     @if ($assignment->metadata['closed_reason'] ?? null)
         <flux:callout variant="secondary" :heading="__('ui.closed_reason')" :text="$assignment->metadata['closed_reason']" />

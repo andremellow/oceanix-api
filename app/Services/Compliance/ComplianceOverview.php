@@ -4,9 +4,14 @@ namespace App\Services\Compliance;
 
 use App\Enums\AssignmentStatus;
 use App\Enums\UserStatus;
+use App\Models\Course;
+use App\Models\Department;
+use App\Models\JobFunction;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
+use App\Services\Organization\ManagedPeopleScope;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 /**
  * Read projection behind the administrative dashboard.
@@ -17,6 +22,8 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class ComplianceOverview
 {
+    public function __construct(private readonly ManagedPeopleScope $managedPeople) {}
+
     /** An assignment due within this window is surfaced as "due soon". */
     public const DUE_SOON_DAYS = 14;
 
@@ -29,11 +36,12 @@ class ComplianceOverview
      *     critical_overdue: int, completion_rate: int, in_progress: int
      * }
      */
-    public function metrics(): array
+    public function metrics(?User $viewer = null): array
     {
-        $people = User::query()->where('status', UserStatus::Active->value)->count();
+        $visibleIds = $this->visibleUserIds($viewer);
+        $people = User::query()->whereKey($visibleIds)->where('status', UserStatus::Active->value)->count();
 
-        $overdueQuery = UserTrainingAssignment::query()->overdue();
+        $overdueQuery = UserTrainingAssignment::query()->whereIn('user_id', $visibleIds)->overdue();
         $overdue = (clone $overdueQuery)->count();
 
         $criticalOverdue = (clone $overdueQuery)
@@ -43,6 +51,7 @@ class ComplianceOverview
         $peopleWithOverdue = (clone $overdueQuery)->distinct()->count('user_id');
 
         $completed = UserTrainingAssignment::query()
+            ->whereIn('user_id', $visibleIds)
             ->where('status', AssignmentStatus::Completed->value)
             ->count();
 
@@ -51,10 +60,11 @@ class ComplianceOverview
         return [
             'people' => $people,
             'compliant' => max(0, $people - $peopleWithOverdue),
-            'due_soon' => UserTrainingAssignment::query()->dueWithin(self::DUE_SOON_DAYS)->count(),
+            'due_soon' => UserTrainingAssignment::query()->whereIn('user_id', $visibleIds)->dueWithin(self::DUE_SOON_DAYS)->count(),
             'overdue' => $overdue,
             'critical_overdue' => $criticalOverdue,
             'in_progress' => UserTrainingAssignment::query()
+                ->whereIn('user_id', $visibleIds)
                 ->where('status', AssignmentStatus::InProgress->value)
                 ->count(),
             'completion_rate' => $closed > 0 ? (int) round($completed / $closed * 100) : 100,
@@ -70,9 +80,10 @@ class ComplianceOverview
      * }  $filters
      * @return Builder<UserTrainingAssignment>
      */
-    public function assignments(array $filters = []): Builder
+    public function assignments(array $filters = [], ?User $viewer = null): Builder
     {
         $query = UserTrainingAssignment::query()
+            ->whereIn('user_id', $this->visibleUserIds($viewer))
             ->with(['user.departments', 'user.jobFunctions', 'course', 'courseVersion']);
 
         if (! empty($filters['search'])) {
@@ -112,6 +123,44 @@ class ComplianceOverview
         $this->applyDueBucket($query, $filters['due_bucket'] ?? null);
 
         return $query->orderByRaw('due_at is null')->orderBy('due_at');
+    }
+
+    /**
+     * Options for the assignment filters are evidence-derived: an option is visible only
+     * when at least one assignment belonging to the viewer's people uses it.
+     *
+     * @return array{departments: Collection, jobFunctions: Collection, courses: Collection}
+     */
+    public function assignmentFacets(User $viewer): array
+    {
+        $visibleIds = $this->visibleUserIds($viewer);
+
+        return [
+            'departments' => Department::query()
+                ->active()
+                ->whereHas('users', fn (Builder $users) => $users
+                    ->whereKey($visibleIds)
+                    ->whereHas('assignments'))
+                ->orderBy('name')
+                ->get(),
+            'jobFunctions' => JobFunction::query()
+                ->active()
+                ->whereHas('users', fn (Builder $users) => $users
+                    ->whereKey($visibleIds)
+                    ->whereHas('assignments'))
+                ->orderBy('name')
+                ->get(),
+            'courses' => Course::query()
+                ->whereHas('assignments', fn (Builder $assignments) => $assignments->whereIn('user_id', $visibleIds))
+                ->orderBy('title')
+                ->get(),
+        ];
+    }
+
+    /** @return list<int> */
+    private function visibleUserIds(?User $viewer): array
+    {
+        return $viewer === null ? User::query()->pluck('id')->all() : $this->managedPeople->userIds($viewer);
     }
 
     /**

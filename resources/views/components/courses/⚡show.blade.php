@@ -77,9 +77,7 @@ new class extends Component
         @endcan
     </x-page-hero>
 
-    @if (session('status'))
-        <flux:callout variant="success" :heading="session('status')" />
-    @endif
+    <x-status-message />
 
     <div class="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
         <section class="detail-card">

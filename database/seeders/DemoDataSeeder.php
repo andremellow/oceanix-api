@@ -26,7 +26,6 @@ use App\Models\User;
 use App\Models\UserTrainingAssignment;
 use App\Models\Video;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 
 /**
  * Offshore-flavored sample data for local development and visual review.
@@ -101,10 +100,12 @@ class DemoDataSeeder extends Seeder
 
                 Video::query()->create([
                     'lesson_id' => $lesson->id,
-                    'provider' => 'cloudflare_stream',
-                    'provider_asset_id' => Str::random(32),
+                    // Demo data has no remote asset. Never manufacture a Cloudflare id:
+                    // it looks playable locally but inevitably fails authorization later.
+                    'provider' => 'demo_placeholder',
+                    'provider_asset_id' => 'demo-placeholder-'.($index + 1),
                     'duration_seconds' => $lessonData['duration'],
-                    'status' => 'ready',
+                    'status' => 'failed',
                 ]);
 
                 $question = Question::query()->create([
@@ -168,6 +169,36 @@ class DemoDataSeeder extends Seeder
             ['name' => 'Bianca Nogueira', 'email' => 'bianca.nogueira@example.com', 'dept' => 'OPS', 'fn' => 'DCK', 'due' => 18, 'status' => AssignmentStatus::Completed, 'course' => 'OFF-SAFE'],
         ];
 
+        $departmentPlan = [
+            'OPS' => ['label' => 'Operations', 'functions' => ['SUP', 'DCK']],
+            'MNT' => ['label' => 'Maintenance', 'functions' => ['WLD', 'SUP']],
+            'HSE' => ['label' => 'HSE', 'functions' => ['SAF']],
+            'MAR' => ['label' => 'Marine', 'functions' => ['DCK']],
+        ];
+        $statusPlan = [
+            AssignmentStatus::Pending,
+            AssignmentStatus::InProgress,
+            AssignmentStatus::Overdue,
+            AssignmentStatus::Completed,
+        ];
+
+        for ($index = count($people); $index < 50; $index++) {
+            $departmentCode = array_keys($departmentPlan)[$index % count($departmentPlan)];
+            $plan = $departmentPlan[$departmentCode];
+            $number = $index + 1;
+            $status = $statusPlan[$index % count($statusPlan)];
+
+            $people[] = [
+                'name' => sprintf('%s Employee %02d', $plan['label'], $number),
+                'email' => sprintf('demo.%s.%02d@example.com', strtolower($departmentCode), $number),
+                'dept' => $departmentCode,
+                'fn' => $plan['functions'][$index % count($plan['functions'])],
+                'due' => $status === AssignmentStatus::Overdue ? -($number % 45 + 1) : ($number % 75 + 5),
+                'status' => $status,
+                'course' => ['OFF-SAFE', 'HOTWORK', 'HUET-01'][$index % 3],
+            ];
+        }
+
         foreach ($people as $index => $person) {
             $account = Account::query()->firstOrCreate(
                 ['email' => $person['email']],
@@ -213,5 +244,15 @@ class DemoDataSeeder extends Seeder
                 ],
             );
         }
+
+        // Predictable manager scopes make recursive dashboard testing easy in local data.
+        User::query()->where('email', 'marina.costa@example.com')->first()?->managedDepartments()->syncWithoutDetaching([$departments['OPS']->id]);
+        User::query()->where('email', 'rafael.duarte@example.com')->first()?->managedDepartments()->syncWithoutDetaching([$departments['MNT']->id]);
+        User::query()->where('email', 'helena.vasques@example.com')->first()?->managedDepartments()->syncWithoutDetaching([$departments['HSE']->id]);
+        User::query()->where('email', 'tomas.ferreira@example.com')->first()?->managedDepartments()->syncWithoutDetaching([$departments['MAR']->id]);
+
+        // This Operations employee manages Maintenance, creating a visible second level
+        // below Marina for exercising recursive manager visibility.
+        User::query()->where('email', 'demo.ops.09@example.com')->first()?->managedDepartments()->syncWithoutDetaching([$departments['MNT']->id]);
     }
 }

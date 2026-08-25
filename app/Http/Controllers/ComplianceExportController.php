@@ -25,7 +25,7 @@ class ComplianceExportController extends Controller
 
         $filename = sprintf('oceanix-compliance-%s.csv', now()->format('Y-m-d-His'));
 
-        return response()->streamDownload(function () use ($overview, $filters): void {
+        return response()->streamDownload(function () use ($overview, $filters, $request): void {
             $handle = fopen('php://output', 'wb');
 
             fputcsv($handle, [
@@ -34,7 +34,7 @@ class ComplianceExportController extends Controller
                 __('Days overdue'), __('Completed'), __('Certificate'),
             ]);
 
-            $overview->assignments($filters)
+            $overview->assignments($filters, $request->user())
                 ->with(['user.departments', 'user.jobFunctions', 'course', 'courseVersion', 'certificate'])
                 ->chunk(500, function ($assignments) use ($handle): void {
                     foreach ($assignments as $assignment) {

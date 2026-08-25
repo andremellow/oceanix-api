@@ -277,6 +277,14 @@
 }
 
 @layer components {
+    /* Keep the floating toaster clear of the persistent application header. */
+    ui-toast-group[position*="end"] {
+        position: fixed !important;
+        inset: 6rem 1.5rem auto auto !important;
+        width: min(24rem, calc(100vw - 2rem)) !important;
+        margin: 0 !important;
+    }
+
     /* Long-form documents rendered from markdown (policies, LGPD notices, guides). */
     .brand-document { @apply max-w-none break-words text-sm leading-7 text-[#4d575e]; }
     .brand-document h1 { @apply mb-6 text-2xl font-bold tracking-tight text-[#1c2226] sm:text-3xl; }

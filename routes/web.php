@@ -1,5 +1,7 @@
 <?php
 
+use App\Actions\Auth\StartUserImpersonation;
+use App\Actions\Auth\StopUserImpersonation;
 use App\Actions\Platform\EnterCompany;
 use App\Actions\Tenancy\SwitchCompany;
 use App\Enums\UserStatus;
@@ -59,6 +61,7 @@ if (app()->environment('local')) {
 
 Route::middleware('guest')->group(function (): void {
     Route::livewire('/login', 'auth.login')->name('login');
+    Route::livewire('/platform/login', 'auth.login')->name('platform.login');
     Route::livewire('/login/{company:slug}', 'auth.login')
         ->middleware(IdentifyCompany::class)
         ->name('tenant.login');
@@ -115,6 +118,7 @@ Route::prefix('platform')
     ->group(function (): void {
         Route::livewire('/', 'platform.dashboard')->name('platform.dashboard');
         Route::livewire('/companies', 'platform.companies')->name('platform.companies');
+        Route::livewire('/users', 'platform.users')->name('platform.users');
         Route::livewire('/companies/{company}', 'platform.company')->name('platform.companies.show');
         Route::post('/companies/{company}/enter', function (Company $company, EnterCompany $action) {
             $action->handle($company);
@@ -188,6 +192,16 @@ Route::prefix('c/{company:slug}')
         Route::livewire('/dashboard', 'dashboard')->name('dashboard');
         Route::livewire('/my-training', 'training.my-training')->name('my-training');
         Route::livewire('/my-training/{assignment}', 'training.assignment')->name('my-training.show');
+        Route::post('/people/{user}/impersonate', function (Company $company, User $user, StartUserImpersonation $action) {
+            $action->handle(auth()->user(), $user);
+
+            return redirect()->route('dashboard', ['company' => $company]);
+        })->name('impersonation.start');
+        Route::post('/impersonation/stop', function (Company $company, StopUserImpersonation $action) {
+            $action->handle();
+
+            return redirect()->route('dashboard', ['company' => $company]);
+        })->name('impersonation.stop');
         Route::get('/certificates/{certificate}/download', CertificateDownloadController::class)
             ->name('certificates.download');
         Route::livewire('/my-training/{assignment}/lessons/{lesson}', 'training.lesson')->name('my-training.lesson');
