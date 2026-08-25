@@ -39,6 +39,16 @@ function fakeVideoProvider(): void
             return new VideoUpload('fake', 'asset', 'https://upload.test');
         }
 
+        public function listAssets(int $limit = 12, string $search = ''): array
+        {
+            return [];
+        }
+
+        public function createAssetPreviewAuthorization(string $assetId, ?string $hlsUrl, int $ttlMinutes): PlaybackAuthorization
+        {
+            return new PlaybackAuthorization('preview-token', 'https://play.test/preview.m3u8', now()->addMinutes($ttlMinutes));
+        }
+
         public function getAssetStatus(string $assetId): VideoAssetStatus
         {
             return new VideoAssetStatus(VideoStatus::Ready);

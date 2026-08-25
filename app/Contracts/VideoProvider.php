@@ -5,6 +5,7 @@ namespace App\Contracts;
 use App\Data\Video\DownloadAuthorization;
 use App\Data\Video\PlaybackAuthorization;
 use App\Data\Video\VideoAssetStatus;
+use App\Data\Video\VideoLibraryItem;
 use App\Data\Video\VideoUpload;
 use App\Models\Video;
 
@@ -30,6 +31,11 @@ interface VideoProvider
     public function verifyConfiguration(bool $write = true): array;
 
     public function createUpload(string $title, int $maxDurationSeconds): VideoUpload;
+
+    /** @return list<VideoLibraryItem> */
+    public function listAssets(int $limit = 12, string $search = ''): array;
+
+    public function createAssetPreviewAuthorization(string $assetId, ?string $hlsUrl, int $ttlMinutes): PlaybackAuthorization;
 
     public function getAssetStatus(string $assetId): VideoAssetStatus;
 

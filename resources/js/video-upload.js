@@ -6,7 +6,9 @@
  * component mark the asset as processing. XHR (not fetch) because we want real progress.
  */
 document.addEventListener('alpine:init', () => {
-    window.Alpine.data('lessonVideoUpload', (lessonIndex) => ({
+    const basicUploadLimit = 200 * 1024 * 1024
+
+    window.Alpine.data('lessonVideoUpload', (lessonIndex, messages = {}) => ({
         uploading: false,
         progress: 0,
         error: null,
@@ -15,6 +17,12 @@ document.addEventListener('alpine:init', () => {
             const file = event.target.files?.[0]
 
             if (! file) {
+                return
+            }
+
+            if (file.size > basicUploadLimit) {
+                this.error = messages.fileTooLarge ?? 'This video is larger than 200 MB. Select a smaller file.'
+                event.target.value = ''
                 return
             }
 
@@ -62,4 +70,28 @@ document.addEventListener('alpine:init', () => {
             })
         },
     }))
+
+    window.Alpine.data('videoLibraryPreview', (url, poster) => ({
+        hls: null,
+
+        init() {
+            const video = this.$refs.video
+            video.poster = poster ?? ''
+
+            if (url?.includes('.m3u8') && Hls.isSupported()) {
+                this.hls = new Hls({ enableWorker: true })
+                this.hls.loadSource(url)
+                this.hls.attachMedia(video)
+
+                return
+            }
+
+            video.src = url ?? ''
+        },
+
+        destroy() {
+            this.hls?.destroy()
+        },
+    }))
 })
+import Hls from 'hls.js'

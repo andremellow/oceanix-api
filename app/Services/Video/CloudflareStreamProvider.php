@@ -6,6 +6,7 @@ use App\Contracts\VideoProvider;
 use App\Data\Video\DownloadAuthorization;
 use App\Data\Video\PlaybackAuthorization;
 use App\Data\Video\VideoAssetStatus;
+use App\Data\Video\VideoLibraryItem;
 use App\Data\Video\VideoUpload;
 use App\Enums\VideoStatus;
 use App\Exceptions\VideoProviderException;
@@ -127,6 +128,66 @@ class CloudflareStreamProvider implements VideoProvider
         );
     }
 
+    /** @return list<VideoLibraryItem> */
+    public function listAssets(int $limit = 12, string $search = ''): array
+    {
+        $query = [
+            'limit' => min(max($limit, 1), 1000),
+        ];
+
+        if (trim($search) !== '') {
+            $query['search'] = trim($search);
+        }
+
+        $response = $this->request()->get($this->accountUrl('/stream'), $query);
+
+        $this->guard($response->successful(), 'listAssets', $response->json());
+
+        return collect($response->json('result', []))
+            ->filter(fn (mixed $asset): bool => is_array($asset) && filled($asset['uid'] ?? null))
+            ->map(function (array $asset): VideoLibraryItem {
+                $state = (string) data_get($asset, 'status.state', '');
+                $duration = $asset['duration'] ?? null;
+
+                return new VideoLibraryItem(
+                    assetId: (string) $asset['uid'],
+                    title: (string) (data_get($asset, 'meta.name') ?: __('Untitled video')),
+                    status: match ($state) {
+                        'ready' => VideoStatus::Ready,
+                        'inprogress', 'queued', 'downloading' => VideoStatus::Processing,
+                        'error' => VideoStatus::Failed,
+                        default => VideoStatus::Uploading,
+                    },
+                    durationSeconds: is_numeric($duration) ? (int) round((float) $duration) : null,
+                    createdAt: is_string($asset['created'] ?? null) ? $asset['created'] : null,
+                    hlsUrl: is_string(data_get($asset, 'playback.hls')) ? data_get($asset, 'playback.hls') : null,
+                );
+            })
+            ->values()
+            ->all();
+    }
+
+    public function createAssetPreviewAuthorization(string $assetId, ?string $hlsUrl, int $ttlMinutes): PlaybackAuthorization
+    {
+        $expiresAt = now()->addMinutes($ttlMinutes);
+        $response = $this->request()->post(
+            $this->accountUrl("/stream/{$assetId}/token"),
+            ['exp' => $expiresAt->getTimestamp()],
+        );
+
+        $this->guard($response->successful(), 'createAssetPreviewAuthorization', $response->json());
+
+        $token = (string) $response->json('result.token');
+        $host = $this->deliveryHostFromHls($hlsUrl);
+
+        return new PlaybackAuthorization(
+            token: $token,
+            playbackUrl: sprintf('%s/%s/manifest/video.m3u8', $host, $token),
+            expiresAt: $expiresAt,
+            posterUrl: sprintf('%s/%s/thumbnails/thumbnail.jpg', $host, $token),
+        );
+    }
+
     public function getAssetStatus(string $assetId): VideoAssetStatus
     {
         $response = $this->request()->get($this->accountUrl("/stream/{$assetId}"));
@@ -244,6 +305,12 @@ class CloudflareStreamProvider implements VideoProvider
     private function deliveryHostFor(Video $video): string
     {
         $hls = $video->metadata['hls'] ?? null;
+
+        return $this->deliveryHostFromHls(is_string($hls) ? $hls : null);
+    }
+
+    private function deliveryHostFromHls(?string $hls): string
+    {
 
         if (is_string($hls) && preg_match('#^(https://[^/]+)/#', $hls, $matches) === 1) {
             return $matches[1];
