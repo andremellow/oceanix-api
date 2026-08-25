@@ -208,6 +208,8 @@ Os vínculos devem manter datas efetivas (`starts_at`, `ends_at`) quando necess�
 - O privilégio `is_platform_admin` pertence ao `account`, fora do catálogo de permissões dos tenants, e não pode ser concedido por um administrador de empresa.
 - Em uma instalação vazia, um e-mail listado em `PLATFORM_ADMIN_EMAILS` pode autenticar diretamente na área global sem empresa ou pessoa pré-existente. Ao criar a primeira empresa, essa conta é vinculada automaticamente à primeira pessoa administradora do tenant.
 - A administração global fica em `/platform`; páginas operacionais ficam em `/c/{company_slug}/...`. O nome da empresa ativa deve permanecer visível no shell autenticado.
+- O login de super administradores é separado em `/platform/login` e nunca envia uma organização ao WorkOS. O login corporativo parte do código ou URL da empresa e envia seu `organization_id`, fazendo o AuthKit selecionar esse tenant e omitir o seletor de outras memberships.
+- `/platform/users` administra exclusivamente as contas super administradoras da plataforma (`accounts.is_platform_admin`), incluindo listagem e convite. Pessoas dos tenants nunca aparecem nessa tela; elas são administradas somente depois de entrar na empresa correspondente.
 - A empresa possui um `public_id` UUID estável para integrações (`external_id` no WorkOS) e pode armazenar o `workos_organization_id` devolvido pelo WorkOS.
 - A tela canônica para colaboradores é Pessoas. Perfis de acesso e vínculo de identidade são administrados no detalhe da pessoa; não existe um segundo cadastro concorrente chamado Usuários.
 
@@ -447,8 +449,15 @@ O MVD não precisa de uma linguagem booleana arbitrária. Targets explícitos co
 
 - Um assignment pode existir sem requirement.
 - O assignment congela a `course_version_id` aplicável.
+- Ao publicar uma nova versão, o operador escolhe entre manter assignments abertos na versão congelada ou substituí-los em lote. A substituição cancela a obrigação anterior com motivo e cria outra ligada à nova versão; nunca reescreve o `course_version_id` histórico.
 - Mudanças de setor/função não apagam uma obrigação já materializada.
+- Uma pessoa pode gerenciar zero ou mais departments e job functions, independentemente dos vínculos organizacionais que determinam sua própria elegibilidade para treinamentos.
+- Não existe marcação direta de "manager de uma pessoa". Reports diretos são as pessoas com associação ativa aos departments ou job functions pelos quais o manager é responsável.
+- O escopo de visibilidade gerencial é transitivo: se um report direto também gerencia departments ou job functions, o manager acima enxerga recursivamente todas as pessoas desses escopos, em qualquer nível. Dashboard, assignments, exports e certificates aplicam a mesma árvore; permissão libera a funcionalidade, mas não amplia o escopo de dados.
+- No dashboard gerencial, o card de pessoas ativas abre os treinamentos ainda abertos de todas as pessoas visíveis na árvore do manager, independentemente de estarem destacados em "Needs attention"; ele nunca redireciona para um diretório irrestrito de pessoas.
+- O ambiente local possui dados demo determinísticos com cerca de 50 pessoas distribuídas em departments e job functions conhecidos, além de responsabilidades gerenciais em mais de um nível. Somente no ambiente local, um administrador da empresa pode impersonar uma pessoa do mesmo tenant para testar sua experiência, com aviso persistente e retorno seguro para a conta original.
 - Não se criam antecipadamente todas as ocorrências futuras de uma recorrência.
+- Requirements e pessoas oferecem uma projeção somente de leitura, paginada em 25 ocorrências, de pelo menos três meses das ocorrências recorrentes. A projeção distingue assignments materializados de datas esperadas e identifica como estimativas as datas dependentes de conclusão; consultar a projeção nunca cria assignments.
 - A engine cria a ocorrência necessária e agenda/materializa a próxima no momento apropriado.
 - Alterações em uma regra não reescrevem o histórico; podem encerrar uma série e iniciar outra.
 - `series_key` permite relacionar ocorrências recorrentes sem depender da geração antecipada.

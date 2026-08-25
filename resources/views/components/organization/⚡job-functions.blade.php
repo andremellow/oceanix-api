@@ -60,9 +60,7 @@ new class extends Component
         :title="__('Job functions')"
         :description="__('ui.job_functions_page_description')" />
 
-    @if (session('status'))
-        <flux:callout variant="success" :heading="session('status')" />
-    @endif
+    <x-status-message />
 
     @can(App\Enums\Permission::JobFunctionsManage->value)
         <div class="form-panel rounded-[20px] border border-[#dde3e7] p-5 sm:p-6">

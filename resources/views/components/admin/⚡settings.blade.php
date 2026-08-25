@@ -70,9 +70,7 @@ new class extends Component
         @endcan
     </x-page-hero>
 
-    @if (session('status'))
-        <flux:callout variant="success" :heading="session('status')" />
-    @endif
+    <x-status-message />
 
     <div class="form-panel rounded-[20px] border border-[#dde3e7] p-5 sm:p-6">
         <div class="grid gap-5 lg:grid-cols-2">

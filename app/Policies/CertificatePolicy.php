@@ -5,6 +5,7 @@ namespace App\Policies;
 use App\Enums\Permission;
 use App\Models\Certificate;
 use App\Models\User;
+use App\Services\Organization\ManagedPeopleScope;
 
 class CertificatePolicy
 {
@@ -16,7 +17,8 @@ class CertificatePolicy
     public function view(User $user, Certificate $certificate): bool
     {
         return $certificate->user_id === $user->id
-            || $user->hasPermission(Permission::CertificatesView);
+            || ($user->hasPermission(Permission::CertificatesView)
+                && app(ManagedPeopleScope::class)->canView($user, $certificate->user_id));
     }
 
     /** Downloading the PDF follows the same boundary as viewing the record. */
@@ -28,6 +30,7 @@ class CertificatePolicy
     public function revoke(User $user, Certificate $certificate): bool
     {
         return ! $certificate->isRevoked()
-            && $user->hasPermission(Permission::CertificatesRevoke);
+            && $user->hasPermission(Permission::CertificatesRevoke)
+            && app(ManagedPeopleScope::class)->canView($user, $certificate->user_id);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Actions\Courses;
 
+use App\Actions\Assignments\ReplaceOpenAssignmentsForCourseVersion;
 use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
 use App\Exceptions\CoursePublicationException;
@@ -20,9 +21,10 @@ class PublishCourseVersion
     public function __construct(
         private readonly CourseVersionValidator $validator,
         private readonly AuditLogger $audit,
+        private readonly ReplaceOpenAssignmentsForCourseVersion $replaceAssignments,
     ) {}
 
-    public function handle(CourseVersion $version, int $publishedBy): CourseVersion
+    public function handle(CourseVersion $version, int $publishedBy, bool $replaceOpenAssignments = false): CourseVersion
     {
         if (! $version->isEditable()) {
             throw CoursePublicationException::notEditable();
@@ -34,7 +36,7 @@ class PublishCourseVersion
             throw new CoursePublicationException($problems);
         }
 
-        return DB::transaction(function () use ($version, $publishedBy): CourseVersion {
+        return DB::transaction(function () use ($version, $publishedBy, $replaceOpenAssignments): CourseVersion {
             $course = $version->course;
             $previous = $course->currentPublishedVersion;
 
@@ -50,6 +52,10 @@ class PublishCourseVersion
                 'current_published_version_id' => $version->id,
                 'status' => CourseStatus::Active,
             ]);
+
+            if ($replaceOpenAssignments) {
+                $this->replaceAssignments->handle($version);
+            }
 
             $this->audit->log(
                 'course_version.published',

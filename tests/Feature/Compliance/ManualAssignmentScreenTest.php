@@ -3,12 +3,23 @@
 use App\Enums\AssignmentOrigin;
 use App\Enums\Permission;
 use App\Models\Course;
+use App\Models\CourseVersion;
+use App\Models\Department;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
 use Livewire\Livewire;
 
+function publishedManualAssignmentCourse(): Course
+{
+    $course = Course::factory()->create();
+    $version = CourseVersion::factory()->published()->create(['course_id' => $course]);
+    $course->update(['current_published_version_id' => $version->id]);
+
+    return $course->refresh();
+}
+
 it('assigns a course to one person from the assignments screen', function (): void {
-    $course = assignableCourseForRequirements();
+    $course = publishedManualAssignmentCourse();
     $person = User::factory()->create(['name' => 'Marina Costa']);
 
     Livewire::actingAs(adminUser())
@@ -48,4 +59,55 @@ it('denies assigning to a profile that can only view assignments', function (): 
         ->test('compliance.assignments')
         ->call('startAssigning')
         ->assertForbidden();
+});
+
+it('prevents a manager from assigning training outside their organization tree', function (): void {
+    $course = publishedManualAssignmentCourse();
+    $department = Department::factory()->create();
+    $inside = User::factory()->create(['name' => 'Inside scope']);
+    $inside->departments()->attach($department);
+    $outside = User::factory()->create(['name' => 'Outside scope']);
+    $manager = userWithPermissions([Permission::AssignmentsCreate]);
+    $manager->managedDepartments()->attach($department);
+
+    Livewire::actingAs($manager)
+        ->test('compliance.assignments')
+        ->assertSee('Inside scope')
+        ->assertDontSee('Outside scope')
+        ->call('startAssigning')
+        ->set('assignment.user_id', (string) $outside->id)
+        ->set('assignment.course_id', (string) $course->id)
+        ->call('assign')
+        ->assertForbidden();
+
+    expect(UserTrainingAssignment::query()->count())->toBe(0);
+});
+
+it('renders an employee as plain text when the assignment viewer cannot open people', function (): void {
+    $department = Department::factory()->create();
+    $person = User::factory()->create(['name' => 'Visible Assignment Person']);
+    $person->departments()->attach($department);
+    $assignment = UserTrainingAssignment::factory()->create(['user_id' => $person]);
+    $manager = userWithPermissions([Permission::AssignmentsView]);
+    $manager->managedDepartments()->attach($department);
+    $personUrl = route('people.show', ['company' => currentCompany(), 'user' => $person]);
+
+    Livewire::actingAs($manager)
+        ->test('compliance.assignments')
+        ->assertSee($assignment->user->name)
+        ->assertDontSee($personUrl, escape: false);
+});
+
+it('links an employee when the assignment viewer may also open people', function (): void {
+    $department = Department::factory()->create();
+    $person = User::factory()->create(['name' => 'Linked Assignment Person']);
+    $person->departments()->attach($department);
+    UserTrainingAssignment::factory()->create(['user_id' => $person]);
+    $manager = userWithPermissions([Permission::AssignmentsView, Permission::PeopleView]);
+    $manager->managedDepartments()->attach($department);
+    $personUrl = route('people.show', ['company' => currentCompany(), 'user' => $person]);
+
+    Livewire::actingAs($manager)
+        ->test('compliance.assignments')
+        ->assertSee($personUrl, escape: false);
 });

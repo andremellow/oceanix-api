@@ -12,11 +12,15 @@ class AuthenticatePlatformAccount
     {
         $email = strtolower($identity->email);
 
-        if (! $identity->emailVerified || ! in_array($email, config('oceanix.platform_admin_emails', []), true)) {
+        $existing = Account::query()->whereRaw('lower(email) = ?', [$email])->first();
+        $authorized = in_array($email, config('oceanix.platform_admin_emails', []), true)
+            || ($existing?->is_platform_admin === true && $existing->status === 'active');
+
+        if (! $identity->emailVerified || ! $authorized) {
             throw SocialLoginProviderException::accountNotProvisioned();
         }
 
-        $account = Account::query()->whereRaw('lower(email) = ?', [$email])->firstOrNew(['email' => $email]);
+        $account = $existing ?? Account::query()->firstOrNew(['email' => $email]);
 
         if ($account->exists && $account->provider_id !== null && $account->provider_id !== $identity->providerId) {
             throw SocialLoginProviderException::accountNotProvisioned();

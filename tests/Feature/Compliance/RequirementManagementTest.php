@@ -8,6 +8,8 @@ use App\Models\CourseVersion;
 use App\Models\Department;
 use App\Models\TrainingRequirement;
 use App\Models\TrainingRequirementTarget;
+use App\Models\User;
+use App\Models\UserTrainingAssignment;
 use Livewire\Livewire;
 
 function assignableCourseForRequirements(): Course
@@ -51,6 +53,42 @@ it('clears the interval when the requirement is one-off', function (): void {
         ->call('save');
 
     expect(TrainingRequirement::query()->firstOrFail()->frequency_value)->toBeNull();
+});
+
+it('shows friendly localized validation messages instead of internal field names', function (): void {
+    app()->setLocale('pt_BR');
+
+    Livewire::actingAs(adminUser())
+        ->test('compliance.requirements')
+        ->call('startCreating')
+        ->call('save')
+        ->assertHasErrors(['form.name', 'form.course_id'])
+        ->assertSee('Informe o nome da regra.')
+        ->assertSee('Selecione um curso.')
+        ->assertDontSee('The form.name field is required.')
+        ->assertDontSee('The form.course id field is required.');
+});
+
+it('opens a three month schedule preview without materializing assignments', function (): void {
+    $requirement = TrainingRequirement::factory()->create([
+        'course_id' => assignableCourseForRequirements(),
+        'name' => 'Schedule preview requirement',
+        'frequency_value' => 1,
+        'due_days_after_assignment' => 10,
+    ]);
+    TrainingRequirementTarget::factory()->create([
+        'training_requirement_id' => $requirement,
+        'scope_type' => TargetScope::Everyone,
+    ]);
+    User::factory()->create(['name' => 'Preview Person']);
+
+    Livewire::actingAs(adminUser())
+        ->test('compliance.requirements')
+        ->call('showSchedule', $requirement->id)
+        ->assertSee('Preview Person')
+        ->assertSee(__('Expected'));
+
+    expect(UserTrainingAssignment::query()->count())->toBe(0);
 });
 
 it('refuses to activate a requirement with no audience', function (): void {

@@ -16,7 +16,7 @@ class EnsureUserIsPlatformAdmin
     {
         if ($this->access->account() === null) {
             if (! Auth::check()) {
-                return redirect()->guest(route('login', ['platform' => 1]));
+                return redirect()->guest(route('platform.login'));
             }
 
             abort(403);

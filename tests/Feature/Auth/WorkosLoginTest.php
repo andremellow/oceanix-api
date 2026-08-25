@@ -16,11 +16,18 @@ beforeEach(function (): void {
 it('shows the sign-in page to guests', function (): void {
     $this->get(route('login'))
         ->assertOk()
-        ->assertSee(__('Company code'));
+        ->assertSee(__('Company code'))
+        ->assertDontSee(__('Platform administrator sign in'))
+        ->assertDontSee(route('platform.login'), escape: false);
 
     $this->get(route('tenant.login', currentCompany()))
         ->assertOk()
         ->assertSee(__('ui.login_action'));
+
+    $this->get(route('platform.login'))
+        ->assertOk()
+        ->assertSee(__('Sign in as platform administrator'))
+        ->assertDontSee(__('Company code'));
 });
 
 it('redirects authenticated users away from sign-in', function (): void {
@@ -41,6 +48,15 @@ it('scopes WorkOS sign-in to the selected company organization', function (): vo
 
     $this->get(route('auth.workos.redirect'))
         ->assertRedirectContains('organization_id=org_company');
+});
+
+it('never scopes platform administrator sign-in to a company organization', function (): void {
+    currentCompany()->update(['workos_organization_id' => 'org_company']);
+
+    $response = $this->get(route('auth.workos.platform.redirect'));
+
+    $response->assertRedirectContains('api.workos.com/user_management/authorize');
+    expect($response->headers->get('Location'))->not->toContain('organization_id');
 });
 
 it('rejects a callback whose state was not minted for this session', function (): void {

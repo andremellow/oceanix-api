@@ -74,6 +74,16 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
+    public function managedDepartments(): BelongsToMany
+    {
+        return $this->belongsToMany(Department::class, 'department_manager')->withTimestamps();
+    }
+
+    public function managedJobFunctions(): BelongsToMany
+    {
+        return $this->belongsToMany(JobFunction::class, 'job_function_manager')->withTimestamps();
+    }
+
     /**
      * @return BelongsToMany<Role, $this>
      */

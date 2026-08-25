@@ -44,6 +44,8 @@ new class extends Component
 
     public bool $confirmingPublish = false;
 
+    public string $assignmentUpdateMode = 'replace_open';
+
     /** @var list<string> */
     public array $publishProblems = [];
 
@@ -263,7 +265,11 @@ new class extends Component
         $this->authorize('publish', $this->course);
 
         try {
-            $action->handle($this->version, auth()->id());
+            $action->handle(
+                $this->version,
+                auth()->id(),
+                $this->assignmentUpdateMode === 'replace_open',
+            );
         } catch (CoursePublicationException $e) {
             $this->publishProblems = $e->problems;
 
@@ -279,6 +285,11 @@ new class extends Component
     {
         return [
             'problems' => $validator->problems($this->version),
+            'openAssignmentCount' => App\Models\UserTrainingAssignment::query()
+                ->where('course_id', $this->course->id)
+                ->where('course_version_id', '!=', $this->version->id)
+                ->open()
+                ->count(),
             'usingFakeVideoProvider' => $videoProvider->key() === 'local_fake',
             'hasEncodingVideo' => collect($this->lessons)->contains(
                 fn (array $lesson): bool => in_array($lesson['video']['status'] ?? null, ['uploading', 'processing'], true)
@@ -652,7 +663,7 @@ new class extends Component
                                                             class="size-4 rounded border-[#8e989f] text-[#1c6b84] focus:ring-[#3e8ba3]"
                                                             aria-label="{{ __('Correct answer') }}">
                                                     @endif
-                                                    <flux:input wire:model.blur="lessons.{{ $lessonIndex }}.questions.{{ $questionIndex }}.options.{{ $optionIndex }}.text" class="admin-control flex-1" :placeholder="__('Answer option')" />
+                                                    <flux:input wire:model="lessons.{{ $lessonIndex }}.questions.{{ $questionIndex }}.options.{{ $optionIndex }}.text" class="admin-control flex-1" :placeholder="__('Answer option')" />
                                                     <flux:button wire:click="removeOption({{ $lessonIndex }}, {{ $questionIndex }}, {{ $optionIndex }})" variant="ghost" size="sm" icon="x-mark" :aria-label="__('Remove option')" />
                                                 </div>
                                             @endforeach
@@ -697,6 +708,20 @@ new class extends Component
                         @endforeach
                     </ul>
                 </flux:callout>
+            @endif
+
+            @if ($openAssignmentCount > 0)
+                <fieldset class="space-y-3 rounded-[16px] border border-[#dde3e7] p-4">
+                    <legend class="px-1 text-sm font-bold text-[#262d33]">{{ trans_choice('ui.existing_assignments_title', $openAssignmentCount, ['count' => $openAssignmentCount]) }}</legend>
+                    <label class="flex cursor-pointer items-start gap-3">
+                        <input type="radio" wire:model="assignmentUpdateMode" value="replace_open" class="mt-1 size-4 border-[#8e989f] text-[#1c6b84] focus:ring-[#3e8ba3]">
+                        <span><strong class="block text-sm text-[#262d33]">{{ __('ui.replace_open_assignments') }}</strong><span class="text-xs text-[#707a80]">{{ __('ui.replace_open_assignments_help') }}</span></span>
+                    </label>
+                    <label class="flex cursor-pointer items-start gap-3">
+                        <input type="radio" wire:model="assignmentUpdateMode" value="new_only" class="mt-1 size-4 border-[#8e989f] text-[#1c6b84] focus:ring-[#3e8ba3]">
+                        <span><strong class="block text-sm text-[#262d33]">{{ __('ui.keep_existing_assignments') }}</strong><span class="text-xs text-[#707a80]">{{ __('ui.keep_existing_assignments_help') }}</span></span>
+                    </label>
+                </fieldset>
             @endif
 
             <div class="flex justify-end gap-2">

@@ -2,12 +2,24 @@
 
 use App\Enums\ComplianceEventType;
 use App\Enums\Permission;
+use App\Models\Department;
+use App\Models\User;
 use App\Services\Compliance\AssignmentEvidence;
 use App\Services\Compliance\ComplianceEventRecorder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 beforeEach(fn () => fakeCloudflarePlayback());
+
+function assignmentViewer(User $person, array $permissions): User
+{
+    $department = Department::factory()->create();
+    $person->departments()->attach($department);
+    $manager = userWithPermissions($permissions);
+    $manager->managedDepartments()->attach($department);
+
+    return $manager;
+}
 
 it('shows how many times each part of the video was watched', function (): void {
     [$assignment, $lesson] = trainableAssignment();
@@ -55,7 +67,7 @@ it('leaves an implausible jump out of the coverage map', function (): void {
 it('opens the drill-down for someone who can view assignments', function (): void {
     [$assignment] = trainableAssignment();
 
-    $this->actingAs(userWithPermissions([Permission::AssignmentsView]))
+    $this->actingAs(assignmentViewer($assignment->user, [Permission::AssignmentsView]))
         ->get(route('assignments.show', ['assignment' => $assignment]))
         ->assertOk()
         ->assertSee($assignment->user->name)
@@ -65,12 +77,12 @@ it('opens the drill-down for someone who can view assignments', function (): voi
 it('hides the raw trail from someone without the evidence permission', function (): void {
     [$assignment] = trainableAssignment();
 
-    $this->actingAs(userWithPermissions([Permission::AssignmentsView]))
+    $this->actingAs(assignmentViewer($assignment->user, [Permission::AssignmentsView]))
         ->get(route('assignments.show', ['assignment' => $assignment]))
         ->assertOk()
         ->assertDontSee(__('ui.evidence_trail'));
 
-    $this->actingAs(userWithPermissions([Permission::ComplianceEventsView]))
+    $this->actingAs(assignmentViewer($assignment->user, [Permission::ComplianceEventsView]))
         ->get(route('assignments.show', ['assignment' => $assignment]))
         ->assertOk()
         ->assertSee(__('ui.evidence_trail'));
@@ -80,6 +92,14 @@ it('denies the drill-down to an employee looking at someone else', function (): 
     [$assignment] = trainableAssignment();
 
     $this->actingAs(employeeUser())
+        ->get(route('assignments.show', ['assignment' => $assignment]))
+        ->assertForbidden();
+});
+
+it('denies direct assignment access when permission exists but the person is outside the management tree', function (): void {
+    [$assignment] = trainableAssignment();
+
+    $this->actingAs(userWithPermissions([Permission::AssignmentsView]))
         ->get(route('assignments.show', ['assignment' => $assignment]))
         ->assertForbidden();
 });

@@ -15,7 +15,7 @@ new #[Layout('layouts::guest')] class extends Component
     public function mount(?Company $company = null): void
     {
         $this->company = $company;
-        $this->platform = $company === null && request()->boolean('platform');
+        $this->platform = request()->routeIs('platform.login');
     }
 
     public function selectCompany(): void
@@ -70,15 +70,12 @@ new #[Layout('layouts::guest')] class extends Component
             <form wire:submit="selectCompany" class="mt-7 space-y-3">
                 <flux:input wire:model="companyCode" label="{{ __('Company code') }}" autocomplete="organization" />
                 <flux:button type="submit" variant="primary" class="!min-h-12 w-full !rounded-xl !bg-[#16222a] !font-bold hover:!bg-[#22333d]">
-                    {{ __('Continue') }}
-                    <flux:icon.arrow-right class="ml-1 size-4" />
+                    <span class="inline-flex items-center gap-2">
+                        {{ __('Continue') }}
+                        <flux:icon.arrow-right class="size-4" />
+                    </span>
                 </flux:button>
             </form>
-            <div class="mt-5 border-t border-[#e5eaed] pt-5">
-                <flux:button href="{{ route('auth.workos.platform.redirect') }}" variant="ghost" class="w-full">
-                    {{ __('Platform administrator sign in') }}
-                </flux:button>
-            </div>
         @endif
         <p class="mt-4 flex items-center justify-center gap-1.5 text-[11px] font-medium text-[#868f95]">
             <flux:icon.lock-closed class="size-3.5" /> {{ __('ui.login_security') }}

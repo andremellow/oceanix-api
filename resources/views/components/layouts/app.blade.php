@@ -179,6 +179,16 @@
             </aside>
 
             <div class="min-w-0">
+                @if (session()->has('impersonator_user_id'))
+                    <div class="flex min-h-12 items-center gap-3 bg-[#fff3d8] px-4 py-2 text-sm text-[#725313] sm:px-7 lg:px-10">
+                        <flux:icon.user-circle class="size-5 shrink-0" />
+                        <p class="font-semibold">{{ __('You are viewing the application as :name.', ['name' => $user->name]) }}</p>
+                        <form method="POST" action="{{ route('impersonation.stop', ['company' => app(App\Tenancy\TenantContext::class)->get()]) }}" class="ml-auto">
+                            @csrf
+                            <button type="submit" class="rounded-lg border border-[#d8b85f] bg-white px-3 py-1.5 text-xs font-bold hover:bg-[#fffaf0]">{{ __('Return to :name', ['name' => session('impersonator_name')]) }}</button>
+                        </form>
+                    </div>
+                @endif
                 <header class="sticky top-0 z-20 flex h-[72px] items-center border-b border-[#e4e8eb]/90 bg-[#f2f5f7]/90 px-4 backdrop-blur-xl sm:px-7 lg:px-10">
                     <label for="mobile-navigation" class="mr-3 grid size-10 cursor-pointer place-items-center rounded-xl border border-[#dce1e5] bg-white text-zinc-600 shadow-sm lg:hidden" aria-label="{{ __('ui.open_menu') }}">
                         <flux:icon.bars-3 class="size-5" />
@@ -217,6 +227,7 @@
         {{ $slot }}
     @endauth
 
+    <x-status-toast />
     @fluxScripts
 </body>
 </html>

@@ -77,7 +77,7 @@ enum Permission: string
     public function groupLabel(): string
     {
         return __(match ($this->group()) {
-            'compliance-dashboard' => 'Compliance dashboard',
+            'compliance-dashboard' => 'Team training oversight',
             'compliance-reports' => 'Compliance reports',
             'compliance-events' => 'Compliance evidence',
             'courses' => 'Courses',
@@ -95,7 +95,7 @@ enum Permission: string
     public function label(): string
     {
         return __(match ($this) {
-            self::ComplianceDashboardView => 'View the compliance dashboard',
+            self::ComplianceDashboardView => 'Monitor training for people you manage',
             self::ComplianceReportsExport => 'Export compliance reports',
             self::ComplianceEventsView => 'View the compliance evidence trail',
             self::CoursesView => 'View courses',
@@ -107,7 +107,7 @@ enum Permission: string
             self::RequirementsCreate => 'Create training requirements',
             self::RequirementsUpdate => 'Edit training requirements',
             self::RequirementsActivate => 'Activate or pause training requirements',
-            self::AssignmentsView => 'View assignments',
+            self::AssignmentsView => 'Review training assignments',
             self::AssignmentsCreate => 'Create manual assignments',
             self::AssignmentsCancel => 'Cancel assignments',
             self::AssignmentsWaive => 'Waive assignments',
@@ -125,6 +125,42 @@ enum Permission: string
             self::AuditLogsView => 'View administrative audit logs',
             self::AppSettingsView => 'View application settings',
             self::AppSettingsUpdate => 'Update application settings',
+        });
+    }
+
+    public function description(): string
+    {
+        return __(match ($this) {
+            self::ComplianceDashboardView => 'See training status, deadlines and completion indicators only for people within your management scope, including indirect reports.',
+            self::ComplianceReportsExport => 'Download compliance data for the people you are allowed to oversee.',
+            self::ComplianceEventsView => 'Inspect the evidence recorded while an accessible person completes training.',
+            self::CoursesView => 'Browse published courses and their content.',
+            self::CoursesCreate => 'Create new courses and their first draft.',
+            self::CoursesUpdate => 'Change course content while it is still a draft.',
+            self::CoursesPublish => 'Publish immutable course versions for assignment.',
+            self::CoursesRetire => 'Remove courses or versions from future operational use.',
+            self::RequirementsView => 'Review the rules that determine who must complete training.',
+            self::RequirementsCreate => 'Create new training obligation rules.',
+            self::RequirementsUpdate => 'Change the audience, schedule or settings of a training rule.',
+            self::RequirementsActivate => 'Start or pause automatic assignment generation from a rule.',
+            self::AssignmentsView => 'Open the training obligations of people within your management scope.',
+            self::AssignmentsCreate => 'Assign a course directly to an accessible person. Course and person choices remain available here without opening their administrative modules.',
+            self::AssignmentsCancel => 'Cancel an obligation while preserving its compliance history.',
+            self::AssignmentsWaive => 'Excuse an obligation with a recorded reason.',
+            self::PeopleView => 'Browse people within the organizational scope you are allowed to access.',
+            self::PeopleManage => 'Edit people and their department, job function and management responsibilities.',
+            self::PeopleImport => 'Add or update people in bulk from a spreadsheet.',
+            self::PeopleAssignAccessProfiles => 'Choose what another person is allowed to see and do.',
+            self::PeopleInvite => 'Send sign-in invitations to people through WorkOS.',
+            self::DepartmentsView => 'Browse the company department structure.',
+            self::DepartmentsManage => 'Create and change departments.',
+            self::JobFunctionsView => 'Browse the company job functions.',
+            self::JobFunctionsManage => 'Create and change job functions.',
+            self::CertificatesView => 'View certificates belonging to people within your management scope.',
+            self::CertificatesRevoke => 'Invalidate a certificate while preserving its history.',
+            self::AuditLogsView => 'Review recorded administrative changes.',
+            self::AppSettingsView => 'View company application settings.',
+            self::AppSettingsUpdate => 'Change company application settings.',
         });
     }
 
@@ -160,7 +196,9 @@ enum Permission: string
             self::RequirementsUpdate => [self::RequirementsView, self::CoursesView],
             self::RequirementsActivate => [self::RequirementsView, self::RequirementsUpdate],
 
-            self::AssignmentsCreate => [self::AssignmentsView, self::CoursesView, self::PeopleView],
+            // The assignment screen may use courses and people as scoped selector data.
+            // That does not grant access to either administrative module.
+            self::AssignmentsCreate => [self::AssignmentsView],
             self::AssignmentsCancel,
             self::AssignmentsWaive => [self::AssignmentsView],
 
