@@ -3,8 +3,10 @@
 use App\Enums\AssignmentStatus;
 use App\Enums\FrequencyType;
 use App\Enums\RenewalBasis;
+use App\Enums\RequirementStatus;
 use App\Models\Course;
 use App\Models\CourseVersion;
+use App\Models\Department;
 use App\Models\TrainingRequirement;
 use App\Models\TrainingRequirementTarget;
 use App\Models\User;
@@ -98,3 +100,49 @@ it('paginates requirement and person schedule previews in pages of 25 occurrence
         ->and($personPage->perPage())->toBe(25)
         ->and($personPage->total())->toBe(3);
 });
+
+it('keeps materialized obligations visible after a person leaves the requirement scope', function (): void {
+    $requirement = recurringScheduleRequirement();
+    $department = Department::factory()->create();
+    $user = User::factory()->create();
+    $requirement->targets()->delete();
+    TrainingRequirementTarget::factory()->create([
+        'training_requirement_id' => $requirement,
+        'scope_type' => 'department',
+        'department_id' => $department,
+    ]);
+    UserTrainingAssignment::factory()->forCourse($requirement->course)->create([
+        'user_id' => $user,
+        'training_requirement_id' => $requirement,
+        'cycle_number' => 1,
+        'due_at' => '2026-09-01',
+        'status' => AssignmentStatus::Pending,
+    ]);
+
+    $requirementRows = app(RequirementSchedulePreview::class)->forRequirement($requirement);
+    $personRows = app(RequirementSchedulePreview::class)->forUser($user);
+
+    expect($requirementRows->where('person_id', $user->id)->first()['materialized'])->toBeTrue()
+        ->and($personRows->where('requirement_id', $requirement->id)->first()['materialized'])->toBeTrue();
+});
+
+it('shows materialized rows but does not project occurrences for inactive requirements', function (RequirementStatus $status): void {
+    $requirement = recurringScheduleRequirement(['status' => $status]);
+    $user = User::factory()->create();
+    UserTrainingAssignment::factory()->forCourse($requirement->course)->create([
+        'user_id' => $user,
+        'training_requirement_id' => $requirement,
+        'cycle_number' => 1,
+        'due_at' => '2026-09-01',
+        'status' => AssignmentStatus::Pending,
+    ]);
+
+    $rows = app(RequirementSchedulePreview::class)->forRequirement($requirement);
+
+    expect($rows)->toHaveCount(1)
+        ->and($rows->first()['materialized'])->toBeTrue();
+})->with([
+    RequirementStatus::Draft,
+    RequirementStatus::Paused,
+    RequirementStatus::Retired,
+]);

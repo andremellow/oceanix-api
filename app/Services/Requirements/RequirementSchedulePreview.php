@@ -23,7 +23,14 @@ class RequirementSchedulePreview
     /** @return Collection<int, array<string, mixed>> */
     public function forRequirement(TrainingRequirement $requirement, int $months = self::DEFAULT_MONTHS): Collection
     {
-        return $this->eligibility->resolve($requirement)
+        $people = $this->eligibility->resolve($requirement)
+            ->concat(User::query()->whereIn(
+                'id',
+                $requirement->assignments()->select('user_id'),
+            )->get())
+            ->unique('id');
+
+        return $people
             ->flatMap(fn (User $user): Collection => $this->forPair($requirement, $user, $months))
             ->sortBy(['due_at', 'person_name'])
             ->values();
@@ -33,11 +40,15 @@ class RequirementSchedulePreview
     public function forUser(User $user, int $months = self::DEFAULT_MONTHS): Collection
     {
         return TrainingRequirement::query()
-            ->where('status', RequirementStatus::Active->value)
+            ->where(function ($query) use ($user): void {
+                $query->where('status', RequirementStatus::Active->value)
+                    ->orWhereHas('assignments', fn ($assignments) => $assignments->where('user_id', $user->id));
+            })
             ->with(['course', 'targets'])
             ->get()
-            ->filter(fn (TrainingRequirement $requirement): bool => $this->eligibility
-                ->query($requirement)->whereKey($user->id)->exists())
+            ->filter(fn (TrainingRequirement $requirement): bool => $requirement->assignments()
+                ->where('user_id', $user->id)->exists()
+                || $this->eligibility->query($requirement)->whereKey($user->id)->exists())
             ->flatMap(fn (TrainingRequirement $requirement): Collection => $this->forPair($requirement, $user, $months))
             ->sortBy(['due_at', 'requirement_name'])
             ->values();
@@ -89,6 +100,10 @@ class RequirementSchedulePreview
                     $assignment->status->label(),
                 ));
             }
+        }
+
+        if (! $requirement->status->materializes()) {
+            return $rows;
         }
 
         $latest = $assignments->last();
