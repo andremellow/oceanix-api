@@ -47,23 +47,22 @@ it('refuses to credit a position that jumps further than time allows', function 
         ->and(ComplianceEvent::query()->where('lesson_id', $lesson->id)->count())->toBe(2);
 });
 
-it('locks the assessment until the watch threshold is met', function (): void {
+it('allows the assessment before the watch threshold is met', function (): void {
     [$assignment, $lesson, $question] = trainableAssignment();
-
-    watch($assignment, $lesson, 40);
 
     $courseAttempt = app(StartAssignment::class)->handle($assignment);
     $lessonAttempt = app(StartLessonAttempt::class)->handle($assignment, $courseAttempt, $lesson);
 
-    expect(fn () => app(AnswerQuestion::class)->handle(
+    $outcome = app(AnswerQuestion::class)->handle(
         $assignment, $lessonAttempt, $question, $question->correctOptionIds()
-    ))->toThrow(AuthorizationException::class);
+    );
+
+    expect($outcome['correct'])->toBeTrue()
+        ->and($assignment->lessonProgress()->where('lesson_id', $lesson->id)->exists())->toBeFalse();
 });
 
 it('completes the course and issues a certificate when the lesson is passed', function (): void {
     [$assignment, $lesson, $question] = trainableAssignment();
-
-    watch($assignment, $lesson, 100);
 
     $courseAttempt = app(StartAssignment::class)->handle($assignment);
     $lessonAttempt = app(StartLessonAttempt::class)->handle($assignment, $courseAttempt, $lesson);
@@ -100,7 +99,7 @@ it('issues exactly one certificate however often completion runs', function (): 
     expect(Certificate::query()->count())->toBe(1);
 });
 
-it('fails the lesson and forces a rewatch when attempts run out', function (): void {
+it('fails the lesson without erasing tracked watch progress when attempts run out', function (): void {
     [$assignment, $lesson, $question] = trainableAssignment(maxAttempts: 2);
     watch($assignment, $lesson, 100);
 
@@ -116,8 +115,7 @@ it('fails the lesson and forces a rewatch when attempts run out', function (): v
 
     expect($second['lesson_failed'])->toBeTrue()
         ->and($lessonAttempt->fresh()->status)->toBe(AttemptStatus::Failed)
-        // The watch threshold resets, so the video has to be watched again.
-        ->and($assignment->lessonProgress()->first()->percentage_watched)->toBe(0)
+        ->and($assignment->lessonProgress()->first()->percentage_watched)->toBeGreaterThanOrEqual(90)
         ->and($assignment->fresh()->status)->not->toBe(AssignmentStatus::Completed);
 });
 
@@ -196,7 +194,6 @@ it('starts a new numbered attempt instead of reopening a finished one', function
     $first = app(StartLessonAttempt::class)->handle($assignment, $courseAttempt, $lesson);
     app(AnswerQuestion::class)->handle($assignment, $first, $question, $question->options()->where('is_correct', false)->pluck('id')->all());
 
-    watch($assignment->fresh(), $lesson, 100);
     $second = app(StartLessonAttempt::class)->handle($assignment, $courseAttempt, $lesson);
 
     expect($second->id)->not->toBe($first->id)

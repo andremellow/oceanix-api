@@ -203,7 +203,7 @@ document.addEventListener('alpine:init', () => {
                 const result = await response.json()
                 this.percentage = result.percentage_watched
 
-                if (result.assessment_unlocked && ! this.unlocked) {
+                if (result.watch_threshold_met && ! this.unlocked) {
                     this.unlocked = true
                     this.$wire.$refresh()
                 }

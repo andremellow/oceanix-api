@@ -314,11 +314,11 @@ Nenhuma URL pública permanente deve ser persistida como mecanismo de autorizaç
 
 ### Regras de execução
 
-- a avaliação é liberada somente após o vídeo atingir o critério de visualização;
+- a avaliação fica disponível assim que a lesson é aberta; o critério de visualização permanece apenas para tracking e relatórios enquanto sua projeção é revisada;
 - cada pergunta respeita seu número máximo de tentativas;
 - respostas incorretas permanecem no histórico;
 - ao esgotar tentativas, a `lesson_attempt` falha;
-- a política inicial pode exigir reassistir a lesson antes de uma nova tentativa;
+- uma nova tentativa não exige reassistir a lesson;
 - uma nova execução cria novos registros, nunca apaga nem reinicia os anteriores.
 
 ### Tabelas de tentativa

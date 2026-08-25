@@ -67,9 +67,12 @@ class TrainingCompletionService
             ]);
 
             if ($passed) {
-                $assignment->lessonProgress()
-                    ->where('lesson_id', $lesson->id)
-                    ->update(['completed_at' => now()]);
+                // The assessment is available before any playback progress exists, so a
+                // passing answer may need to create the projection row for the first time.
+                $assignment->lessonProgress()->updateOrCreate(
+                    ['lesson_id' => $lesson->id],
+                    ['completed_at' => now()],
+                );
             }
 
             $this->events->record(

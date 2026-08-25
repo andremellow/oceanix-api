@@ -54,7 +54,8 @@ class TrainingPlaybackController extends Controller
 
         return response()->json([
             'percentage_watched' => $progress->percentage_watched,
-            'assessment_unlocked' => $progress->percentage_watched >= $lesson->minimum_watch_percentage,
+            'watch_threshold_met' => $progress->percentage_watched >= $lesson->minimum_watch_percentage,
+            'assessment_unlocked' => true,
         ]);
     }
 }
