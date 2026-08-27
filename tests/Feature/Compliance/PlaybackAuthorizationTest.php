@@ -34,12 +34,12 @@ function fakeVideoProvider(): void
             return [['label' => 'Test double', 'ok' => true, 'detail' => null]];
         }
 
-        public function createUpload(string $title, int $maxDurationSeconds): VideoUpload
+        public function createUpload(string $title, int $maxDurationSeconds, string $ownerKey): VideoUpload
         {
             return new VideoUpload('fake', 'asset', 'https://upload.test');
         }
 
-        public function listAssets(int $limit = 12, string $search = ''): array
+        public function listAssets(int $limit = 12, string $search = '', string $ownerKey = ''): array
         {
             return [];
         }

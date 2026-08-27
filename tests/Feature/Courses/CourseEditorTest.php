@@ -175,7 +175,7 @@ it('loads the Cloudflare library and links a ready video to the lesson', functio
         'api.cloudflare.com/client/v4/accounts/*/stream?*' => Http::response([
             'result' => [[
                 'uid' => 'existing-asset',
-                'meta' => ['name' => 'Safety induction'],
+                'meta' => ['name' => 'Safety induction', 'oceanix_owner' => 'company:'.currentCompany()->id],
                 'status' => ['state' => 'ready'],
                 'duration' => 125.4,
                 'created' => '2026-08-20T14:00:00Z',
@@ -190,6 +190,8 @@ it('loads the Cloudflare library and links a ready video to the lesson', functio
                 'uid' => 'existing-asset',
                 'status' => ['state' => 'ready'],
                 'duration' => 125.4,
+                'requireSignedURLs' => true,
+                'meta' => ['oceanix_owner' => 'company:'.currentCompany()->id],
                 'playback' => ['hls' => 'https://customer.example/existing-asset/manifest/video.m3u8'],
             ],
         ]),

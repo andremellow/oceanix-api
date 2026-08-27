@@ -11,6 +11,7 @@ use App\Data\Video\VideoUpload;
 use App\Enums\VideoStatus;
 use App\Exceptions\VideoProviderException;
 use App\Models\Video;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -111,12 +112,12 @@ class CloudflareStreamProvider implements VideoProvider
         return $checks;
     }
 
-    public function createUpload(string $title, int $maxDurationSeconds): VideoUpload
+    public function createUpload(string $title, int $maxDurationSeconds, string $ownerKey): VideoUpload
     {
         $response = $this->request()->post($this->accountUrl('/stream/direct_upload'), [
             'maxDurationSeconds' => $maxDurationSeconds,
             'requireSignedURLs' => true,
-            'meta' => ['name' => $title],
+            'meta' => ['name' => $title, 'oceanix_owner' => $ownerKey],
         ]);
 
         $this->guard($response->successful(), 'createUpload', $response->json());
@@ -129,22 +130,29 @@ class CloudflareStreamProvider implements VideoProvider
     }
 
     /** @return list<VideoLibraryItem> */
-    public function listAssets(int $limit = 12, string $search = ''): array
+    public function listAssets(int $limit = 12, string $search = '', string $ownerKey = ''): array
     {
         $query = [
-            'limit' => min(max($limit, 1), 1000),
+            'limit' => 1000,
         ];
 
         if (trim($search) !== '') {
             $query['search'] = trim($search);
         }
 
-        $response = $this->request()->get($this->accountUrl('/stream'), $query);
+        try {
+            $response = $this->request()->get($this->accountUrl('/stream'), $query);
+        } catch (ConnectionException) {
+            throw VideoProviderException::requestFailed($this->key(), 'listAssets');
+        }
 
         $this->guard($response->successful(), 'listAssets', $response->json());
 
         return collect($response->json('result', []))
-            ->filter(fn (mixed $asset): bool => is_array($asset) && filled($asset['uid'] ?? null))
+            ->filter(fn (mixed $asset): bool => is_array($asset)
+                && filled($asset['uid'] ?? null)
+                && $ownerKey !== ''
+                && data_get($asset, 'meta.oceanix_owner') === $ownerKey)
             ->map(function (array $asset): VideoLibraryItem {
                 $state = (string) data_get($asset, 'status.state', '');
                 $duration = $asset['duration'] ?? null;
@@ -163,6 +171,7 @@ class CloudflareStreamProvider implements VideoProvider
                     hlsUrl: is_string(data_get($asset, 'playback.hls')) ? data_get($asset, 'playback.hls') : null,
                 );
             })
+            ->take(min(max($limit, 1), 1000))
             ->values()
             ->all();
     }
@@ -190,7 +199,11 @@ class CloudflareStreamProvider implements VideoProvider
 
     public function getAssetStatus(string $assetId): VideoAssetStatus
     {
-        $response = $this->request()->get($this->accountUrl("/stream/{$assetId}"));
+        try {
+            $response = $this->request()->get($this->accountUrl("/stream/{$assetId}"));
+        } catch (ConnectionException) {
+            throw VideoProviderException::requestFailed($this->key(), 'getAssetStatus');
+        }
 
         $this->guard($response->successful(), 'getAssetStatus', $response->json());
 
@@ -211,6 +224,8 @@ class CloudflareStreamProvider implements VideoProvider
                 'state' => $state,
                 // Carries the account's delivery host, which differs per account.
                 'hls' => $response->json('result.playback.hls'),
+                'oceanix_owner' => $response->json('result.meta.oceanix_owner'),
+                'require_signed_urls' => $response->json('result.requireSignedURLs') === true,
             ],
         );
     }

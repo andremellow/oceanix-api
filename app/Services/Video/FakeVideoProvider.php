@@ -44,7 +44,7 @@ class FakeVideoProvider implements VideoProvider
         ]];
     }
 
-    public function createUpload(string $title, int $maxDurationSeconds): VideoUpload
+    public function createUpload(string $title, int $maxDurationSeconds, string $ownerKey): VideoUpload
     {
         $assetId = (string) Str::uuid();
 
@@ -56,7 +56,7 @@ class FakeVideoProvider implements VideoProvider
     }
 
     /** @return list<VideoLibraryItem> */
-    public function listAssets(int $limit = 12, string $search = ''): array
+    public function listAssets(int $limit = 12, string $search = '', string $ownerKey = ''): array
     {
         return [];
     }

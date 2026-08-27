@@ -20,10 +20,13 @@ class LinkExistingVideo
     public function handle(Lesson $lesson, string $assetId): Video
     {
         $asset = $this->provider->getAssetStatus($assetId);
+        $ownerKey = $lesson->company_id === null ? 'platform' : 'company:'.$lesson->company_id;
 
-        if ($asset->status !== VideoStatus::Ready) {
+        if ($asset->status !== VideoStatus::Ready
+            || ($asset->metadata['oceanix_owner'] ?? null) !== $ownerKey
+            || ($asset->metadata['require_signed_urls'] ?? false) !== true) {
             throw ValidationException::withMessages([
-                'videoLibrary' => __('Only videos that are ready can be linked.'),
+                'videoLibrary' => __('Only ready, private videos owned by this company can be linked.'),
             ]);
         }
 

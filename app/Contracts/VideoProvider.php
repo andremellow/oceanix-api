@@ -30,10 +30,10 @@ interface VideoProvider
      */
     public function verifyConfiguration(bool $write = true): array;
 
-    public function createUpload(string $title, int $maxDurationSeconds): VideoUpload;
+    public function createUpload(string $title, int $maxDurationSeconds, string $ownerKey): VideoUpload;
 
     /** @return list<VideoLibraryItem> */
-    public function listAssets(int $limit = 12, string $search = ''): array;
+    public function listAssets(int $limit = 12, string $search = '', string $ownerKey = ''): array;
 
     public function createAssetPreviewAuthorization(string $assetId, ?string $hlsUrl, int $ttlMinutes): PlaybackAuthorization;
 
