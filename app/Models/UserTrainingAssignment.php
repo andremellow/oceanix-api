@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Collection;
 
 /**
  * The materialized obligation. It freezes the course version it was issued against, so
@@ -23,6 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'user_id', 'course_id', 'course_version_id', 'training_requirement_id', 'origin_type',
     'origin_id', 'series_key', 'cycle_number', 'assigned_at', 'available_at', 'due_at',
     'expires_at', 'status', 'completed_at', 'supersedes_assignment_id', 'metadata',
+    'replacement_generation', 'publication_course_version_id', 'propagation_id',
 ])]
 class UserTrainingAssignment extends Model
 {
@@ -40,6 +42,7 @@ class UserTrainingAssignment extends Model
             'expires_at' => 'datetime',
             'completed_at' => 'datetime',
             'cycle_number' => 'integer',
+            'replacement_generation' => 'integer',
             'metadata' => 'array',
         ];
     }
@@ -141,15 +144,55 @@ class UserTrainingAssignment extends Model
     /** Percentage of required lessons completed, for the employee progress bar. */
     public function progressPercentage(): int
     {
-        $required = $this->courseVersion?->requiredLessonCount() ?? 0;
+        $requiredLessonIds = $this->requiredLessonIds();
+        $required = $requiredLessonIds->count();
 
         if ($required === 0) {
             return $this->status->isSatisfied() ? 100 : 0;
         }
 
-        $completed = $this->lessonProgress()->whereNotNull('completed_at')->count();
+        $completed = $this->lessonProgress()
+            ->whereIn('lesson_id', $requiredLessonIds)
+            ->whereNotNull('completed_at')
+            ->count();
 
         return (int) min(100, round($completed / $required * 100));
+    }
+
+    /**
+     * Resolve the frozen lesson set through module composition, with a legacy fallback
+     * for assignments whose course version has not been backfilled yet.
+     *
+     * @return Collection<int, int>
+     */
+    public function requiredLessonIds(): Collection
+    {
+        $version = $this->courseVersion;
+
+        if ($version === null) {
+            return collect();
+        }
+
+        if (! method_exists($version, 'moduleCompositions')) {
+            return $version->lessons()
+                ->where('is_required', true)
+                ->pluck('id');
+        }
+
+        $compositions = $version->moduleCompositions()
+            ->where('is_required', true)
+            ->get();
+
+        if ($compositions->isEmpty()) {
+            return $version->lessons()
+                ->where('is_required', true)
+                ->pluck('id');
+        }
+
+        return $compositions
+            ->pluck('lesson_id')
+            ->unique()
+            ->values();
     }
 
     public function scopeOpen(Builder $query): void

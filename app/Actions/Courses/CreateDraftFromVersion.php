@@ -2,9 +2,11 @@
 
 namespace App\Actions\Courses;
 
+use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
 use App\Exceptions\CoursePublicationException;
 use App\Models\CourseVersion;
+use App\Models\CourseVersionModule;
 use App\Models\Lesson;
 use App\Models\Question;
 use App\Models\QuestionOption;
@@ -25,6 +27,10 @@ class CreateDraftFromVersion
     {
         $course = $source->course;
 
+        if ($course->status === CourseStatus::Archived) {
+            throw new \LogicException('Archived courses cannot create new draft versions.');
+        }
+
         if ($course->versions()->where('status', CourseVersionStatus::Draft->value)->exists()) {
             throw CoursePublicationException::draftAlreadyExists();
         }
@@ -38,6 +44,25 @@ class CreateDraftFromVersion
                 'description' => $source->description,
                 'completion_rule' => $source->completion_rule,
             ]);
+
+            $compositions = method_exists($source, 'moduleCompositions')
+                ? $source->moduleCompositions()->get()
+                : collect();
+
+            if ($compositions->isNotEmpty()) {
+                foreach ($compositions->load('moduleVersion') as $composition) {
+                    if (! $composition->moduleVersion?->is_shared) {
+                        continue;
+                    }
+
+                    CourseVersionModule::query()->create([
+                        'course_version_id' => $draft->id,
+                        'module_version_id' => $composition->module_version_id,
+                        'position' => $composition->position,
+                        'is_required' => $composition->is_required,
+                    ]);
+                }
+            }
 
             foreach ($source->lessons()->with(['video', 'questions.options'])->get() as $lesson) {
                 $copy = Lesson::query()->create([
@@ -84,12 +109,17 @@ class CreateDraftFromVersion
                 }
             }
 
-            $this->audit->log('course_version.draft_created', $draft, after: [
-                'from_version' => $source->version_number,
-                'version_number' => $draft->version_number,
-            ]);
+            $this->auditDraft($source, $draft);
 
             return $draft->refresh();
         });
+    }
+
+    private function auditDraft(CourseVersion $source, CourseVersion $draft): void
+    {
+        $this->audit->log('course_version.draft_created', $draft, after: [
+            'from_version' => $source->version_number,
+            'version_number' => $draft->version_number,
+        ]);
     }
 }

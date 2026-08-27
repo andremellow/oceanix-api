@@ -119,7 +119,11 @@ Route::prefix('platform')
         Route::livewire('/', 'platform.dashboard')->name('platform.dashboard');
         Route::livewire('/companies', 'platform.companies')->name('platform.companies');
         Route::livewire('/users', 'platform.users')->name('platform.users');
+        Route::livewire('/shared-courses', 'platform.shared-courses.index')->name('platform.shared-courses.index');
+        Route::livewire('/shared-courses/{course}', 'platform.shared-courses.show')->name('platform.shared-courses.show');
+        Route::livewire('/shared-courses/{course}/editor', 'platform.shared-courses.editor')->name('platform.shared-courses.editor');
         Route::livewire('/companies/{company}', 'platform.company')->name('platform.companies.show');
+        Route::livewire('/companies/{company}/courses/{course}', 'platform.shared-courses.show')->name('platform.companies.courses.show');
         Route::post('/companies/{company}/enter', function (Company $company, EnterCompany $action) {
             $action->handle($company);
 
@@ -226,6 +230,12 @@ Route::prefix('c/{company:slug}')
             Route::livewire('/courses/{course}/editor', 'courses.editor')
                 ->middleware(EnsureUserHasPermission::class.':courses.update')
                 ->name('courses.editor');
+            Route::livewire('/shared-courses', 'courses.shared-index')
+                ->middleware(EnsureUserHasPermission::class.':shared-courses.view')
+                ->name('shared-courses.index');
+            Route::livewire('/shared-courses/{course}', 'courses.show')
+                ->middleware(EnsureUserHasPermission::class.':shared-courses.view')
+                ->name('shared-courses.show');
 
             Route::livewire('/requirements', 'compliance.requirements')
                 ->middleware(EnsureUserHasPermission::class.':training-requirements.view')

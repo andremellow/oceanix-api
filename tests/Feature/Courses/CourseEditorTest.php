@@ -170,6 +170,73 @@ it('opens an upload slot and marks the video processing when the browser finishe
     expect($lesson->fresh()->video->status)->toBe(VideoStatus::Processing);
 });
 
+it('loads the Cloudflare library and links a ready video to the lesson', function (): void {
+    Http::fake([
+        'api.cloudflare.com/client/v4/accounts/*/stream?*' => Http::response([
+            'result' => [[
+                'uid' => 'existing-asset',
+                'meta' => ['name' => 'Safety induction', 'oceanix_owner' => 'company:'.currentCompany()->id],
+                'status' => ['state' => 'ready'],
+                'duration' => 125.4,
+                'created' => '2026-08-20T14:00:00Z',
+                'playback' => ['hls' => 'https://customer.example/existing-asset/manifest/video.m3u8'],
+            ]],
+        ]),
+        'api.cloudflare.com/client/v4/accounts/*/stream/existing-asset/token' => Http::response([
+            'result' => ['token' => 'preview-token'],
+        ]),
+        'api.cloudflare.com/client/v4/accounts/*/stream/existing-asset' => Http::response([
+            'result' => [
+                'uid' => 'existing-asset',
+                'status' => ['state' => 'ready'],
+                'duration' => 125.4,
+                'requireSignedURLs' => true,
+                'meta' => ['oceanix_owner' => 'company:'.currentCompany()->id],
+                'playback' => ['hls' => 'https://customer.example/existing-asset/manifest/video.m3u8'],
+            ],
+        ]),
+    ]);
+
+    $course = draftCourse();
+    $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id]);
+
+    Livewire::actingAs(adminUser())
+        ->test('courses.editor', ['course' => $course])
+        ->call('openVideoLibrary', 0)
+        ->assertSet('videoLibraryOpen', true)
+        ->assertSee('Safety induction')
+        ->assertSet('videoLibraryItems.0.thumbnail_url', 'https://customer.example/preview-token/thumbnails/thumbnail.jpg')
+        ->call('previewLibraryVideo', 'existing-asset')
+        ->assertSet('videoLibraryPreviewTitle', 'Safety induction')
+        ->set('videoLibrarySearch', 'safety')
+        ->call('searchVideoLibrary')
+        ->call('linkExistingVideo', 'existing-asset')
+        ->assertSet('videoLibraryOpen', false);
+
+    Http::assertSent(fn ($request): bool => $request->method() === 'GET'
+        && ($request->data()['search'] ?? null) === 'safety');
+
+    expect($lesson->fresh()->video)
+        ->provider_asset_id->toBe('existing-asset')
+        ->duration_seconds->toBe(125)
+        ->status->toBe(VideoStatus::Ready);
+});
+
+it('does not link a video that was not returned by the library', function (): void {
+    Http::fake([
+        'api.cloudflare.com/*' => Http::response(['result' => []]),
+    ]);
+
+    $course = draftCourse();
+    Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id]);
+
+    Livewire::actingAs(adminUser())
+        ->test('courses.editor', ['course' => $course])
+        ->call('openVideoLibrary', 0)
+        ->call('linkExistingVideo', 'forged-asset')
+        ->assertNotFound();
+});
+
 it('publishes from the editor once every rule is satisfied', function (): void {
     $course = draftCourse();
     $version = $course->versions()->first();

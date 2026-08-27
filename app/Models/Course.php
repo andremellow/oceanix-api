@@ -4,7 +4,8 @@ namespace App\Models;
 
 use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
-use App\Models\Concerns\BelongsToCompany;
+use App\Models\Concerns\HasContentOwnership;
+use App\Tenancy\TenantContext;
 use Database\Factories\CourseFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -13,15 +14,35 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['code', 'title', 'description', 'status', 'current_published_version_id'])]
+#[Fillable(['company_id', 'is_shared', 'code', 'title', 'description', 'status', 'current_published_version_id'])]
 class Course extends Model
 {
     /** @use HasFactory<CourseFactory> */
-    use BelongsToCompany, HasFactory;
+    use HasContentOwnership, HasFactory;
+
+    protected static function booted(): void
+    {
+        static::addGlobalScope('company-library', function (Builder $query): void {
+            if (request()->routeIs('platform.*') || session()->has('platform_account_id')) {
+                return;
+            }
+
+            $company = app(TenantContext::class)->get();
+
+            if ($company === null) {
+                return;
+            }
+
+            $query->where(function (Builder $query) use ($company): void {
+                $query->where($query->qualifyColumn('company_id'), $company->getKey())
+                    ->orWhere($query->qualifyColumn('is_shared'), true);
+            });
+        });
+    }
 
     protected function casts(): array
     {
-        return ['status' => CourseStatus::class];
+        return ['is_shared' => 'boolean', 'status' => CourseStatus::class];
     }
 
     /**
@@ -54,6 +75,11 @@ class Course extends Model
     public function assignments(): HasMany
     {
         return $this->hasMany(UserTrainingAssignment::class);
+    }
+
+    public function companyAssociations(): HasMany
+    {
+        return $this->hasMany(CompanyCourse::class);
     }
 
     public function draftVersion(): ?CourseVersion

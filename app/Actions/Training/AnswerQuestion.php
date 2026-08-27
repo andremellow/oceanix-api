@@ -11,7 +11,6 @@ use App\Models\Question;
 use App\Models\QuestionAttempt;
 use App\Models\UserTrainingAssignment;
 use App\Services\Compliance\ComplianceEventRecorder;
-use App\Services\Training\LessonProgressProjector;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 
@@ -20,7 +19,7 @@ use Illuminate\Support\Facades\DB;
  *
  * Grading happens here, on the server, against the stored answer key — the client is never
  * told which option is correct before answering. Wrong answers stay in the history; running
- * out of tries fails the lesson attempt and sends the employee back to the video.
+ * out of tries fails the lesson attempt. Playback progress remains independent evidence.
  * See docs/product-spec.md §7.
  *
  * @phpstan-type Outcome array{correct: bool, attempts_left: int, lesson_failed: bool}
@@ -29,7 +28,6 @@ class AnswerQuestion
 {
     public function __construct(
         private readonly ComplianceEventRecorder $events,
-        private readonly LessonProgressProjector $progress,
     ) {}
 
     /**
@@ -132,12 +130,6 @@ class AnswerQuestion
             throw new AuthorizationException('This lesson attempt is already finished.');
         }
 
-        // The assessment stays locked until the video has actually been watched.
-        $progress = $assignment->lessonProgress()->where('lesson_id', $lesson->id)->first();
-
-        if ($progress === null || $progress->percentage_watched < $lesson->minimum_watch_percentage) {
-            throw new AuthorizationException('The video has not been watched enough to answer yet.');
-        }
     }
 
     private function failLesson(UserTrainingAssignment $assignment, LessonAttempt $lessonAttempt, Lesson $lesson): void
@@ -154,8 +146,6 @@ class AnswerQuestion
             'lesson_attempt_id' => $lessonAttempt->id,
         ]);
 
-        // Policy: the lesson must be watched again before another assessment attempt.
-        $this->progress->resetForRewatch($assignment, $lesson);
     }
 
     private function score(LessonAttempt $lessonAttempt): int

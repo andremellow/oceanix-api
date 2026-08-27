@@ -24,6 +24,13 @@ enum Permission: string
     case CoursesPublish = 'courses.publish';
     case CoursesRetire = 'courses.retire';
 
+    // Shared training library
+    case SharedCoursesView = 'shared-courses.view';
+    case SharedCoursesAdd = 'shared-courses.add';
+    case SharedCoursesRemove = 'shared-courses.remove';
+    case SharedModulesView = 'shared-modules.view';
+    case SharedModulesUse = 'shared-modules.use';
+
     // Requirements
     case RequirementsView = 'training-requirements.view';
     case RequirementsCreate = 'training-requirements.create';
@@ -63,6 +70,8 @@ enum Permission: string
             str_starts_with($this->value, 'compliance-reports.') => 'compliance-reports',
             str_starts_with($this->value, 'compliance-events.') => 'compliance-events',
             str_starts_with($this->value, 'courses.') => 'courses',
+            str_starts_with($this->value, 'shared-courses.') => 'shared-courses',
+            str_starts_with($this->value, 'shared-modules.') => 'shared-modules',
             str_starts_with($this->value, 'training-requirements.') => 'training-requirements',
             str_starts_with($this->value, 'assignments.') => 'assignments',
             str_starts_with($this->value, 'people.') => 'people',
@@ -81,6 +90,8 @@ enum Permission: string
             'compliance-reports' => 'Compliance reports',
             'compliance-events' => 'Compliance evidence',
             'courses' => 'Courses',
+            'shared-courses' => 'Shared courses',
+            'shared-modules' => 'Shared modules',
             'training-requirements' => 'Training requirements',
             'assignments' => 'Assignments',
             'people' => 'People',
@@ -103,6 +114,11 @@ enum Permission: string
             self::CoursesUpdate => 'Edit course drafts',
             self::CoursesPublish => 'Publish course versions',
             self::CoursesRetire => 'Retire courses and versions',
+            self::SharedCoursesView => 'Browse shared courses',
+            self::SharedCoursesAdd => 'Add shared courses to the company',
+            self::SharedCoursesRemove => 'Remove shared courses from the company',
+            self::SharedModulesView => 'Browse shared modules',
+            self::SharedModulesUse => 'Use shared modules in company courses',
             self::RequirementsView => 'View training requirements',
             self::RequirementsCreate => 'Create training requirements',
             self::RequirementsUpdate => 'Edit training requirements',
@@ -139,6 +155,11 @@ enum Permission: string
             self::CoursesUpdate => 'Change course content while it is still a draft.',
             self::CoursesPublish => 'Publish immutable course versions for assignment.',
             self::CoursesRetire => 'Remove courses or versions from future operational use.',
+            self::SharedCoursesView => 'Browse shared courses available for the company to adopt.',
+            self::SharedCoursesAdd => 'Associate a shared course with the company without copying its content.',
+            self::SharedCoursesRemove => 'Remove an unneeded shared course association when no obligation depends on it.',
+            self::SharedModulesView => 'Browse shared modules available for reuse in company courses.',
+            self::SharedModulesUse => 'Add shared modules to drafts of company-owned courses.',
             self::RequirementsView => 'Review the rules that determine who must complete training.',
             self::RequirementsCreate => 'Create new training obligation rules.',
             self::RequirementsUpdate => 'Change the audience, schedule or settings of a training rule.',
@@ -175,6 +196,8 @@ enum Permission: string
         return match ($this) {
             self::ComplianceDashboardView,
             self::CoursesView,
+            self::SharedCoursesView,
+            self::SharedModulesView,
             self::RequirementsView,
             self::AssignmentsView,
             self::PeopleView,
@@ -191,6 +214,10 @@ enum Permission: string
             self::CoursesUpdate,
             self::CoursesRetire => [self::CoursesView],
             self::CoursesPublish => [self::CoursesView, self::CoursesUpdate],
+
+            self::SharedCoursesAdd,
+            self::SharedCoursesRemove => [self::SharedCoursesView, self::CoursesView],
+            self::SharedModulesUse => [self::SharedModulesView, self::CoursesView, self::CoursesUpdate],
 
             self::RequirementsCreate,
             self::RequirementsUpdate => [self::RequirementsView, self::CoursesView],

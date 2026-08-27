@@ -23,7 +23,8 @@ it('ingests player events for the assignee', function (): void {
     $this->actingAs($assignment->user)
         ->postJson(route('my-training.events', ['assignment' => $assignment, 'lesson' => $lesson]), ['events' => [eventPayload()]])
         ->assertOk()
-        ->assertJsonStructure(['percentage_watched', 'assessment_unlocked']);
+        ->assertJsonStructure(['percentage_watched', 'watch_threshold_met', 'assessment_unlocked'])
+        ->assertJsonPath('assessment_unlocked', true);
 
     expect(ComplianceEvent::query()->where('assignment_id', $assignment->id)->count())->toBe(1);
 });

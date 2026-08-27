@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\Question;
 use App\Models\QuestionOption;
+use App\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -16,6 +17,7 @@ class QuestionOptionFactory extends Factory
     public function definition(): array
     {
         return [
+            'company_id' => fn (): int => app(TenantContext::class)->id(),
             'question_id' => Question::factory(),
             'text' => fake()->sentence(5),
             'is_correct' => false,

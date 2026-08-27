@@ -67,9 +67,12 @@ class TrainingCompletionService
             ]);
 
             if ($passed) {
-                $assignment->lessonProgress()
-                    ->where('lesson_id', $lesson->id)
-                    ->update(['completed_at' => now()]);
+                // The assessment is available before any playback progress exists, so a
+                // passing answer may need to create the projection row for the first time.
+                $assignment->lessonProgress()->updateOrCreate(
+                    ['lesson_id' => $lesson->id],
+                    ['completed_at' => now()],
+                );
             }
 
             $this->events->record(
@@ -91,10 +94,7 @@ class TrainingCompletionService
     /** Completes the assignment once every required lesson is done, and issues the certificate. */
     public function evaluateCourse(UserTrainingAssignment $assignment, CourseAttempt $courseAttempt): UserTrainingAssignment
     {
-        $requiredLessonIds = $assignment->courseVersion
-            ->lessons()
-            ->where('is_required', true)
-            ->pluck('id');
+        $requiredLessonIds = $assignment->requiredLessonIds();
 
         $completed = $assignment->lessonProgress()
             ->whereIn('lesson_id', $requiredLessonIds)

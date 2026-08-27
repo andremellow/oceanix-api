@@ -9,6 +9,7 @@ use App\Models\CourseAttempt;
 use App\Models\UserTrainingAssignment;
 use App\Services\Compliance\ComplianceEventRecorder;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * Opens (or resumes) the course attempt behind an assignment.
@@ -23,6 +24,18 @@ class StartAssignment
     public function handle(UserTrainingAssignment $assignment): CourseAttempt
     {
         return DB::transaction(function () use ($assignment): CourseAttempt {
+            $assignment = UserTrainingAssignment::query()->lockForUpdate()->findOrFail($assignment->id);
+
+            if ($assignment->status === AssignmentStatus::Cancelled) {
+                $assignment = UserTrainingAssignment::query()
+                    ->where('supersedes_assignment_id', $assignment->id)
+                    ->lockForUpdate()
+                    ->first() ?? throw new LogicException('This assignment has been cancelled.');
+            }
+
+            if (! $assignment->status->isOpen()) {
+                throw new LogicException('This assignment cannot be started.');
+            }
             $open = $assignment->courseAttempts()
                 ->where('status', AttemptStatus::InProgress->value)
                 ->orderByDesc('attempt_number')

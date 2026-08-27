@@ -83,8 +83,6 @@ it('accepts a single-choice answer bound as a scalar', function (): void {
     [$assignment, $lesson, $question] = trainableAssignment();
     $correct = $question->options()->where('is_correct', true)->firstOrFail();
 
-    watch($assignment, $lesson, 100);
-
     Livewire::actingAs($assignment->user)
         ->test('training.lesson', ['assignment' => $assignment, 'lesson' => $lesson])
         ->set("selected.{$question->id}", (string) $correct->id)
@@ -93,4 +91,18 @@ it('accepts a single-choice answer bound as a scalar', function (): void {
 
     expect(QuestionAttempt::query()->firstOrFail()->is_correct)->toBeTrue()
         ->and(QuestionType::SingleChoice)->toBe($question->type);
+});
+
+it('shows and accepts assessment questions immediately when the lesson opens', function (): void {
+    [$assignment, $lesson, $question] = trainableAssignment();
+    $correct = $question->options()->where('is_correct', true)->firstOrFail();
+
+    Livewire::actingAs($assignment->user)
+        ->test('training.lesson', ['assignment' => $assignment, 'lesson' => $lesson])
+        ->assertSee($question->prompt)
+        ->set("selected.{$question->id}", (string) $correct->id)
+        ->call('answer', $question->id)
+        ->assertHasNoErrors();
+
+    expect(QuestionAttempt::query()->firstOrFail()->is_correct)->toBeTrue();
 });

@@ -17,10 +17,8 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Livewire\Component;
 
 /**
- * The employee's lesson: watch, then answer.
- *
- * The assessment is gated on the server, never only in the markup — AnswerQuestion refuses
- * an answer whose lesson has not met its watch threshold, whatever the page shows.
+ * The employee's lesson: video tracking and assessment share one execution screen.
+ * Watching remains measured against the configured threshold, but it does not block answers.
  */
 new class extends Component
 {
@@ -198,9 +196,7 @@ new class extends Component
         :kicker="$assignment->course->title"
         :title="$lesson->title"
         :description="$lesson->description">
-        <span class="status-pill {{ $unlocked ? 'status-pill--positive' : 'status-pill--warning' }}">
-            {{ $unlocked ? __('ui.assessment_unlocked') : __('ui.watch_to_unlock', ['percentage' => $lesson->minimum_watch_percentage]) }}
-        </span>
+        <span class="status-pill status-pill--accent">{{ __('ui.watched_percentage', ['percentage' => $percentage]) }}</span>
         <flux:button :href="route('my-training.show', ['assignment' => $assignment])" wire:navigate variant="ghost" size="sm">{{ __('ui.back_to_assignment') }}</flux:button>
     </x-page-hero>
 
@@ -255,7 +251,7 @@ new class extends Component
         <span class="detail-card-icon"><flux:icon.clipboard-document-check class="size-5" /></span>
         <h2 class="detail-card-title">{{ __('Assessment') }}</h2>
         <p class="mt-1 text-sm text-[#6f797f]">
-            {{ $unlocked ? __('ui.assessment_help') : __('ui.assessment_locked_help', ['percentage' => $lesson->minimum_watch_percentage]) }}
+            {{ __('ui.assessment_help') }}
         </p>
 
         @error('assessment')
@@ -266,11 +262,6 @@ new class extends Component
             <flux:callout variant="danger" :heading="__('ui.lesson_failed')" :text="__('ui.lesson_failed_help')" class="mt-4">
                 <flux:button :href="route('my-training.lesson', ['assignment' => $assignment, 'lesson' => $lesson])" variant="primary" class="mt-3">{{ __('ui.watch_again') }}</flux:button>
             </flux:callout>
-        @elseif (! $unlocked)
-            <div class="mt-5 rounded-[18px] border border-dashed border-[#d7dee3] p-8 text-center">
-                <span class="mx-auto grid size-11 place-items-center rounded-2xl bg-[#eef3f6] text-[#7d878e]"><flux:icon.lock-closed class="size-5" /></span>
-                <p class="mt-4 text-sm font-semibold text-[#5f6a71]">{{ __('ui.assessment_locked', ['percentage' => $percentage]) }}</p>
-            </div>
         @else
             <div class="mt-5 space-y-4">
                 @foreach ($lesson->questions as $question)

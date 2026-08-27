@@ -6,6 +6,7 @@ use App\Contracts\VideoProvider;
 use App\Data\Video\DownloadAuthorization;
 use App\Data\Video\PlaybackAuthorization;
 use App\Data\Video\VideoAssetStatus;
+use App\Data\Video\VideoLibraryItem;
 use App\Data\Video\VideoUpload;
 use App\Enums\VideoStatus;
 use App\Models\Video;
@@ -43,7 +44,7 @@ class FakeVideoProvider implements VideoProvider
         ]];
     }
 
-    public function createUpload(string $title, int $maxDurationSeconds): VideoUpload
+    public function createUpload(string $title, int $maxDurationSeconds, string $ownerKey): VideoUpload
     {
         $assetId = (string) Str::uuid();
 
@@ -51,6 +52,23 @@ class FakeVideoProvider implements VideoProvider
             provider: $this->key(),
             assetId: $assetId,
             uploadUrl: URL::temporarySignedRoute('dev.video.upload', now()->addHour(), ['asset' => $assetId]),
+        );
+    }
+
+    /** @return list<VideoLibraryItem> */
+    public function listAssets(int $limit = 12, string $search = '', string $ownerKey = ''): array
+    {
+        return [];
+    }
+
+    public function createAssetPreviewAuthorization(string $assetId, ?string $hlsUrl, int $ttlMinutes): PlaybackAuthorization
+    {
+        $expiresAt = now()->addMinutes($ttlMinutes);
+
+        return new PlaybackAuthorization(
+            token: 'local-fake',
+            playbackUrl: URL::temporarySignedRoute('dev.video.play', $expiresAt, ['asset' => $assetId]),
+            expiresAt: $expiresAt,
         );
     }
 

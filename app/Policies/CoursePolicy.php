@@ -12,38 +12,62 @@ class CoursePolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->hasPermission(Permission::CoursesView);
+        return $user->isPlatformAdmin()
+            || $user->hasPermission(Permission::CoursesView);
     }
 
     public function view(User $user, Course $course): bool
     {
-        return $user->hasPermission(Permission::CoursesView);
+        if ($course->is_shared) {
+            return $user->isPlatformAdmin()
+                || $user->hasPermission(Permission::SharedCoursesView);
+        }
+
+        return $this->belongsToUserCompany($user, $course)
+            && $user->hasPermission(Permission::CoursesView);
     }
 
     public function create(User $user): bool
     {
-        return $user->hasPermission(Permission::CoursesCreate);
+        return $user->isPlatformAdmin()
+            || $user->hasPermission(Permission::CoursesCreate);
     }
 
     /** Only a draft version can be edited — publishing freezes the content. */
     public function update(User $user, Course $course): bool
     {
-        return $user->hasPermission(Permission::CoursesUpdate);
+        return $this->canWrite($user, $course, Permission::CoursesUpdate);
     }
 
     public function updateVersion(User $user, CourseVersion $version): bool
     {
         return $version->status === CourseVersionStatus::Draft
-            && $user->hasPermission(Permission::CoursesUpdate);
+            && $this->canWrite($user, $version->course, Permission::CoursesUpdate);
     }
 
     public function publish(User $user, Course $course): bool
     {
-        return $user->hasPermission(Permission::CoursesPublish);
+        return $this->canWrite($user, $course, Permission::CoursesPublish);
     }
 
     public function retire(User $user, Course $course): bool
     {
-        return $user->hasPermission(Permission::CoursesRetire);
+        return $this->canWrite($user, $course, Permission::CoursesRetire);
+    }
+
+    private function canWrite(User $user, Course $course, Permission $permission): bool
+    {
+        if ($course->is_shared) {
+            return $user->isPlatformAdmin();
+        }
+
+        return $this->belongsToUserCompany($user, $course)
+            && $user->hasPermission($permission);
+    }
+
+    private function belongsToUserCompany(User $user, Course $course): bool
+    {
+        return $course->company_id !== null
+            && (int) $course->company_id === (int) $user->company_id;
     }
 }

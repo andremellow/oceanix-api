@@ -3,6 +3,7 @@
 namespace App\Services\Compliance;
 
 use App\Enums\ComplianceEventType;
+use App\Models\Account;
 use App\Models\ComplianceEvent;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -28,7 +29,7 @@ class ComplianceEventRecorder
     /**
      * @param  array<string, mixed>  $attributes
      */
-    public function record(ComplianceEventType $type, int $userId, array $attributes = []): ComplianceEvent
+    public function record(ComplianceEventType $type, int $userId, array $attributes = [], ?Account $platformActor = null): ComplianceEvent
     {
         $uuid = (string) ($attributes['uuid'] ?? Str::uuid());
         $existing = ComplianceEvent::query()->where('uuid', $uuid)->first();
@@ -56,7 +57,10 @@ class ComplianceEventRecorder
             'received_at' => now(),
             'client_sequence' => $attributes['client_sequence'] ?? null,
             'position_seconds' => $attributes['position_seconds'] ?? null,
-            'metadata' => $attributes['metadata'] ?? null,
+            'metadata' => $platformActor === null ? ($attributes['metadata'] ?? null) : [
+                ...($attributes['metadata'] ?? []),
+                'platform_account_id' => $platformActor->id,
+            ],
             'ip_address' => $attributes['ip_address'] ?? request()->ip(),
             'user_agent' => $attributes['user_agent'] ?? substr((string) request()->userAgent(), 0, 500),
         ]);

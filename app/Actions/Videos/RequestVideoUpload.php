@@ -29,6 +29,7 @@ class RequestVideoUpload
         $upload = $this->videoProvider->createUpload(
             $lesson->title !== '' ? $lesson->title : __('Untitled lesson'),
             $maxDurationSeconds,
+            $lesson->company_id === null ? 'platform' : 'company:'.$lesson->company_id,
         );
 
         DB::transaction(function () use ($lesson, $upload): void {

@@ -1,18 +1,26 @@
 <?php
 
 use App\Actions\Courses\PublishCourseVersion;
+use App\Actions\Courses\UpdateCourseModuleComposition;
+use App\Actions\Videos\LinkExistingVideo;
 use App\Actions\Videos\RequestVideoUpload;
 use App\Actions\Videos\SyncVideoAsset;
+use App\Contracts\VideoProvider;
 use App\Enums\CourseVersionStatus;
 use App\Enums\QuestionType;
 use App\Enums\VideoStatus;
 use App\Exceptions\CoursePublicationException;
+use App\Exceptions\VideoProviderException;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
 use App\Models\Question;
 use App\Models\QuestionOption;
+use App\Models\UserTrainingAssignment;
+use App\Models\Video;
 use App\Services\Courses\CourseVersionValidator;
+use App\Services\Modules\EligibleModuleCatalog;
+use App\Services\Video\VideoLibrary;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
@@ -51,6 +59,28 @@ new class extends Component
 
     public ?string $savedAt = null;
 
+    public bool $videoLibraryOpen = false;
+
+    public ?int $videoLibraryLessonIndex = null;
+
+    /** @var list<array<string, mixed>> */
+    public array $videoLibraryItems = [];
+
+    public ?string $videoLibraryError = null;
+
+    public string $videoLibrarySearch = '';
+
+    public ?string $videoLibraryPreviewUrl = null;
+
+    public ?string $videoLibraryPreviewPoster = null;
+
+    public ?string $videoLibraryPreviewTitle = null;
+
+    public string $moduleSearch = '';
+
+    /** @var list<int> */
+    public array $selectedModuleVersionIds = [];
+
     public function mount(Course $course): void
     {
         $this->authorize('update', $course);
@@ -72,6 +102,7 @@ new class extends Component
         ];
 
         $this->loadLessons();
+        $this->selectedModuleVersionIds = $draft->moduleCompositions()->pluck('lesson_id')->map(fn ($id) => (int) $id)->all();
         $this->expanded = collect($this->lessons)->pluck('id')->take(1)->all();
     }
 
@@ -86,12 +117,9 @@ new class extends Component
         match (true) {
             str_starts_with($property, 'courseForm.') => $this->saveCourseField(substr($property, 11), $value),
             str_starts_with($property, 'versionForm.') => $this->saveVersionField(substr($property, 12), $value),
-            (bool) preg_match('/^lessons\.(\d+)\.questions\.(\d+)\.options\.(\d+)\.(\w+)$/', $property, $m)
-                => $this->saveOptionField((int) $m[1], (int) $m[2], (int) $m[3], $m[4], $value),
-            (bool) preg_match('/^lessons\.(\d+)\.questions\.(\d+)\.(\w+)$/', $property, $m)
-                => $this->saveQuestionField((int) $m[1], (int) $m[2], $m[3], $value),
-            (bool) preg_match('/^lessons\.(\d+)\.(\w+)$/', $property, $m)
-                => $this->saveLessonField((int) $m[1], $m[2], $value),
+            (bool) preg_match('/^lessons\.(\d+)\.questions\.(\d+)\.options\.(\d+)\.(\w+)$/', $property, $m) => $this->saveOptionField((int) $m[1], (int) $m[2], (int) $m[3], $m[4], $value),
+            (bool) preg_match('/^lessons\.(\d+)\.questions\.(\d+)\.(\w+)$/', $property, $m) => $this->saveQuestionField((int) $m[1], (int) $m[2], $m[3], $value),
+            (bool) preg_match('/^lessons\.(\d+)\.(\w+)$/', $property, $m) => $this->saveLessonField((int) $m[1], $m[2], $value),
             default => null,
         };
     }
@@ -101,6 +129,35 @@ new class extends Component
         $this->expanded = in_array($lessonId, $this->expanded, true)
             ? array_values(array_diff($this->expanded, [$lessonId]))
             : [...$this->expanded, $lessonId];
+    }
+
+    public function addModule(int $moduleVersionId, UpdateCourseModuleComposition $action): void
+    {
+        if (! in_array($moduleVersionId, $this->selectedModuleVersionIds, true)) {
+            $this->selectedModuleVersionIds[] = $moduleVersionId;
+        }
+
+        $this->persistModuleComposition($action);
+    }
+
+    public function removeModule(int $index, UpdateCourseModuleComposition $action): void
+    {
+        abort_unless(array_key_exists($index, $this->selectedModuleVersionIds), 404);
+        array_splice($this->selectedModuleVersionIds, $index, 1);
+        $this->persistModuleComposition($action);
+    }
+
+    public function moveModule(int $index, int $direction, UpdateCourseModuleComposition $action): void
+    {
+        $target = $index + $direction;
+        abort_unless(array_key_exists($index, $this->selectedModuleVersionIds), 404);
+
+        if ($target < 0 || $target >= count($this->selectedModuleVersionIds)) {
+            return;
+        }
+
+        [$this->selectedModuleVersionIds[$index], $this->selectedModuleVersionIds[$target]] = [$this->selectedModuleVersionIds[$target], $this->selectedModuleVersionIds[$index]];
+        $this->persistModuleComposition($action);
     }
 
     public function addLesson(): void
@@ -232,6 +289,73 @@ new class extends Component
         $this->touchSaved();
     }
 
+    public function openVideoLibrary(int $lessonIndex, VideoLibrary $library): void
+    {
+        $this->lessonAt($lessonIndex);
+        $this->videoLibraryLessonIndex = $lessonIndex;
+        $this->videoLibraryError = null;
+        $this->videoLibrarySearch = '';
+        $this->clearVideoLibraryPreview();
+        $this->videoLibraryOpen = true;
+
+        try {
+            $this->videoLibraryItems = $library->items();
+        } catch (VideoProviderException) {
+            $this->videoLibraryItems = [];
+            $this->videoLibraryError = __('The video library could not be loaded. Try again.');
+        }
+    }
+
+    public function searchVideoLibrary(VideoLibrary $library): void
+    {
+        abort_if($this->videoLibraryLessonIndex === null, 404);
+
+        $this->videoLibraryError = null;
+        $this->clearVideoLibraryPreview();
+
+        try {
+            $this->videoLibraryItems = $library->items($this->videoLibrarySearch);
+        } catch (VideoProviderException) {
+            $this->videoLibraryItems = [];
+            $this->videoLibraryError = __('The video library could not be loaded. Try again.');
+        }
+    }
+
+    public function previewLibraryVideo(string $assetId): void
+    {
+        $item = collect($this->videoLibraryItems)
+            ->first(fn (array $item): bool => hash_equals((string) $item['asset_id'], $assetId));
+        abort_if($item === null || $item['status'] !== VideoStatus::Ready->value, 404);
+
+        $this->videoLibraryPreviewUrl = $item['preview_url'];
+        $this->videoLibraryPreviewPoster = $item['thumbnail_url'];
+        $this->videoLibraryPreviewTitle = $item['title'];
+    }
+
+    public function linkExistingVideo(string $assetId, LinkExistingVideo $action): void
+    {
+        abort_if($this->videoLibraryLessonIndex === null, 404);
+
+        $listed = collect($this->videoLibraryItems)
+            ->contains(fn (array $item): bool => hash_equals((string) $item['asset_id'], $assetId));
+        abort_unless($listed, 404);
+
+        $action->handle($this->lessonAt($this->videoLibraryLessonIndex), $assetId);
+
+        $this->videoLibraryOpen = false;
+        $this->videoLibraryLessonIndex = null;
+        $this->videoLibraryItems = [];
+        $this->loadLessons();
+        $this->touchSaved();
+    }
+
+    private function clearVideoLibraryPreview(): void
+    {
+        $this->videoLibraryPreviewUrl = null;
+        $this->videoLibraryPreviewPoster = null;
+        $this->videoLibraryPreviewTitle = null;
+    }
+
     /** Polled while any video is still encoding. */
     public function syncVideos(SyncVideoAsset $action): void
     {
@@ -241,7 +365,7 @@ new class extends Component
             ->with('video')
             ->get()
             ->pluck('video')
-            ->filter(fn (?App\Models\Video $video): bool => $video !== null
+            ->filter(fn (?Video $video): bool => $video !== null
                 && $video->status !== VideoStatus::Ready
                 && $video->status !== VideoStatus::Uploading);
 
@@ -281,11 +405,13 @@ new class extends Component
         $this->redirect(route('courses.show', ['course' => $this->course]), navigate: true);
     }
 
-    public function with(CourseVersionValidator $validator, App\Contracts\VideoProvider $videoProvider): array
+    public function with(CourseVersionValidator $validator, VideoProvider $videoProvider, EligibleModuleCatalog $moduleCatalog): array
     {
+        $moduleGroups = $moduleCatalog->forCourseEditor($this->course->company, auth()->user(), $this->moduleSearch);
+
         return [
             'problems' => $validator->problems($this->version),
-            'openAssignmentCount' => App\Models\UserTrainingAssignment::query()
+            'openAssignmentCount' => UserTrainingAssignment::query()
                 ->where('course_id', $this->course->id)
                 ->where('course_version_id', '!=', $this->version->id)
                 ->open()
@@ -294,6 +420,8 @@ new class extends Component
             'hasEncodingVideo' => collect($this->lessons)->contains(
                 fn (array $lesson): bool => in_array($lesson['video']['status'] ?? null, ['uploading', 'processing'], true)
             ),
+            'moduleGroups' => $moduleGroups,
+            'selectedModules' => $this->version->moduleCompositions()->with('moduleVersion')->get(),
         ];
     }
 
@@ -475,6 +603,13 @@ new class extends Component
     {
         $this->savedAt = now()->format('H:i:s');
     }
+
+    private function persistModuleComposition(UpdateCourseModuleComposition $action): void
+    {
+        $action->handle($this->version, $this->selectedModuleVersionIds, auth()->user());
+        $this->resetErrorBag('modules');
+        $this->touchSaved();
+    }
 };
 ?>
 
@@ -532,6 +667,42 @@ new class extends Component
             <p class="mt-2 text-xs text-[#8a9298]">{{ __('ui.version_description_note') }}</p>
         </div>
         <p class="mt-4 border-t border-[#eef1f4] pt-4 text-xs text-[#8a9298]">{{ __('ui.completion_rule_note') }}</p>
+    </section>
+
+    {{-- Immutable module composition --}}
+    <section class="detail-card space-y-5">
+        <div>
+            <p class="admin-kicker">{{ __('Reusable content') }}</p>
+            <h2 class="mt-1 text-xl font-bold tracking-tight text-[#242a2f]">{{ __('Course Modules') }}</h2>
+            <p class="mt-1 text-sm text-[#707a80]">{{ __('Compose this draft from published Company Modules and Shared Modules.') }}</p>
+        </div>
+        @error('modules') <flux:callout variant="danger" :heading="$message" /> @enderror
+        <div class="space-y-2" aria-live="polite">
+            @forelse ($selectedModules as $index => $composition)
+                <div class="flex items-center gap-3 rounded-[16px] border border-[#e4e9ec] bg-[#f8fafb] p-3" wire:key="composition-{{ $composition->id }}">
+                    <span class="grid size-8 place-items-center rounded-xl bg-[#e4f0f5] text-sm font-bold text-[#1c6b84]">{{ $index + 1 }}</span>
+                    <div class="min-w-0 flex-1"><p class="truncate font-semibold">{{ $composition->moduleVersion->title }}</p><p class="text-xs text-[#7d878d]">{{ $composition->moduleVersion->is_shared ? __('Shared Module') : __('Company Module') }} · {{ __('Version :number', ['number' => $composition->moduleVersion->version_number]) }}</p></div>
+                    <flux:button wire:click="moveModule({{ $index }}, -1)" variant="ghost" size="sm" icon="chevron-up" :aria-label="__('Move module up')" :disabled="$index === 0" />
+                    <flux:button wire:click="moveModule({{ $index }}, 1)" variant="ghost" size="sm" icon="chevron-down" :aria-label="__('Move module down')" :disabled="$index === $selectedModules->count() - 1" />
+                    <flux:button wire:click="removeModule({{ $index }})" variant="ghost" size="sm" icon="trash" :aria-label="__('Remove module')" />
+                </div>
+            @empty
+                <x-empty-state :title="__('No modules selected')" :description="__('Choose a published module below. Legacy lessons remain available during migration.')" />
+            @endforelse
+        </div>
+        <flux:input wire:model.live.debounce.300ms="moduleSearch" type="search" :label="__('Search modules')" :placeholder="__('Search by title or code')" />
+        <div wire:loading.delay wire:target="moduleSearch" role="status" class="text-sm text-[#5f6a71]">{{ __('Searching modules…') }}</div>
+        <div class="grid gap-5 md:grid-cols-2" wire:loading.remove.delay wire:target="moduleSearch">
+            @foreach (['company' => __('Company Modules'), 'shared' => __('Shared Modules')] as $group => $label)
+                <div><h3 class="text-sm font-bold">{{ $label }}</h3><div class="mt-3 space-y-2">
+                    @forelse ($moduleGroups[$group] as $module)
+                        <div class="flex items-center justify-between rounded-[16px] border border-[#e4e9ec] p-3" wire:key="picker-{{ $group }}-{{ $module->id }}"><div><p class="font-semibold">{{ $module->title }}</p><p class="text-xs text-[#7d878d]">{{ $module->code }} · {{ $group === 'shared' ? __('Managed by platform') : __('Managed by company') }}</p></div><flux:button wire:click="addModule({{ $module->id }})" wire:loading.attr="disabled" variant="ghost" size="sm" :disabled="in_array($module->id, $selectedModuleVersionIds, true)">{{ __('Add module') }}</flux:button></div>
+                    @empty
+                        <p class="rounded-[16px] border border-dashed border-[#d8e0e4] p-4 text-sm text-[#707a80]">{{ __('No eligible modules found.') }}</p>
+                    @endforelse
+                </div></div>
+            @endforeach
+        </div>
     </section>
 
     {{-- Lessons --}}
@@ -593,7 +764,7 @@ new class extends Component
 
                         {{-- Video --}}
                         <div class="mt-5 rounded-[18px] border border-[#e4e9ec] bg-[#f8fafb] p-4">
-                            <div class="flex flex-wrap items-center justify-between gap-3" x-data="lessonVideoUpload({{ $lessonIndex }})">
+                            <div class="flex flex-wrap items-center justify-between gap-3" x-data="lessonVideoUpload({{ $lessonIndex }}, {{ Js::from(['fileTooLarge' => __('This video is larger than 200 MB. Select a smaller file.')]) }})">
                                 <div class="min-w-0">
                                     <p class="text-sm font-bold text-[#262d33]">{{ __('Video') }}</p>
                                     <p class="mt-0.5 text-xs text-[#8a9298]">
@@ -613,8 +784,11 @@ new class extends Component
                                     </template>
                                     <p class="mt-2 text-[11px] font-semibold text-[#b23a3a]" x-show="error" x-text="error"></p>
                                 </div>
-                                <div>
+                                <div class="flex flex-wrap items-center gap-2">
                                     <input type="file" accept="video/*" class="hidden" x-ref="file" @change="start($event)">
+                                    <flux:button wire:click="openVideoLibrary({{ $lessonIndex }})" variant="ghost" size="sm" icon="rectangle-stack">
+                                        {{ __('Video library') }}
+                                    </flux:button>
                                     <flux:button variant="ghost" size="sm" x-on:click="$refs.file.click()" ::disabled="uploading">
                                         {{ $lesson['video'] ? __('Replace video') : __('Upload video') }}
                                     </flux:button>
@@ -691,6 +865,106 @@ new class extends Component
             </x-empty-state>
         @endforelse
     </section>
+
+    <flux:modal wire:model.self="videoLibraryOpen" class="max-w-3xl">
+        <div class="space-y-5">
+            <div>
+                <flux:heading size="lg">{{ __('Video library') }}</flux:heading>
+                <flux:text class="mt-2">{{ __('Select a ready video from Cloudflare Stream to reuse in this lesson.') }}</flux:text>
+            </div>
+
+            <div class="flex gap-2">
+                <flux:input
+                    wire:model="videoLibrarySearch"
+                    wire:keydown.enter="searchVideoLibrary"
+                    class="admin-control flex-1"
+                    icon="magnifying-glass"
+                    :label="__('Search videos')"
+                    :placeholder="__('Search by video name')" />
+                <flux:button
+                    wire:click="searchVideoLibrary"
+                    wire:loading.attr="disabled"
+                    wire:target="searchVideoLibrary"
+                    variant="ghost"
+                    class="self-end">
+                    {{ __('Search') }}
+                </flux:button>
+            </div>
+
+            @if ($videoLibraryPreviewUrl)
+                <section class="overflow-hidden rounded-[20px] border border-[#dde3e7] bg-[#11181c]" wire:key="video-library-preview-{{ md5($videoLibraryPreviewUrl) }}">
+                    <video
+                        x-data="videoLibraryPreview({{ Js::from($videoLibraryPreviewUrl) }}, {{ Js::from($videoLibraryPreviewPoster) }})"
+                        x-ref="video"
+                        class="aspect-video w-full bg-black"
+                        controls
+                        playsinline></video>
+                    <p class="px-4 py-3 text-sm font-bold text-white">{{ $videoLibraryPreviewTitle }}</p>
+                </section>
+            @endif
+
+            @if ($videoLibraryError)
+                <flux:callout variant="danger" :heading="$videoLibraryError" />
+            @elseif ($videoLibraryItems === [])
+                <x-empty-state
+                    icon="film"
+                    :title="__('No videos found')"
+                    :description="__('Upload a video to Cloudflare Stream and it will appear here.')" />
+            @else
+                <div class="grid max-h-[55vh] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
+                    @foreach ($videoLibraryItems as $item)
+                        <article class="overflow-hidden rounded-2xl border border-[#dde3e7] bg-white" wire:key="library-video-{{ $item['asset_id'] }}">
+                            <button
+                                type="button"
+                                wire:click="previewLibraryVideo('{{ $item['asset_id'] }}')"
+                                class="group relative block aspect-video w-full overflow-hidden bg-[#e8eef1] text-left disabled:cursor-not-allowed"
+                                aria-label="{{ __('Preview :video', ['video' => $item['title']]) }}"
+                                @disabled($item['status'] !== App\Enums\VideoStatus::Ready->value || $item['preview_url'] === null)>
+                                @if ($item['thumbnail_url'])
+                                    <img src="{{ $item['thumbnail_url'] }}" alt="" class="size-full object-cover transition group-hover:scale-[1.02]">
+                                @else
+                                    <span class="grid size-full place-items-center text-[#8a9298]">
+                                        <flux:icon.film class="size-8" />
+                                    </span>
+                                @endif
+                                @if ($item['status'] === App\Enums\VideoStatus::Ready->value && $item['preview_url'])
+                                    <span class="absolute inset-0 grid place-items-center bg-black/10 opacity-0 transition group-hover:opacity-100">
+                                        <span class="grid size-11 place-items-center rounded-full bg-white/95 text-[#1c6b84] shadow">
+                                            <flux:icon.play class="size-5" />
+                                        </span>
+                                    </span>
+                                @endif
+                            </button>
+                            <div class="p-3">
+                                <p class="truncate text-sm font-bold text-[#262d33]">{{ $item['title'] }}</p>
+                                <p class="mt-1 text-xs text-[#8a9298]">{{ $item['duration'] }} · {{ $item['created_at'] }}</p>
+                                <div class="mt-3 flex items-center justify-between gap-2">
+                                    <span class="status-pill {{ $item['pill'] }}">{{ $item['status_label'] }}</span>
+                                    <flux:button
+                                        wire:click="linkExistingVideo('{{ $item['asset_id'] }}')"
+                                        wire:loading.attr="disabled"
+                                        wire:target="linkExistingVideo"
+                                        variant="ghost"
+                                        size="sm"
+                                        :disabled="$item['status'] !== App\Enums\VideoStatus::Ready->value">
+                                        {{ __('Use video') }}
+                                    </flux:button>
+                                </div>
+                            </div>
+                        </article>
+                    @endforeach
+                </div>
+            @endif
+
+            @error('videoLibrary')
+                <flux:callout variant="danger" :heading="$message" />
+            @enderror
+
+            <div class="flex justify-end">
+                <flux:button x-on:click="$flux.modal.close()" variant="ghost">{{ __('Close') }}</flux:button>
+            </div>
+        </div>
+    </flux:modal>
 
     {{-- Publish confirmation --}}
     <flux:modal wire:model.self="confirmingPublish" class="max-w-lg">
