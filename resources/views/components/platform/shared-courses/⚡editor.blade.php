@@ -1,8 +1,7 @@
 <?php
 
-use App\Actions\Courses\PublishCourseVersion;
+use App\Actions\Courses\PublishSharedCourseDraft;
 use App\Actions\Modules\CreateModuleDraft;
-use App\Actions\Modules\PublishModuleVersion;
 use App\Actions\Videos\RequestVideoUpload;
 use App\Enums\CourseVersionStatus;
 use App\Enums\ModuleVersionStatus;
@@ -62,7 +61,7 @@ new #[Layout('layouts::platform')] class extends Component
             abort_unless(in_array($field, ['code', 'title', 'description'], true), 404);
             $this->validate(['courseForm.code' => ['required', 'string', 'max:40', 'unique:courses,code,'.$this->course->id], 'courseForm.title' => ['required', 'string', 'max:200'], 'courseForm.description' => ['nullable', 'string', 'max:2000']]);
             $this->course->update([$field => $value]);
-            if ($field !== 'code') $this->version->update([$field => $value]);
+            if ($field === 'title') $this->version->update(['title' => $value]);
             return;
         }
 
@@ -75,18 +74,38 @@ new #[Layout('layouts::platform')] class extends Component
         if (preg_match('/^modules\.(\d+)\.([a-z_]+)$/', $property, $matches)) {
             $index = (int) $matches[1]; $field = $matches[2];
             abort_unless(in_array($field, ['title', 'description', 'content_markdown', 'minimum_watch_percentage', 'passing_score'], true), 404);
+            $this->validate([
+                "modules.{$index}.title" => ['required', 'string', 'max:200'],
+                "modules.{$index}.description" => ['nullable', 'string', 'max:2000'],
+                "modules.{$index}.content_markdown" => ['nullable', 'string', 'max:100000'],
+                "modules.{$index}.minimum_watch_percentage" => ['required', 'integer', 'min:1', 'max:100'],
+                "modules.{$index}.passing_score" => ['required', 'integer', 'min:1', 'max:100'],
+            ]);
             $module = $this->moduleAt($index);
             $module->update([$field => $value]);
             return;
         }
 
         if (preg_match('/^modules\.(\d+)\.questions\.(\d+)\.(prompt|max_attempts)$/', $property, $matches)) {
+            $moduleIndex = (int) $matches[1];
+            $questionIndex = (int) $matches[2];
+            $this->validate([
+                "modules.{$moduleIndex}.questions.{$questionIndex}.prompt" => ['required', 'string', 'max:1000'],
+                "modules.{$moduleIndex}.questions.{$questionIndex}.max_attempts" => ['required', 'integer', 'min:1', 'max:10'],
+            ]);
             $question = $this->questionAt((int) $matches[1], (int) $matches[2]);
             $question->update([$matches[3] => $value]);
             return;
         }
 
         if (preg_match('/^modules\.(\d+)\.questions\.(\d+)\.options\.(\d+)\.(text|is_correct)$/', $property, $matches)) {
+            $moduleIndex = (int) $matches[1];
+            $questionIndex = (int) $matches[2];
+            $optionIndex = (int) $matches[3];
+            $this->validate([
+                "modules.{$moduleIndex}.questions.{$questionIndex}.options.{$optionIndex}.text" => ['required', 'string', 'max:1000'],
+                "modules.{$moduleIndex}.questions.{$questionIndex}.options.{$optionIndex}.is_correct" => ['boolean'],
+            ]);
             $option = $this->optionAt((int) $matches[1], (int) $matches[2], (int) $matches[3]);
             $option->update([$matches[4] => $value]);
         }
@@ -214,14 +233,11 @@ new #[Layout('layouts::platform')] class extends Component
         $this->imageLibraryOpen = false;
     }
 
-    public function publish(PublishModuleVersion $publishModule, PublishCourseVersion $publishCourse, PlatformAccess $access): void
+    public function publish(PublishSharedCourseDraft $action, PlatformAccess $access): void
     {
         $actor = $access->authorize();
         try {
-            foreach ($this->version->moduleCompositions()->with('moduleVersion')->get() as $composition) {
-                if ($composition->moduleVersion->status === ModuleVersionStatus::Draft) $publishModule->handle($composition->moduleVersion, $actor, $this->restartInProgress);
-            }
-            $publishCourse->handle($this->version->fresh(), $actor, $this->restartInProgress);
+            $action->handle($this->version, $actor, $this->restartInProgress);
         } catch (CoursePublicationException|\LogicException $exception) {
             $this->addError('publish', $exception instanceof CoursePublicationException ? ($exception->problems[0] ?? $exception->getMessage()) : $exception->getMessage()); return;
         }
