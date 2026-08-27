@@ -33,4 +33,9 @@ class CourseVersionFactory extends Factory
             'published_at' => now()->subDays(30),
         ]);
     }
+
+    public function shared(): static
+    {
+        return $this->for(Course::factory()->shared());
+    }
 }

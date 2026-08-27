@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CourseStatus;
 use App\Enums\FrequencyType;
 use App\Enums\RenewalBasis;
 use App\Enums\RequirementStatus;
@@ -88,7 +89,10 @@ class TrainingRequirement extends Model
             return false;
         }
 
-        return $this->course?->current_published_version_id !== null;
+        $course = $this->course()->first();
+
+        return $course?->status === CourseStatus::Active
+            && $course->current_published_version_id !== null;
     }
 
     public function frequencyLabel(): string

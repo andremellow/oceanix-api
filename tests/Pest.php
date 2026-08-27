@@ -6,7 +6,10 @@ use App\Enums\QuestionType;
 use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
+use App\Models\CourseVersionModule;
 use App\Models\Lesson;
+use App\Models\Module;
+use App\Models\ModuleVersion;
 use App\Models\Permission;
 use App\Models\Question;
 use App\Models\QuestionOption;
@@ -98,6 +101,33 @@ function seedAccessCatalog(): void
 {
     (new PermissionSeeder)->run();
     (new RoleSeeder)->run();
+}
+
+/** @return array{0: Course, 1: CourseVersion, 2: Module, 3: ModuleVersion} */
+function sharedTrainingGraph(): array
+{
+    $course = Course::factory()->shared()->create();
+    $courseVersion = CourseVersion::factory()->published()->create([
+        'course_id' => $course->id,
+        'published_by' => null,
+    ]);
+    $course->update(['current_published_version_id' => $courseVersion->id]);
+
+    $module = Module::factory()->shared()->create(['status' => 'active']);
+    $moduleVersion = ModuleVersion::factory()->published()->create([
+        'module_id' => $module->id,
+        'published_by' => null,
+    ]);
+    $module->update(['current_published_version_id' => $moduleVersion->id]);
+
+    CourseVersionModule::query()->create([
+        'course_version_id' => $courseVersion->id,
+        'module_version_id' => $moduleVersion->id,
+        'position' => 1,
+        'is_required' => true,
+    ]);
+
+    return [$course->fresh(), $courseVersion->fresh(), $module->fresh(), $moduleVersion->fresh()];
 }
 
 /**

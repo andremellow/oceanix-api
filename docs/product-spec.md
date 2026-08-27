@@ -259,6 +259,40 @@ Uma versão em rascunho pode ser alterada. Depois de publicada e utilizada, torn
 
 Assignments e certificados sempre apontam para um `course_version_id` específico.
 
+### Biblioteca compartilhada de cursos e módulos
+
+Cursos e módulos usam ownership explícito por `company_id` e `is_shared`:
+
+- conteúdo da plataforma possui `company_id = null` e `is_shared = true`;
+- conteúdo próprio de empresa possui `company_id` preenchido e `is_shared = false`;
+- qualquer outra combinação é inválida.
+
+Um curso compartilhado é mantido exclusivamente pela plataforma. A empresa o adiciona à sua
+biblioteca por uma associação durável, sem copiar curso, versões, módulos ou lessons. A remoção da
+biblioteca impede novos usos naquela empresa, mas nunca apaga obrigações ou evidências históricas.
+
+Módulos são versionados e entram em uma `CourseVersion` como referências ordenadas e imutáveis de
+`ModuleVersion`. Cursos próprios podem combinar módulos da própria empresa com módulos
+compartilhados elegíveis; dados de outra empresa nunca são elegíveis.
+
+Ao publicar uma nova versão de curso compartilhado, assignments não iniciados passam
+automaticamente para a nova versão. Assignments em progresso permanecem na versão anterior por
+padrão; a plataforma pode optar explicitamente por reiniciá-los. A substituição cancela a obrigação
+anterior, cria outra equivalente sem copiar progresso e preserva recorrência, agenda e histórico.
+
+Ao publicar uma nova versão de módulo compartilhado, o sistema cria uma nova versão publicada de
+cada curso afetado a partir da última versão publicada. Rascunhos existentes permanecem intactos.
+A propagação é durável, idempotente, processada por empresa e permite retentar falhas parciais.
+
+Um curso próprio pode ser promovido pela plataforma. A operação transfere atomicamente o curso e
+todos os módulos próprios que compõem suas versões para ownership compartilhado, mantém uma
+associação para a empresa de origem e preserva identificadores e referências históricas. O impacto,
+inclusive módulos reutilizados por outros cursos, deve ser confirmado sobre uma prévia ainda válida.
+
+Arquivar conteúdo compartilhado encerra novas associações, composições e assignments. Associações,
+assignments, conclusões, certificados e evidências já existentes continuam acessíveis e não são
+cancelados nem reescritos.
+
 ### `lessons`
 
 - `id`

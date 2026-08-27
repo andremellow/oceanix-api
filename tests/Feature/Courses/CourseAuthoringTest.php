@@ -56,6 +56,19 @@ it('publishes a complete draft and makes it the current version', function (): v
         ->and(AuditLog::query()->where('action', 'course_version.published')->count())->toBe(1);
 });
 
+it('renders a migrated course composition without nested lesson relationships', function (): void {
+    $version = publishableDraft();
+    $admin = adminUser();
+    app(PublishCourseVersion::class)->handle($version, $admin->id);
+
+    expect($version->moduleCompositions()->count())->toBe(1);
+
+    $this->actingAs($admin)
+        ->get(route('courses.show', ['course' => $version->course]))
+        ->assertOk()
+        ->assertSee($version->lessons()->first()->title);
+});
+
 it('refuses to publish a version with no lessons', function (): void {
     $version = publishableDraft();
     $version->lessons()->delete();

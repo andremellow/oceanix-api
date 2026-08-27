@@ -1,4 +1,7 @@
 *.log
+*.cache
+*.tmp
+*.swp
 .DS_Store
 .env
 .env.backup
@@ -14,6 +17,8 @@
 /.zed
 /auth.json
 /node_modules
+/dist
+/build
 /public/build
 /public/fonts-manifest.dev.json
 /public/hot

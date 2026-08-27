@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Enums\QuestionType;
 use App\Models\Lesson;
 use App\Models\Question;
+use App\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -17,6 +18,7 @@ class QuestionFactory extends Factory
     public function definition(): array
     {
         return [
+            'company_id' => fn (): int => app(TenantContext::class)->id(),
             'lesson_id' => Lesson::factory(),
             'type' => QuestionType::SingleChoice,
             'prompt' => fake()->sentence(8).'?',

@@ -1,21 +1,26 @@
 <?php
 
 use App\Actions\Courses\PublishCourseVersion;
-use App\Actions\Videos\RequestVideoUpload;
+use App\Actions\Courses\UpdateCourseModuleComposition;
 use App\Actions\Videos\LinkExistingVideo;
+use App\Actions\Videos\RequestVideoUpload;
 use App\Actions\Videos\SyncVideoAsset;
+use App\Contracts\VideoProvider;
 use App\Enums\CourseVersionStatus;
 use App\Enums\QuestionType;
 use App\Enums\VideoStatus;
 use App\Exceptions\CoursePublicationException;
+use App\Exceptions\VideoProviderException;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
 use App\Models\Question;
 use App\Models\QuestionOption;
+use App\Models\UserTrainingAssignment;
+use App\Models\Video;
 use App\Services\Courses\CourseVersionValidator;
+use App\Services\Modules\EligibleModuleCatalog;
 use App\Services\Video\VideoLibrary;
-use App\Exceptions\VideoProviderException;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
@@ -71,6 +76,11 @@ new class extends Component
 
     public ?string $videoLibraryPreviewTitle = null;
 
+    public string $moduleSearch = '';
+
+    /** @var list<int> */
+    public array $selectedModuleVersionIds = [];
+
     public function mount(Course $course): void
     {
         $this->authorize('update', $course);
@@ -92,6 +102,7 @@ new class extends Component
         ];
 
         $this->loadLessons();
+        $this->selectedModuleVersionIds = $draft->moduleCompositions()->pluck('lesson_id')->map(fn ($id) => (int) $id)->all();
         $this->expanded = collect($this->lessons)->pluck('id')->take(1)->all();
     }
 
@@ -106,12 +117,9 @@ new class extends Component
         match (true) {
             str_starts_with($property, 'courseForm.') => $this->saveCourseField(substr($property, 11), $value),
             str_starts_with($property, 'versionForm.') => $this->saveVersionField(substr($property, 12), $value),
-            (bool) preg_match('/^lessons\.(\d+)\.questions\.(\d+)\.options\.(\d+)\.(\w+)$/', $property, $m)
-                => $this->saveOptionField((int) $m[1], (int) $m[2], (int) $m[3], $m[4], $value),
-            (bool) preg_match('/^lessons\.(\d+)\.questions\.(\d+)\.(\w+)$/', $property, $m)
-                => $this->saveQuestionField((int) $m[1], (int) $m[2], $m[3], $value),
-            (bool) preg_match('/^lessons\.(\d+)\.(\w+)$/', $property, $m)
-                => $this->saveLessonField((int) $m[1], $m[2], $value),
+            (bool) preg_match('/^lessons\.(\d+)\.questions\.(\d+)\.options\.(\d+)\.(\w+)$/', $property, $m) => $this->saveOptionField((int) $m[1], (int) $m[2], (int) $m[3], $m[4], $value),
+            (bool) preg_match('/^lessons\.(\d+)\.questions\.(\d+)\.(\w+)$/', $property, $m) => $this->saveQuestionField((int) $m[1], (int) $m[2], $m[3], $value),
+            (bool) preg_match('/^lessons\.(\d+)\.(\w+)$/', $property, $m) => $this->saveLessonField((int) $m[1], $m[2], $value),
             default => null,
         };
     }
@@ -121,6 +129,35 @@ new class extends Component
         $this->expanded = in_array($lessonId, $this->expanded, true)
             ? array_values(array_diff($this->expanded, [$lessonId]))
             : [...$this->expanded, $lessonId];
+    }
+
+    public function addModule(int $moduleVersionId, UpdateCourseModuleComposition $action): void
+    {
+        if (! in_array($moduleVersionId, $this->selectedModuleVersionIds, true)) {
+            $this->selectedModuleVersionIds[] = $moduleVersionId;
+        }
+
+        $this->persistModuleComposition($action);
+    }
+
+    public function removeModule(int $index, UpdateCourseModuleComposition $action): void
+    {
+        abort_unless(array_key_exists($index, $this->selectedModuleVersionIds), 404);
+        array_splice($this->selectedModuleVersionIds, $index, 1);
+        $this->persistModuleComposition($action);
+    }
+
+    public function moveModule(int $index, int $direction, UpdateCourseModuleComposition $action): void
+    {
+        $target = $index + $direction;
+        abort_unless(array_key_exists($index, $this->selectedModuleVersionIds), 404);
+
+        if ($target < 0 || $target >= count($this->selectedModuleVersionIds)) {
+            return;
+        }
+
+        [$this->selectedModuleVersionIds[$index], $this->selectedModuleVersionIds[$target]] = [$this->selectedModuleVersionIds[$target], $this->selectedModuleVersionIds[$index]];
+        $this->persistModuleComposition($action);
     }
 
     public function addLesson(): void
@@ -328,7 +365,7 @@ new class extends Component
             ->with('video')
             ->get()
             ->pluck('video')
-            ->filter(fn (?App\Models\Video $video): bool => $video !== null
+            ->filter(fn (?Video $video): bool => $video !== null
                 && $video->status !== VideoStatus::Ready
                 && $video->status !== VideoStatus::Uploading);
 
@@ -368,11 +405,13 @@ new class extends Component
         $this->redirect(route('courses.show', ['course' => $this->course]), navigate: true);
     }
 
-    public function with(CourseVersionValidator $validator, App\Contracts\VideoProvider $videoProvider): array
+    public function with(CourseVersionValidator $validator, VideoProvider $videoProvider, EligibleModuleCatalog $moduleCatalog): array
     {
+        $moduleGroups = $moduleCatalog->forCourseEditor($this->course->company, auth()->user(), $this->moduleSearch);
+
         return [
             'problems' => $validator->problems($this->version),
-            'openAssignmentCount' => App\Models\UserTrainingAssignment::query()
+            'openAssignmentCount' => UserTrainingAssignment::query()
                 ->where('course_id', $this->course->id)
                 ->where('course_version_id', '!=', $this->version->id)
                 ->open()
@@ -381,6 +420,8 @@ new class extends Component
             'hasEncodingVideo' => collect($this->lessons)->contains(
                 fn (array $lesson): bool => in_array($lesson['video']['status'] ?? null, ['uploading', 'processing'], true)
             ),
+            'moduleGroups' => $moduleGroups,
+            'selectedModules' => $this->version->moduleCompositions()->with('moduleVersion')->get(),
         ];
     }
 
@@ -562,6 +603,13 @@ new class extends Component
     {
         $this->savedAt = now()->format('H:i:s');
     }
+
+    private function persistModuleComposition(UpdateCourseModuleComposition $action): void
+    {
+        $action->handle($this->version, $this->selectedModuleVersionIds, auth()->user());
+        $this->resetErrorBag('modules');
+        $this->touchSaved();
+    }
 };
 ?>
 
@@ -619,6 +667,42 @@ new class extends Component
             <p class="mt-2 text-xs text-[#8a9298]">{{ __('ui.version_description_note') }}</p>
         </div>
         <p class="mt-4 border-t border-[#eef1f4] pt-4 text-xs text-[#8a9298]">{{ __('ui.completion_rule_note') }}</p>
+    </section>
+
+    {{-- Immutable module composition --}}
+    <section class="detail-card space-y-5">
+        <div>
+            <p class="admin-kicker">{{ __('Reusable content') }}</p>
+            <h2 class="mt-1 text-xl font-bold tracking-tight text-[#242a2f]">{{ __('Course Modules') }}</h2>
+            <p class="mt-1 text-sm text-[#707a80]">{{ __('Compose this draft from published Company Modules and Shared Modules.') }}</p>
+        </div>
+        @error('modules') <flux:callout variant="danger" :heading="$message" /> @enderror
+        <div class="space-y-2" aria-live="polite">
+            @forelse ($selectedModules as $index => $composition)
+                <div class="flex items-center gap-3 rounded-[16px] border border-[#e4e9ec] bg-[#f8fafb] p-3" wire:key="composition-{{ $composition->id }}">
+                    <span class="grid size-8 place-items-center rounded-xl bg-[#e4f0f5] text-sm font-bold text-[#1c6b84]">{{ $index + 1 }}</span>
+                    <div class="min-w-0 flex-1"><p class="truncate font-semibold">{{ $composition->moduleVersion->title }}</p><p class="text-xs text-[#7d878d]">{{ $composition->moduleVersion->is_shared ? __('Shared Module') : __('Company Module') }} · {{ __('Version :number', ['number' => $composition->moduleVersion->version_number]) }}</p></div>
+                    <flux:button wire:click="moveModule({{ $index }}, -1)" variant="ghost" size="sm" icon="chevron-up" :aria-label="__('Move module up')" :disabled="$index === 0" />
+                    <flux:button wire:click="moveModule({{ $index }}, 1)" variant="ghost" size="sm" icon="chevron-down" :aria-label="__('Move module down')" :disabled="$index === $selectedModules->count() - 1" />
+                    <flux:button wire:click="removeModule({{ $index }})" variant="ghost" size="sm" icon="trash" :aria-label="__('Remove module')" />
+                </div>
+            @empty
+                <x-empty-state :title="__('No modules selected')" :description="__('Choose a published module below. Legacy lessons remain available during migration.')" />
+            @endforelse
+        </div>
+        <flux:input wire:model.live.debounce.300ms="moduleSearch" type="search" :label="__('Search modules')" :placeholder="__('Search by title or code')" />
+        <div wire:loading.delay wire:target="moduleSearch" role="status" class="text-sm text-[#5f6a71]">{{ __('Searching modules…') }}</div>
+        <div class="grid gap-5 md:grid-cols-2" wire:loading.remove.delay wire:target="moduleSearch">
+            @foreach (['company' => __('Company Modules'), 'shared' => __('Shared Modules')] as $group => $label)
+                <div><h3 class="text-sm font-bold">{{ $label }}</h3><div class="mt-3 space-y-2">
+                    @forelse ($moduleGroups[$group] as $module)
+                        <div class="flex items-center justify-between rounded-[16px] border border-[#e4e9ec] p-3" wire:key="picker-{{ $group }}-{{ $module->id }}"><div><p class="font-semibold">{{ $module->title }}</p><p class="text-xs text-[#7d878d]">{{ $module->code }} · {{ $group === 'shared' ? __('Managed by platform') : __('Managed by company') }}</p></div><flux:button wire:click="addModule({{ $module->id }})" wire:loading.attr="disabled" variant="ghost" size="sm" :disabled="in_array($module->id, $selectedModuleVersionIds, true)">{{ __('Add module') }}</flux:button></div>
+                    @empty
+                        <p class="rounded-[16px] border border-dashed border-[#d8e0e4] p-4 text-sm text-[#707a80]">{{ __('No eligible modules found.') }}</p>
+                    @endforelse
+                </div></div>
+            @endforeach
+        </div>
     </section>
 
     {{-- Lessons --}}

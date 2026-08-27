@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Enums\VideoStatus;
 use App\Models\Lesson;
 use App\Models\Video;
+use App\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -18,6 +19,7 @@ class VideoFactory extends Factory
     public function definition(): array
     {
         return [
+            'company_id' => fn (): int => app(TenantContext::class)->id(),
             'lesson_id' => Lesson::factory(),
             'provider' => 'cloudflare_stream',
             'provider_asset_id' => Str::random(32),

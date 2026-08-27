@@ -5,6 +5,7 @@ namespace App\Actions\Assignments;
 use App\Enums\AssignmentOrigin;
 use App\Enums\AssignmentStatus;
 use App\Enums\ComplianceEventType;
+use App\Enums\CourseStatus;
 use App\Models\Course;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
@@ -36,10 +37,11 @@ class CreateManualAssignment
         AssignmentOrigin $origin = AssignmentOrigin::Manual,
         ?string $originId = null,
     ): UserTrainingAssignment {
+        $course = Course::query()->withoutGlobalScopes()->findOrFail($course->id);
         $versionId = $course->current_published_version_id;
 
-        if ($versionId === null) {
-            throw new RuntimeException('The course has no published version to assign.');
+        if ($versionId === null || $course->status !== CourseStatus::Active) {
+            throw new RuntimeException('The course is not available for new assignments.');
         }
 
         return DB::transaction(function () use ($user, $course, $versionId, $dueAt, $availableAt, $origin, $originId): UserTrainingAssignment {

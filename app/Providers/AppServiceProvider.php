@@ -6,12 +6,14 @@ use App\Contracts\VideoProvider;
 use App\Enums\Permission;
 use App\Models\Certificate;
 use App\Models\Course;
+use App\Models\Module;
 use App\Models\Role;
 use App\Models\TrainingRequirement;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
 use App\Policies\CertificatePolicy;
 use App\Policies\CoursePolicy;
+use App\Policies\ModulePolicy;
 use App\Policies\RolePolicy;
 use App\Policies\TrainingRequirementPolicy;
 use App\Policies\UserPolicy;
@@ -58,13 +60,21 @@ class AppServiceProvider extends ServiceProvider
     {
         // Administrators bypass permission Gates here — never inside domain Actions or
         // Policies, so the bypass stays auditable in one place.
-        Gate::before(fn (User $user): ?bool => $user->isAdmin() ? true : null);
+        Gate::before(function (User $user, string $ability, array $arguments): ?bool {
+            $record = $arguments[0] ?? null;
+            $isSharedContentWrite = in_array($ability, ['update', 'updateVersion', 'publish', 'retire'], true)
+                && ($record instanceof Course || $record instanceof Module)
+                && (bool) $record->getAttribute('is_shared');
+
+            return $user->isAdmin() && ! $isSharedContentWrite ? true : null;
+        });
 
         foreach (Permission::cases() as $permission) {
             Gate::define($permission->value, fn (User $user): bool => $user->hasPermission($permission));
         }
 
         Gate::policy(Course::class, CoursePolicy::class);
+        Gate::policy(Module::class, ModulePolicy::class);
         Gate::policy(TrainingRequirement::class, TrainingRequirementPolicy::class);
         Gate::policy(UserTrainingAssignment::class, UserTrainingAssignmentPolicy::class);
         Gate::policy(Certificate::class, CertificatePolicy::class);

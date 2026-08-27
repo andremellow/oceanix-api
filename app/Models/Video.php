@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Enums\VideoStatus;
-use App\Models\Concerns\BelongsToCompany;
 use Database\Factories\VideoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -15,13 +14,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * request by the VideoProvider, so copying a URL never grants lasting access.
  */
 #[Fillable([
-    'lesson_id', 'provider', 'provider_asset_id', 'provider_playback_id',
+    'company_id', 'lesson_id', 'provider', 'provider_asset_id', 'provider_playback_id',
     'duration_seconds', 'status', 'metadata',
 ])]
 class Video extends Model
 {
     /** @use HasFactory<VideoFactory> */
-    use BelongsToCompany, HasFactory;
+    use HasFactory;
 
     protected function casts(): array
     {

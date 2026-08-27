@@ -348,6 +348,22 @@ small screens. Supporting metadata may be hidden.
 
 ## 11. Testing requirements
 
+### Shared-content administration patterns
+
+Shared content is identified with a visible `Shared` badge plus ownership text; color is never the
+only distinction. Platform authoring lives under `/platform`, while company screens expose shared
+records as read-only and place discovery in `Browse Shared Courses` or a `Shared Modules` picker.
+
+Publication and promotion confirmations show impact counts before the destructive boundary. The
+restart-in-progress option is unchecked by default. Long-running propagation exposes queued,
+running, completed and failed states with a retry action and an accessible text status. Empty,
+loading and validation states remain inside the same page composition so the primary action and
+context do not move unexpectedly.
+
+On mobile, ownership/status stays adjacent to the record title, impact rows stack vertically and
+the confirmation action remains visible. Searchable module pickers use a labelled search input,
+keyboard-operable results, explicit company/shared groups and actionable empty states.
+
 Every new role-aware UI behavior needs Pest coverage for:
 
 - Expected content for the authorized role.

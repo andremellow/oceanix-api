@@ -21,6 +21,31 @@ it('expands prerequisites when a dependent permission is granted', function (): 
         ->toContain(Permission::CoursesView->value);
 });
 
+it('defines atomic shared library permissions with their exact prerequisites', function (): void {
+    expect(Permission::withPrerequisites([Permission::SharedCoursesAdd]))
+        ->toEqualCanonicalizing([
+            Permission::SharedCoursesAdd->value,
+            Permission::SharedCoursesView->value,
+            Permission::CoursesView->value,
+        ])
+        ->and(Permission::withPrerequisites([Permission::SharedCoursesRemove]))
+        ->toEqualCanonicalizing([
+            Permission::SharedCoursesRemove->value,
+            Permission::SharedCoursesView->value,
+            Permission::CoursesView->value,
+        ])
+        ->and(Permission::withPrerequisites([Permission::SharedModulesUse]))
+        ->toEqualCanonicalizing([
+            Permission::SharedModulesUse->value,
+            Permission::SharedModulesView->value,
+            Permission::CoursesView->value,
+            Permission::CoursesUpdate->value,
+        ]);
+
+    expect(Permission::SharedCoursesView->group())->toBe('shared-courses')
+        ->and(Permission::SharedModulesView->group())->toBe('shared-modules');
+});
+
 it('does not grant course or people modules just to create assignments', function (): void {
     $keys = Permission::withPrerequisites([Permission::AssignmentsCreate]);
 

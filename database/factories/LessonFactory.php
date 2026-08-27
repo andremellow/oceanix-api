@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Enums\LessonType;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
+use App\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -17,6 +18,7 @@ class LessonFactory extends Factory
     public function definition(): array
     {
         return [
+            'company_id' => fn (): int => app(TenantContext::class)->id(),
             'course_version_id' => CourseVersion::factory(),
             'title' => fake()->sentence(4),
             'description' => fake()->sentence(10),

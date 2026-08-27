@@ -5,6 +5,7 @@ namespace App\Services\Requirements;
 use App\Enums\AssignmentOrigin;
 use App\Enums\AssignmentStatus;
 use App\Enums\ComplianceEventType;
+use App\Enums\CourseStatus;
 use App\Models\TrainingRequirement;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
@@ -73,6 +74,10 @@ class AssignmentMaterializationService
 
     public function materializeFor(TrainingRequirement $requirement, User $user): ?UserTrainingAssignment
     {
+        if (! $requirement->isMaterializable()) {
+            return null;
+        }
+
         $latest = $requirement->assignments()
             ->where('user_id', $user->id)
             ->orderByDesc('cycle_number')
@@ -122,12 +127,17 @@ class AssignmentMaterializationService
         ?UserTrainingAssignment $supersedes = null,
     ): ?UserTrainingAssignment {
         try {
-            return DB::transaction(function () use ($requirement, $user, $cycle, $dueAt, $availableAt, $seriesKey, $supersedes): UserTrainingAssignment {
+            return DB::transaction(function () use ($requirement, $user, $cycle, $dueAt, $availableAt, $seriesKey, $supersedes): ?UserTrainingAssignment {
+                $course = $requirement->course()->lockForUpdate()->firstOrFail();
+                if ($course->status !== CourseStatus::Active || $course->current_published_version_id === null) {
+                    return null;
+                }
+
                 $assignment = UserTrainingAssignment::query()->create([
                     'user_id' => $user->id,
                     'course_id' => $requirement->course_id,
                     // Frozen now: republishing the course later never rewrites this obligation.
-                    'course_version_id' => $requirement->course->current_published_version_id,
+                    'course_version_id' => $course->current_published_version_id,
                     'training_requirement_id' => $requirement->id,
                     'origin_type' => AssignmentOrigin::Requirement,
                     'origin_id' => (string) $requirement->id,

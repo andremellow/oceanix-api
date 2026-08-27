@@ -4,6 +4,7 @@ namespace App\Services\Notifications;
 
 use App\Enums\ComplianceEventType;
 use App\Enums\NotificationType;
+use App\Models\Account;
 use App\Models\ScheduledNotification;
 use App\Models\UserTrainingAssignment;
 use App\Services\Compliance\ComplianceEventRecorder;
@@ -78,7 +79,7 @@ class NotificationSchedulingService
         return array_values(array_filter($types));
     }
 
-    public function schedule(UserTrainingAssignment $assignment, NotificationType $type, ?Carbon $for = null): ?ScheduledNotification
+    public function schedule(UserTrainingAssignment $assignment, NotificationType $type, ?Carbon $for = null, ?Account $platformActor = null): ?ScheduledNotification
     {
         $for ??= now();
 
@@ -91,6 +92,7 @@ class NotificationSchedulingService
                 'payload' => [
                     'course' => $assignment->course->title,
                     'due_at' => $assignment->due_at?->toDateString(),
+                    ...($platformActor === null ? [] : ['platform_account_id' => $platformActor->id]),
                 ],
             ]);
         } catch (UniqueConstraintViolationException) {
@@ -101,7 +103,7 @@ class NotificationSchedulingService
         $this->events->record(ComplianceEventType::NotificationQueued, $assignment->user_id, [
             'assignment_id' => $assignment->id,
             'metadata' => ['type' => $type->value],
-        ]);
+        ], $platformActor);
 
         return $notification;
     }

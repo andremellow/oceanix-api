@@ -2,7 +2,10 @@
 
 use App\Actions\Courses\CreateCourse;
 use App\Enums\CourseStatus;
+use App\Models\Company;
 use App\Models\Course;
+use App\Services\Courses\CompanyCourseLibrary;
+use App\Tenancy\TenantContext;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -22,6 +25,15 @@ new class extends Component
     public string $title = '';
 
     public string $description = '';
+
+    public Company $company;
+
+    public function mount(Company $company): void
+    {
+        $tenant = $company->exists ? $company : app(TenantContext::class)->get();
+        abort_unless($tenant instanceof Company, 404);
+        $this->company = $tenant;
+    }
 
     /** Creates the course and its first draft, then opens the editor on it. */
     public function create(CreateCourse $action): void
@@ -49,24 +61,12 @@ new class extends Component
         $this->resetPage();
     }
 
-    public function with(): array
+    public function with(CompanyCourseLibrary $library): array
     {
-        $query = Course::query()
-            ->with(['currentPublishedVersion', 'versions'])
-            ->withCount('assignments');
-
-        if ($this->search !== '') {
-            $term = '%'.strtolower($this->search).'%';
-            $query->where(fn ($scoped) => $scoped
-                ->whereRaw('lower(title) like ?', [$term])
-                ->orWhereRaw('lower(code) like ?', [$term]));
-        }
-
-        if ($this->status !== '') {
-            $query->where('status', $this->status);
-        }
-
-        return ['courses' => $query->orderBy('title')->paginate(12)];
+        return [
+            'courses' => $library->companyCourses($this->company, $this->search ?: null, $this->status ?: null),
+            'sharedCourses' => $library->sharedCourses($this->company, $this->search ?: null),
+        ];
     }
 };
 ?>
@@ -76,13 +76,17 @@ new class extends Component
         :kicker="__('ui.content')"
         :title="__('Courses')"
         :description="__('ui.courses_page_description')">
-        <span class="status-pill status-pill--accent">{{ trans_choice('ui.results_count', $courses->total(), ['count' => $courses->total()]) }}</span>
+        <span class="status-pill status-pill--accent">{{ trans_choice('ui.results_count', $courses->count() + $sharedCourses->count(), ['count' => $courses->count() + $sharedCourses->count()]) }}</span>
         @can('create', App\Models\Course::class)
             <flux:button wire:click="$set('creating', true)" variant="primary" class="admin-primary-action">{{ __('New course') }}</flux:button>
         @endcan
     </x-page-hero>
 
     <x-status-message />
+
+    @can(App\Enums\Permission::SharedCoursesView->value)
+        <div class="flex justify-end"><flux:button :href="route('shared-courses.index', ['company' => $company])" wire:navigate variant="ghost">{{ __('Browse Shared Courses') }}</flux:button></div>
+    @endcan
 
     <div class="form-panel rounded-[20px] border border-[#dde3e7] p-4 sm:p-5">
         <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_200px]">
@@ -101,6 +105,7 @@ new class extends Component
         </div>
     </div>
 
+    <h2 class="text-xl font-bold tracking-tight">{{ __('Company Courses') }}</h2>
     @if ($courses->isEmpty())
         <x-empty-state
             icon="book-open"
@@ -131,7 +136,20 @@ new class extends Component
             @endforeach
         </div>
 
-        <div>{{ $courses->links() }}</div>
+    @endif
+
+    @if ($sharedCourses->isNotEmpty())
+        <h2 class="text-xl font-bold tracking-tight">{{ __('Shared Courses') }}</h2>
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            @foreach ($sharedCourses as $course)
+                <a href="{{ route('shared-courses.show', ['company' => $company, 'course' => $course]) }}" wire:navigate class="saas-feature-card group flex flex-col">
+                    <div class="flex items-start justify-between gap-3"><span class="saas-feature-icon"><flux:icon.book-open class="size-5" /></span><span class="status-pill status-pill--accent">{{ __('Shared') }}</span></div>
+                    <span class="mt-5 text-[11px] font-bold uppercase tracking-[.12em] text-[#8a9298]">{{ $course->code }}</span>
+                    <span class="mt-1 text-base font-bold text-[#262d33]">{{ $course->title }}</span>
+                    <span class="mt-2 text-xs font-semibold text-[#1c6b84]">{{ __('Managed by platform') }}</span>
+                </a>
+            @endforeach
+        </div>
     @endif
 
     <flux:modal wire:model.self="creating" class="max-w-lg">

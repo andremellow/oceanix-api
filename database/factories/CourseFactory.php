@@ -23,11 +23,17 @@ class CourseFactory extends Factory
             'title' => $title,
             'description' => fake()->sentence(12),
             'status' => CourseStatus::Active,
+            'is_shared' => false,
         ];
     }
 
     public function draft(): static
     {
         return $this->state(fn (): array => ['status' => CourseStatus::Draft]);
+    }
+
+    public function shared(): static
+    {
+        return $this->state(fn (): array => ['company_id' => null, 'is_shared' => true]);
     }
 }

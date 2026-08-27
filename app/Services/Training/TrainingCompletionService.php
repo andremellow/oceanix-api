@@ -94,10 +94,7 @@ class TrainingCompletionService
     /** Completes the assignment once every required lesson is done, and issues the certificate. */
     public function evaluateCourse(UserTrainingAssignment $assignment, CourseAttempt $courseAttempt): UserTrainingAssignment
     {
-        $requiredLessonIds = $assignment->courseVersion
-            ->lessons()
-            ->where('is_required', true)
-            ->pluck('id');
+        $requiredLessonIds = $assignment->requiredLessonIds();
 
         $completed = $assignment->lessonProgress()
             ->whereIn('lesson_id', $requiredLessonIds)

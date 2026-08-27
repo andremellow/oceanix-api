@@ -19,6 +19,7 @@
             <nav class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1 text-sm font-semibold sm:gap-2">
                 <a href="{{ route('platform.dashboard') }}" wire:navigate class="hidden rounded-xl px-3 py-2 hover:bg-[#eef3f5] sm:inline-flex">{{ __('Overview') }}</a>
                 <a href="{{ route('platform.companies') }}" wire:navigate class="hidden rounded-xl px-3 py-2 hover:bg-[#eef3f5] sm:inline-flex">{{ __('Companies') }}</a>
+                <a href="{{ route('platform.shared-courses.index') }}" wire:navigate class="rounded-xl px-3 py-2 hover:bg-[#eef3f5]">{{ __('Shared courses') }}</a>
                 <a href="{{ route('platform.users') }}" wire:navigate class="hidden rounded-xl px-3 py-2 hover:bg-[#eef3f5] sm:inline-flex">{{ __('Super admins') }}</a>
                 @if ($companyIdentities->count() === 1)
                     @php($identity = $companyIdentities->first())

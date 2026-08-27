@@ -6,6 +6,7 @@ use App\Enums\QuestionType;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
 use App\Models\Question;
+use Illuminate\Support\Collection;
 
 /**
  * Publication readiness. Publishing freezes the content forever — assignments and
@@ -23,7 +24,20 @@ class CourseVersionValidator
     {
         $problems = [];
 
-        $lessons = $version->lessons()->with(['video', 'questions.options'])->get();
+        $compositions = $version->moduleCompositions()->with('moduleVersion')->get();
+        foreach ($compositions as $composition) {
+            $moduleVersion = $composition->moduleVersion;
+            $eligibleOwner = $moduleVersion !== null && (
+                ($moduleVersion->is_shared && $moduleVersion->company_id === null && $moduleVersion->getRawOriginal('status') === 'published')
+                || (! $moduleVersion->is_shared && (int) $moduleVersion->company_id === (int) $version->course->company_id)
+            );
+
+            if (! $eligibleOwner) {
+                $problems[] = __('Module at position :position is unavailable or not published.', ['position' => $composition->position]);
+            }
+        }
+
+        $lessons = $this->lessons($version);
 
         if ($lessons->isEmpty()) {
             return [__('Add at least one lesson before publishing.')];
@@ -34,6 +48,30 @@ class CourseVersionValidator
         }
 
         return $problems;
+    }
+
+    /**
+     * Read through the immutable module snapshot when it is present. The fallback keeps
+     * pre-backfill versions publishable while the staged migration is being deployed.
+     *
+     * @return Collection<int, Lesson>
+     */
+    private function lessons(CourseVersion $version): Collection
+    {
+        if (! method_exists($version, 'moduleCompositions')) {
+            return $version->lessons()->with(['video', 'questions.options'])->get();
+        }
+
+        $compositions = $version->moduleCompositions()->with(['moduleVersion.video', 'moduleVersion.questions.options'])->get();
+
+        if ($compositions->isEmpty()) {
+            return $version->lessons()->with(['video', 'questions.options'])->get();
+        }
+
+        return $compositions
+            ->map(fn ($composition) => $composition->moduleVersion)
+            ->filter()
+            ->values();
     }
 
     public function isPublishable(CourseVersion $version): bool

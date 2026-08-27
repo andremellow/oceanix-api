@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 /** Administrative trail: who published a version, changed a link, waived an assignment. */
 #[Fillable([
-    'actor_id', 'action', 'auditable_type', 'auditable_id',
+    'actor_id', 'platform_account_id', 'action', 'auditable_type', 'auditable_id',
     'before', 'after', 'metadata', 'ip_address',
 ])]
 class AuditLog extends Model
@@ -40,6 +40,11 @@ class AuditLog extends Model
     public function actor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'actor_id');
+    }
+
+    public function platformActor(): BelongsTo
+    {
+        return $this->belongsTo(Account::class, 'platform_account_id');
     }
 
     public function auditable(): MorphTo
