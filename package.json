@@ -17,6 +17,11 @@
         "@laravel/multiplex": "^0.4.1"
     },
     "dependencies": {
+        "@tiptap/core": "3.30.5",
+        "@tiptap/extension-image": "3.30.5",
+        "@tiptap/extension-link": "3.30.5",
+        "@tiptap/markdown": "3.30.5",
+        "@tiptap/starter-kit": "3.30.5",
         "hls.js": "1.6.19"
     }
 }

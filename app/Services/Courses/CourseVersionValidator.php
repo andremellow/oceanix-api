@@ -22,13 +22,28 @@ class CourseVersionValidator
      */
     public function problems(CourseVersion $version): array
     {
+        return $this->collectProblems($version, allowSharedDraftModules: false);
+    }
+
+    /** @return list<string> */
+    public function problemsBeforeSharedModulePublication(CourseVersion $version): array
+    {
+        return $this->collectProblems($version, allowSharedDraftModules: true);
+    }
+
+    /** @return list<string> */
+    private function collectProblems(CourseVersion $version, bool $allowSharedDraftModules): array
+    {
         $problems = [];
 
         $compositions = $version->moduleCompositions()->with('moduleVersion')->get();
         foreach ($compositions as $composition) {
             $moduleVersion = $composition->moduleVersion;
             $eligibleOwner = $moduleVersion !== null && (
-                ($moduleVersion->is_shared && $moduleVersion->company_id === null && $moduleVersion->getRawOriginal('status') === 'published')
+                ($moduleVersion->is_shared && $moduleVersion->company_id === null && (
+                    $moduleVersion->getRawOriginal('status') === 'published'
+                    || ($allowSharedDraftModules && $moduleVersion->getRawOriginal('status') === 'draft')
+                ))
                 || (! $moduleVersion->is_shared && (int) $moduleVersion->company_id === (int) $version->course->company_id)
             );
 

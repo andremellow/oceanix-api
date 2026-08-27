@@ -15,7 +15,7 @@ use Illuminate\Support\Str;
 
 #[Fillable([
     'company_id', 'course_version_id', 'is_shared', 'code', 'lineage_uuid', 'version_number',
-    'status', 'published_at', 'published_by_account_id', 'source_lesson_id', 'title', 'description',
+    'status', 'published_at', 'published_by_account_id', 'source_lesson_id', 'title', 'description', 'content_markdown',
     'type', 'position', 'is_required', 'minimum_watch_percentage', 'passing_score',
 ])]
 class Lesson extends Model

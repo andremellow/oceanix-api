@@ -22,7 +22,7 @@ abstract class TestCase extends BaseTestCase
             ]);
 
             app(TenantContext::class)->set($company);
-            URL::defaults(['company' => $company->slug]);
+            URL::defaults(['company:slug' => $company->slug]);
         }
     }
 }

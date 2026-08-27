@@ -30,8 +30,6 @@ it('shows publication impact and leaves in-progress restart unchecked by default
 
     Livewire\Livewire::test('platform.shared-courses.editor', ['course' => $course])
         ->assertSet('restartInProgress', false)
-        ->call('confirmPublish')
-        ->assertSet('confirmingPublish', true)
         ->assertViewHas('impact', ['not_started' => 1, 'in_progress' => 1])
         ->assertSee(__('Not started'))
         ->assertSee(__('In progress'))
@@ -46,7 +44,7 @@ it('shows an actionable empty state for a shared course draft without modules', 
 
     Livewire\Livewire::test('platform.shared-courses.editor', ['course' => $course])
         ->assertSee(__('No modules selected'))
-        ->assertSee(__('Review and publish'))
+        ->assertSee(__('Publish course and module changes'))
         ->assertSeeHtml('wire:loading.attr="disabled"')
         ->call('publish')
         ->assertHasErrors('publish')

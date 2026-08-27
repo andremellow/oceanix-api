@@ -64,11 +64,16 @@ class CreateDraftFromVersion
                 }
             }
 
-            foreach ($source->lessons()->with(['video', 'questions.options'])->get() as $lesson) {
+            $reusedSharedLessonIds = $compositions
+                ->filter(fn (CourseVersionModule $composition): bool => (bool) $composition->moduleVersion?->is_shared)
+                ->pluck('lesson_id');
+
+            foreach ($source->lessons()->with(['video', 'questions.options'])->whereNotIn('id', $reusedSharedLessonIds)->get() as $lesson) {
                 $copy = Lesson::query()->create([
                     'course_version_id' => $draft->id,
                     'title' => $lesson->title,
                     'description' => $lesson->description,
+                    'content_markdown' => $lesson->content_markdown,
                     'type' => $lesson->type,
                     'position' => $lesson->position,
                     'is_required' => $lesson->is_required,

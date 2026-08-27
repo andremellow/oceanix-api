@@ -5,6 +5,7 @@ use App\Enums\CourseVersionStatus;
 use App\Enums\Permission;
 use App\Enums\QuestionType;
 use App\Enums\VideoStatus;
+use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
@@ -46,6 +47,38 @@ it('autosaves a lesson field straight to the database', function (): void {
 
     expect($lesson->fresh()->title)->toBe('Gas detection and alarms')
         ->and($lesson->fresh()->minimum_watch_percentage)->toBe(95);
+});
+
+it('preserves markdown content while its authoring interface is hidden', function (): void {
+    $course = draftCourse();
+    $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id]);
+    $markdown = "## Emergency response\n\nFollow the **muster procedure**.\n\n:::image{src=\"https://example.com/muster.jpg\" align=\"right\" width=\"40%\" alt=\"Muster station\"}";
+
+    Livewire::actingAs(adminUser())
+        ->test('courses.editor', ['course' => $course])
+        ->set('lessons.0.content_markdown', $markdown)
+        ->assertDontSee(__('Open full preview'))
+        ->assertDontSee('visual-markdown-editor', escape: false);
+
+    expect($lesson->fresh()->content_markdown)->toBe($markdown);
+
+    $this->actingAs(adminUser())
+        ->get(route('courses.lessons.preview', ['course' => $course, 'lesson' => $lesson]))
+        ->assertOk()
+        ->assertSee('Emergency response')
+        ->assertSee('lesson-media--right', escape: false);
+});
+
+it('never opens a shared course editor from tenant context even for a platform administrator', function (): void {
+    $course = Course::factory()->shared()->draft()->create();
+    $version = CourseVersion::factory()->create(['course_id' => $course->id]);
+    Lesson::factory()->create(['company_id' => null, 'is_shared' => true, 'course_version_id' => $version->id]);
+    $actor = adminUser();
+    $actor->update(['account_id' => Account::factory()->platformAdmin()->create()->id]);
+
+    Livewire::actingAs($actor)
+        ->test('courses.editor', ['course' => $course])
+        ->assertNotFound();
 });
 
 it('rejects an out-of-range watch threshold', function (): void {

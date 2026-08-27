@@ -150,6 +150,25 @@ it('clones a published version into a new draft without touching the original', 
     expect($version->fresh()->lessons->first()->title)->not->toBe('Changed in the draft');
 });
 
+it('clones a shared module composition once without colliding on its position', function (): void {
+    $course = Course::factory()->shared()->create();
+    $version = CourseVersion::factory()->published()->create(['course_id' => $course]);
+    $module = Lesson::factory()->create([
+        'company_id' => null,
+        'is_shared' => true,
+        'status' => 'published',
+        'course_version_id' => $version->id,
+        'position' => 1,
+    ]);
+    $course->update(['current_published_version_id' => $version->id]);
+
+    $draft = app(CreateDraftFromVersion::class)->handle($version->fresh());
+
+    expect($draft->moduleCompositions()->count())->toBe(1)
+        ->and($draft->moduleCompositions()->first()->lesson_id)->toBe($module->id)
+        ->and($draft->lessons()->count())->toBe(0);
+});
+
 it('allows only one open draft per course', function (): void {
     $version = publishableDraft();
     app(PublishCourseVersion::class)->handle($version, adminUser()->id);

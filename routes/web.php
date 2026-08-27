@@ -122,6 +122,9 @@ Route::prefix('platform')
         Route::livewire('/shared-courses', 'platform.shared-courses.index')->name('platform.shared-courses.index');
         Route::livewire('/shared-courses/{course}', 'platform.shared-courses.show')->name('platform.shared-courses.show');
         Route::livewire('/shared-courses/{course}/editor', 'platform.shared-courses.editor')->name('platform.shared-courses.editor');
+        Route::livewire('/shared-modules/{module}', 'platform.shared-modules.show')->name('platform.shared-modules.show');
+        Route::livewire('/shared-modules/{module}/editor', 'platform.shared-modules.editor')->name('platform.shared-modules.editor');
+        Route::livewire('/shared-modules/{module}/preview', 'platform.shared-modules.preview')->name('platform.shared-modules.preview');
         Route::livewire('/companies/{company}', 'platform.company')->name('platform.companies.show');
         Route::livewire('/companies/{company}/courses/{course}', 'platform.shared-courses.show')->name('platform.companies.courses.show');
         Route::post('/companies/{company}/enter', function (Company $company, EnterCompany $action) {
@@ -230,6 +233,9 @@ Route::prefix('c/{company:slug}')
             Route::livewire('/courses/{course}/editor', 'courses.editor')
                 ->middleware(EnsureUserHasPermission::class.':courses.update')
                 ->name('courses.editor');
+            Route::livewire('/courses/{course}/lessons/{lesson}/preview', 'courses.lesson-preview')
+                ->middleware(EnsureUserHasPermission::class.':courses.update')
+                ->name('courses.lessons.preview');
             Route::livewire('/shared-courses', 'courses.shared-index')
                 ->middleware(EnsureUserHasPermission::class.':shared-courses.view')
                 ->name('shared-courses.index');

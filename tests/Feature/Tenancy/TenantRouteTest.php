@@ -6,6 +6,10 @@ it('puts authenticated operational pages below the company slug', function (): v
     expect(route('dashboard'))->toContain('/c/'.currentCompany()->slug.'/dashboard');
 });
 
+it('generates tenant urls without an empty company query parameter', function (): void {
+    expect(route('courses.index'))->toBe(url('/c/'.currentCompany()->slug.'/courses'));
+});
+
 it('redirects an authenticated root request into its company workspace', function (): void {
     $user = employeeUser();
 

@@ -83,6 +83,7 @@ new class extends Component
 
     public function mount(Course $course): void
     {
+        abort_if($course->is_shared, 404);
         $this->authorize('update', $course);
 
         $draft = $course->versions()->where('status', CourseVersionStatus::Draft->value)->first();
@@ -470,7 +471,7 @@ new class extends Component
 
     private function saveLessonField(int $index, string $field, mixed $value): void
     {
-        $allowed = ['title', 'description', 'is_required', 'minimum_watch_percentage', 'passing_score'];
+        $allowed = ['title', 'description', 'content_markdown', 'is_required', 'minimum_watch_percentage', 'passing_score'];
 
         if (! in_array($field, $allowed, true)) {
             return;
@@ -479,6 +480,7 @@ new class extends Component
         $this->validate([
             "lessons.{$index}.title" => ['required', 'string', 'max:200'],
             "lessons.{$index}.description" => ['nullable', 'string', 'max:2000'],
+            "lessons.{$index}.content_markdown" => ['nullable', 'string', 'max:100000'],
             "lessons.{$index}.minimum_watch_percentage" => ['required', 'integer', 'min:1', 'max:100'],
             "lessons.{$index}.passing_score" => ['required', 'integer', 'min:1', 'max:100'],
         ]);
@@ -575,6 +577,7 @@ new class extends Component
                 'id' => $lesson->id,
                 'title' => $lesson->title,
                 'description' => $lesson->description,
+                'content_markdown' => $lesson->content_markdown,
                 'position' => $lesson->position,
                 'is_required' => $lesson->is_required,
                 'minimum_watch_percentage' => $lesson->minimum_watch_percentage,

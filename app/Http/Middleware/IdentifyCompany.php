@@ -19,7 +19,8 @@ class IdentifyCompany
 
     public function handle(Request $request, Closure $next): Response
     {
-        $company = $request->route('company');
+        $routeCompany = $request->route('company');
+        $company = $routeCompany;
 
         if (is_string($company)) {
             $company = Company::query()->where('slug', $company)->first();
@@ -40,7 +41,7 @@ class IdentifyCompany
 
         $this->context->set($company);
         $request->session()->put('company_id', $company->getKey());
-        URL::defaults(['company' => $company->slug]);
+        URL::defaults(['company:slug' => $company->slug]);
         $this->settings->apply();
 
         if ($request->user() !== null && (int) $request->user()->company_id !== (int) $company->getKey()) {

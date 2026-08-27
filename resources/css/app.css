@@ -302,4 +302,34 @@
     .brand-document th { @apply border-b border-[#cbd4d9] bg-[#f4f7f9] px-3 py-2 font-bold text-[#262d33]; }
     .brand-document td { @apply border-b border-[#e2e7ea] px-3 py-2 align-top; }
     .brand-document strong { @apply font-bold text-[#323a40]; }
+
+    .lesson-content h1 { @apply mb-4 text-2xl font-bold tracking-tight text-[#20272c]; }
+    .lesson-content h2 { @apply mb-3 mt-8 text-xl font-bold text-[#262d33]; }
+    .lesson-content h3 { @apply mb-2 mt-6 text-base font-bold text-[#262d33]; }
+    .lesson-content p { @apply my-4; }
+    .lesson-content ul { @apply my-4 list-disc space-y-1 pl-6; }
+    .lesson-content ol { @apply my-4 list-decimal space-y-1 pl-6; }
+    .lesson-content blockquote { @apply my-5 rounded-2xl border-l-4 border-[#64a9bf] bg-[#eff7fa] px-5 py-3 text-[#2e5f70]; }
+    .lesson-content a { @apply font-semibold text-[#1c6b84] underline underline-offset-4; }
+    .lesson-media { width: var(--lesson-media-width); @apply my-4 overflow-hidden rounded-[18px] border border-[#dce3e7] bg-[#f6f8f9] shadow-sm; }
+    .lesson-media img { @apply block h-auto w-full object-cover; }
+    .lesson-media--left { @apply mr-6 float-left; }
+    .lesson-media--right { @apply ml-6 float-right; }
+    .lesson-media--center { @apply mx-auto; }
+    .lesson-video-placeholder { @apply my-5 rounded-[18px] border border-[#cfe1e9] bg-[#eff7fa] px-5 py-4 font-semibold text-[#2e5f70]; }
+
+    .visual-markdown-editor { @apply overflow-hidden rounded-[18px] border border-[#d8e0e4] bg-white shadow-sm; }
+    .visual-markdown-toolbar { @apply flex flex-wrap items-center gap-1 border-b border-[#e2e7ea] bg-[#f7f9fa] p-2; }
+    .visual-markdown-toolbar button { @apply min-h-9 rounded-lg border border-transparent px-2.5 text-xs font-semibold text-[#465159] transition hover:border-[#cbd8de] hover:bg-white hover:text-[#1c6b84] focus:outline-none focus:ring-2 focus:ring-[#77b6ca]; }
+    .visual-markdown-surface { @apply min-h-80 px-6 py-5 text-sm leading-7 text-[#364047] outline-none; }
+    .visual-markdown-surface p:first-child { @apply mt-0; }
+    .visual-markdown-surface img { @apply my-4 h-auto max-w-full cursor-pointer rounded-[16px] border border-[#dce3e7] shadow-sm; width: 50%; }
+    .visual-markdown-surface img[title^="oceanix:align=left"] { @apply mr-6 float-left; }
+    .visual-markdown-surface img[title^="oceanix:align=right"] { @apply ml-6 float-right; }
+    .visual-markdown-surface img[title^="oceanix:align=center"] { @apply mx-auto block float-none; }
+    .visual-markdown-surface .ProseMirror-selectednode { @apply ring-4 ring-[#77b6ca]/50; }
+
+    @media (max-width: 639px) {
+        .lesson-media { width: 100%; @apply mx-0 float-none; }
+    }
 }

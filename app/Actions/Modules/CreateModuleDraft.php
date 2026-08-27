@@ -35,6 +35,7 @@ class CreateModuleDraft
                 'status' => ModuleVersionStatus::Draft,
                 'title' => $source->title,
                 'description' => $source->description,
+                'content_markdown' => $source->content_markdown,
                 'type' => $source->type,
                 'position' => $source->position,
                 'is_required' => $source->is_required,
