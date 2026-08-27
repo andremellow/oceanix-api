@@ -18,6 +18,22 @@ function publishedManualAssignmentCourse(): Course
     return $course->refresh();
 }
 
+it('shows the current administrator and every other active company user in the assignment picker', function (): void {
+    $administrator = adminUser();
+    $administrator->update(['name' => 'Current Administrator']);
+    $otherAdministrator = adminUser();
+    $otherAdministrator->update(['name' => 'Other Administrator']);
+    $employee = User::factory()->create(['name' => 'Active Employee']);
+    User::factory()->suspended()->create(['name' => 'Inactive Employee']);
+
+    Livewire::actingAs($administrator)
+        ->test('compliance.assignments')
+        ->assertSee('Current Administrator')
+        ->assertSee('Other Administrator')
+        ->assertSee('Active Employee')
+        ->assertDontSee('Inactive Employee');
+});
+
 it('assigns a course to one person from the assignments screen', function (): void {
     $course = publishedManualAssignmentCourse();
     $person = User::factory()->create(['name' => 'Marina Costa']);

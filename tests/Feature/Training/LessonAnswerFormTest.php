@@ -9,6 +9,16 @@ use Livewire\Livewire;
 
 beforeEach(fn () => fakeCloudflarePlayback());
 
+it('keeps the employee flow focused on video and assessment while rich content is disabled', function (): void {
+    [$assignment, $lesson, $question] = trainableAssignment();
+    $lesson->update(['content_markdown' => 'TEMPORARILY-HIDDEN-RICH-CONTENT']);
+
+    Livewire::actingAs($assignment->user)
+        ->test('training.lesson', ['assignment' => $assignment, 'lesson' => $lesson])
+        ->assertSee($question->prompt)
+        ->assertDontSee('TEMPORARILY-HIDDEN-RICH-CONTENT');
+});
+
 it('shows a useful unavailable state when playback authorization fails', function (): void {
     [$assignment, $lesson] = trainableAssignment();
     $lesson->video->update(['status' => VideoStatus::Processing]);

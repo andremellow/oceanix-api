@@ -12,7 +12,7 @@ class ManagedPeopleScope
     public function userIds(User $manager): array
     {
         if ($manager->isAdmin()) {
-            return User::query()->whereKeyNot($manager->id)->pluck('id')->all();
+            return User::query()->pluck('id')->map(fn (int|string $id): int => (int) $id)->all();
         }
 
         $resolved = [];

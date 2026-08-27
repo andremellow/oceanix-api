@@ -2,6 +2,7 @@
 
 use App\Actions\Courses\AssociateSharedCourse;
 use App\Enums\Permission;
+use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 
@@ -41,4 +42,18 @@ it('renders a specific empty state when no published shared course is eligible',
 
     Livewire\Livewire::actingAs($viewer)->test('courses.shared-index')
         ->assertSee(__('No shared courses available'));
+});
+
+it('never offers tenant editing for an associated shared course even to a platform administrator', function (): void {
+    $course = publishedSharedCourseForCatalog(['title' => 'Shared Read Only Course']);
+    $actor = adminUser();
+
+    app(AssociateSharedCourse::class)->handle($course, $actor);
+    $actor->update(['account_id' => Account::factory()->platformAdmin()->create()->id]);
+
+    Livewire\Livewire::actingAs($actor)
+        ->test('courses.show', ['company' => currentCompany(), 'course' => $course])
+        ->assertSee('Shared Read Only Course')
+        ->assertDontSee(__('Edit draft'))
+        ->assertDontSee(__('New draft version'));
 });

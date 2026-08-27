@@ -140,13 +140,15 @@ new class extends Component
                 @endcan
             @endif
         @endif
-        @can('update', $course)
-            @if ($course->versions()->where('status', CourseVersionStatus::Draft->value)->exists())
-                <flux:button :href="route('courses.editor', ['course' => $course])" wire:navigate variant="primary" class="admin-primary-action">{{ __('Edit draft') }}</flux:button>
-            @else
-                <flux:button wire:click="createDraft" variant="primary" class="admin-primary-action">{{ __('New draft version') }}</flux:button>
-            @endif
-        @endcan
+        @unless ($course->is_shared)
+            @can('update', $course)
+                @if ($course->versions()->where('status', CourseVersionStatus::Draft->value)->exists())
+                    <flux:button :href="route('courses.editor', ['course' => $course])" wire:navigate variant="primary" class="admin-primary-action">{{ __('Edit draft') }}</flux:button>
+                @else
+                    <flux:button wire:click="createDraft" variant="primary" class="admin-primary-action">{{ __('New draft version') }}</flux:button>
+                @endif
+            @endcan
+        @endunless
     </x-page-hero>
 
     <x-status-message />

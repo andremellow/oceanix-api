@@ -5,6 +5,15 @@ use App\Models\JobFunction;
 use App\Models\User;
 use App\Services\Organization\ManagedPeopleScope;
 
+it('includes every company user including the current administrator', function (): void {
+    $administrator = adminUser();
+    $otherAdministrator = adminUser();
+    $employee = User::factory()->create();
+
+    expect(app(ManagedPeopleScope::class)->userIds($administrator))
+        ->toContain($administrator->id, $otherAdministrator->id, $employee->id);
+});
+
 it('derives recursive reports from managed departments and job functions', function (): void {
     $manas = Department::factory()->create(['name' => 'Manas']);
     $elder = JobFunction::factory()->create(['name' => 'Elder']);
