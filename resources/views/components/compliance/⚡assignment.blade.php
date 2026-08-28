@@ -27,6 +27,8 @@ new class extends Component
 
     public ?string $closing = null;
 
+    public bool $closingModalOpen = false;
+
     public string $closeReason = '';
 
     public function startClosing(string $status): void
@@ -34,6 +36,7 @@ new class extends Component
         $this->authorize($status === 'waived' ? 'waive' : 'cancel', $this->assignment);
 
         $this->closing = $status;
+        $this->closingModalOpen = true;
         $this->closeReason = '';
     }
 
@@ -49,6 +52,7 @@ new class extends Component
 
         $this->assignment = $action->handle($this->assignment, $status, $validated['closeReason']);
         $this->closing = null;
+        $this->closingModalOpen = false;
 
         session()->flash('status', __('ui.assignment_closed', ['status' => $status->label()]));
     }
@@ -279,7 +283,7 @@ new class extends Component
         </section>
     @endcan
 
-    <flux:modal :open="$closing !== null" wire:model.self="closing" class="max-w-lg">
+    <flux:modal wire:model.self="closingModalOpen" class="max-w-lg">
         <form wire:submit="close" class="space-y-5">
             <div>
                 <flux:heading size="lg">{{ $closing === 'waived' ? __('Waive this training') : __('Cancel this training') }}</flux:heading>
@@ -289,7 +293,7 @@ new class extends Component
             <flux:textarea wire:model="closeReason" class="admin-control" :label="__('Reason')" rows="3" />
 
             <div class="flex justify-end gap-2">
-                <flux:button x-on:click="$wire.closing = null" variant="ghost" type="button">{{ __('Cancel') }}</flux:button>
+                <flux:button x-on:click="$wire.closingModalOpen = false; $wire.closing = null" variant="ghost" type="button">{{ __('Cancel') }}</flux:button>
                 <flux:button type="submit" variant="primary" class="admin-primary-action">{{ __('Confirm') }}</flux:button>
             </div>
         </form>

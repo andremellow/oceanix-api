@@ -127,3 +127,14 @@ it('links an employee when the assignment viewer may also open people', function
         ->test('compliance.assignments')
         ->assertSee($personUrl, escape: false);
 });
+
+it('provides an explicit action to open assignment details', function (): void {
+    $assignment = UserTrainingAssignment::factory()->create();
+    $administrator = adminUser();
+    $detailsUrl = route('assignments.show', ['assignment' => $assignment]);
+
+    Livewire::actingAs($administrator)
+        ->test('compliance.assignments')
+        ->assertSee(__('View details'))
+        ->assertSee($detailsUrl, escape: false);
+});
