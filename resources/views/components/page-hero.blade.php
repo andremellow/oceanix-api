@@ -1,8 +1,8 @@
 @props(['kicker' => null, 'title', 'description' => null])
 
 <section class="admin-hero">
-    <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-        <div class="min-w-0">
+    <div class="flex flex-col gap-5 sm:flex-row sm:flex-wrap sm:items-start">
+        <div class="min-w-0 flex-1 basis-[32rem]">
             @if ($kicker)
                 <span class="admin-kicker">{{ $kicker }}</span>
             @endif
@@ -12,7 +12,7 @@
             @endif
         </div>
         @if (! $slot->isEmpty())
-            <div class="flex shrink-0 flex-wrap items-center gap-2">{{ $slot }}</div>
+            <div class="flex flex-wrap items-center gap-2 sm:ml-auto sm:justify-end">{{ $slot }}</div>
         @endif
     </div>
 </section>
