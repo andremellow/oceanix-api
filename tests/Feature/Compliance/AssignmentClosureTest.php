@@ -32,6 +32,26 @@ it('cancels without satisfying the obligation', function (): void {
         ->and($closed->status->isOpen())->toBeFalse();
 });
 
+it('cancels an assignment through the detail screen', function (): void {
+    [$assignment] = trainableAssignment();
+    $department = Department::factory()->create();
+    $assignment->user->departments()->attach($department);
+    $operator = userWithPermissions([Permission::AssignmentsCancel]);
+    $operator->managedDepartments()->attach($department);
+
+    Livewire::actingAs($operator)
+        ->test('compliance.assignment', ['assignment' => $assignment])
+        ->call('startClosing', 'cancelled')
+        ->assertSet('closing', 'cancelled')
+        ->assertSet('closingModalOpen', true)
+        ->set('closeReason', 'Duplicate manual assignment')
+        ->call('close')
+        ->assertHasNoErrors()
+        ->assertSet('closingModalOpen', false);
+
+    expect($assignment->fresh()->status)->toBe(AssignmentStatus::Cancelled);
+});
+
 it('refuses to close an assignment as anything else', function (): void {
     [$assignment] = trainableAssignment();
 

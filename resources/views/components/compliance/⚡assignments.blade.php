@@ -205,6 +205,7 @@ new class extends Component
                         <th>{{ __('Origin') }}</th>
                         <th>{{ __('Status') }}</th>
                         <th class="text-right">{{ __('Days overdue') }}</th>
+                        <th class="text-right">{{ __('Actions') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -227,12 +228,15 @@ new class extends Component
                             <td class="text-[#5f6a71]">{{ $assignment->due_at?->locale(app()->getLocale())->translatedFormat('M j, Y') ?? '—' }}</td>
                             <td class="text-[#5f6a71]">{{ $assignment->origin_type->label() }}</td>
                             <td>
-                                <a href="{{ route('assignments.show', ['assignment' => $assignment]) }}" wire:navigate class="inline-flex">
-                                    <span class="status-pill {{ $assignment->status->pillModifier() }}">{{ $assignment->status->label() }}</span>
-                                </a>
+                                <span class="status-pill {{ $assignment->status->pillModifier() }}">{{ $assignment->status->label() }}</span>
                             </td>
                             <td class="text-right font-bold {{ $assignment->daysOverdue() > 0 ? 'text-[#b23a3a]' : 'text-[#8a9298]' }}">
                                 {{ $assignment->daysOverdue() > 0 ? $assignment->daysOverdue() : '—' }}
+                            </td>
+                            <td class="text-right">
+                                <flux:button :href="route('assignments.show', ['assignment' => $assignment])" wire:navigate variant="ghost" size="sm">
+                                    {{ __('View details') }}
+                                </flux:button>
                             </td>
                         </tr>
                     @endforeach
