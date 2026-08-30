@@ -5,6 +5,7 @@ namespace App\Actions\Videos;
 use App\Contracts\VideoProvider;
 use App\Data\Video\VideoUpload;
 use App\Enums\VideoStatus;
+use App\Models\Account;
 use App\Models\Lesson;
 use App\Models\Video;
 use App\Services\Audit\AuditLogger;
@@ -24,7 +25,7 @@ class RequestVideoUpload
         private readonly AuditLogger $audit,
     ) {}
 
-    public function handle(Lesson $lesson, int $maxDurationSeconds = 7200): VideoUpload
+    public function handle(Lesson $lesson, int $maxDurationSeconds = 7200, ?Account $platformActor = null): VideoUpload
     {
         $upload = $this->videoProvider->createUpload(
             $lesson->title !== '' ? $lesson->title : __('Untitled lesson'),
@@ -32,7 +33,7 @@ class RequestVideoUpload
             $lesson->company_id === null ? 'platform' : 'company:'.$lesson->company_id,
         );
 
-        DB::transaction(function () use ($lesson, $upload): void {
+        DB::transaction(function () use ($lesson, $upload, $platformActor): void {
             $previous = $lesson->video;
 
             // Replacing a video only detaches it from this draft lesson. The asset stays at
@@ -49,7 +50,7 @@ class RequestVideoUpload
             $this->audit->log('lesson.video_upload_requested', $lesson, after: [
                 'provider' => $upload->provider,
                 'asset_id' => $upload->assetId,
-            ]);
+            ], platformActor: $platformActor);
         });
 
         return $upload;

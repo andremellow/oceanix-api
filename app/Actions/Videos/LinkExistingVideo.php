@@ -4,6 +4,7 @@ namespace App\Actions\Videos;
 
 use App\Contracts\VideoProvider;
 use App\Enums\VideoStatus;
+use App\Models\Account;
 use App\Models\Lesson;
 use App\Models\Video;
 use App\Services\Audit\AuditLogger;
@@ -17,7 +18,7 @@ class LinkExistingVideo
         private readonly AuditLogger $audit,
     ) {}
 
-    public function handle(Lesson $lesson, string $assetId, bool $allowAnyOwner = false): Video
+    public function handle(Lesson $lesson, string $assetId, bool $allowAnyOwner = false, ?Account $platformActor = null): Video
     {
         $asset = $this->provider->getAssetStatus($assetId);
         $ownerKey = $lesson->company_id === null ? 'platform' : 'company:'.$lesson->company_id;
@@ -30,7 +31,7 @@ class LinkExistingVideo
             ]);
         }
 
-        return DB::transaction(function () use ($lesson, $assetId, $asset): Video {
+        return DB::transaction(function () use ($lesson, $assetId, $asset, $platformActor): Video {
             $lesson->video?->delete();
 
             $video = Video::query()->create([
@@ -46,7 +47,7 @@ class LinkExistingVideo
             $this->audit->log('lesson.video_linked', $lesson, after: [
                 'provider' => $this->provider->key(),
                 'asset_id' => $assetId,
-            ]);
+            ], platformActor: $platformActor);
 
             return $video;
         });

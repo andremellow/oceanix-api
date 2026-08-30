@@ -1,9 +1,13 @@
 <?php
 
 use App\Actions\Videos\LinkExistingVideo;
+use App\Actions\Videos\RequestVideoUpload;
 use App\Exceptions\VideoProviderException;
+use App\Models\Account;
+use App\Models\AuditLog;
 use App\Models\Lesson;
 use App\Services\Video\CloudflareStreamProvider;
+use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 
@@ -62,7 +66,9 @@ it('rejects unsigned and cross-company assets before linking', function (bool $s
 ]);
 
 it('allows platform administration to link a ready signed company video', function (): void {
+    $actor = Account::factory()->platformAdmin()->create();
     $lesson = Lesson::factory()->create(['company_id' => null, 'is_shared' => true]);
+    app(TenantContext::class)->clear();
     Http::fake(['api.cloudflare.com/*' => Http::response(['result' => [
         'uid' => 'company-asset',
         'status' => ['state' => 'ready'],
@@ -70,9 +76,31 @@ it('allows platform administration to link a ready signed company video', functi
         'meta' => ['oceanix_owner' => 'company:99'],
     ]])]);
 
-    app(LinkExistingVideo::class)->handle($lesson, 'company-asset', allowAnyOwner: true);
+    app(LinkExistingVideo::class)->handle($lesson, 'company-asset', allowAnyOwner: true, platformActor: $actor);
 
     expect($lesson->fresh()->video?->provider_asset_id)->toBe('company-asset');
+    $audit = AuditLog::query()->withoutGlobalScopes()->where('action', 'lesson.video_linked')->sole();
+    expect($audit->company_id)->toBeNull()
+        ->and($audit->actor_id)->toBeNull()
+        ->and($audit->platform_account_id)->toBe($actor->id);
+});
+
+it('records platform video upload requests without requiring a tenant', function (): void {
+    $actor = Account::factory()->platformAdmin()->create();
+    $lesson = Lesson::factory()->create(['company_id' => null, 'is_shared' => true]);
+    app(TenantContext::class)->clear();
+    Http::fake(['api.cloudflare.com/*' => Http::response(['result' => [
+        'uid' => 'platform-upload',
+        'uploadURL' => 'https://upload.cloudflarestream.com/platform-upload',
+    ]])]);
+
+    app(RequestVideoUpload::class)->handle($lesson, platformActor: $actor);
+
+    expect($lesson->fresh()->video?->provider_asset_id)->toBe('platform-upload');
+    $audit = AuditLog::query()->withoutGlobalScopes()->where('action', 'lesson.video_upload_requested')->sole();
+    expect($audit->company_id)->toBeNull()
+        ->and($audit->actor_id)->toBeNull()
+        ->and($audit->platform_account_id)->toBe($actor->id);
 });
 
 it('normalizes Cloudflare connection failures for the library UI', function (): void {

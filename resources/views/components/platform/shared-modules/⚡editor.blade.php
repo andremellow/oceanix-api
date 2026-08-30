@@ -53,7 +53,7 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function mount(Module $module, PlatformAccess $access): void
     {
-        $access->authorize();
+        $actor = $access->authorize();
         abort_unless($module->is_shared && $module->company_id === null, 404);
         $this->module = $module;
         $this->version = $module->versions()->where('status', ModuleVersionStatus::Draft->value)->firstOrFail();
@@ -90,9 +90,9 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function requestUpload(int $lessonIndex, RequestVideoUpload $action, PlatformAccess $access): string
     {
-        $access->authorize();
+        $actor = $access->authorize();
         abort_unless($lessonIndex === 0, 404);
-        $upload = $action->handle($this->version);
+        $upload = $action->handle($this->version, platformActor: $actor);
         $this->version->load('video');
 
         return $upload->uploadUrl;
@@ -125,10 +125,10 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function selectLibraryVideo(string $assetId, LinkExistingVideo $action, PlatformAccess $access): void
     {
-        $access->authorize();
+        $actor = $access->authorize();
         abort_unless(collect($this->videoLibraryItems)->contains(fn (array $item): bool => hash_equals((string) $item['asset_id'], $assetId) && $item['status'] === VideoStatus::Ready->value), 404);
         $item = collect($this->videoLibraryItems)->first(fn (array $item): bool => hash_equals((string) $item['asset_id'], $assetId));
-        $action->handle($this->version, $assetId, allowAnyOwner: true);
+        $action->handle($this->version, $assetId, allowAnyOwner: true, platformActor: $actor);
         $this->version->load('video');
         $this->dispatch('oceanix:insert-video', model: 'contentMarkdown', previewUrl: $item['preview_url'], posterUrl: $item['thumbnail_url'], title: $item['title'], aspectRatio: $item['aspect_ratio']);
         $this->videoLibraryOpen = false;
