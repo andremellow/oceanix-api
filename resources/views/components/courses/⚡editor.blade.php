@@ -278,7 +278,9 @@ new class extends Component
             $option->update(['is_correct' => true]);
         });
 
-        $this->loadLessons();
+        foreach ($this->lessons[$lessonIndex]['questions'][$questionIndex]['options'] as $index => $current) {
+            $this->lessons[$lessonIndex]['questions'][$questionIndex]['options'][$index]['is_correct'] = $index === $optionIndex;
+        }
         $this->touchSaved();
     }
 
@@ -287,7 +289,7 @@ new class extends Component
     {
         $upload = $action->handle($this->lessonAt($lessonIndex));
 
-        $this->loadLessons();
+        $this->refreshLessonVideo($lessonIndex);
 
         return $upload->uploadUrl;
     }
@@ -298,7 +300,7 @@ new class extends Component
 
         $lesson->video?->update(['status' => VideoStatus::Processing]);
 
-        $this->loadLessons();
+        $this->refreshLessonVideo($lessonIndex);
         $this->touchSaved();
 
         if ($this->videoLibraryOpen && $this->videoLibraryLessonIndex === $lessonIndex) {
@@ -379,10 +381,10 @@ new class extends Component
             );
         }
 
+        $this->refreshLessonVideo($this->videoLibraryLessonIndex);
         $this->videoLibraryOpen = false;
         $this->videoLibraryLessonIndex = null;
         $this->videoLibraryItems = [];
-        $this->loadLessons();
         $this->touchSaved();
     }
 
@@ -459,7 +461,9 @@ new class extends Component
             $action->handle($video);
         }
 
-        $this->loadLessons();
+        foreach (array_keys($this->lessons) as $lessonIndex) {
+            $this->refreshLessonVideo($lessonIndex);
+        }
     }
 
     public function confirmPublish(CourseVersionValidator $validator): void
@@ -604,7 +608,11 @@ new class extends Component
             $keep = $question->options()->where('is_correct', true)->orderBy('position')->first();
             $question->options()->where('is_correct', true)->update(['is_correct' => false]);
             $keep?->update(['is_correct' => true]);
-            $this->loadLessons();
+            $keptOptionId = $keep?->id;
+
+            foreach ($this->lessons[$lessonIndex]['questions'][$questionIndex]['options'] as $index => $option) {
+                $this->lessons[$lessonIndex]['questions'][$questionIndex]['options'][$index]['is_correct'] = $option['id'] === $keptOptionId;
+            }
         }
 
         $this->touchSaved();
@@ -679,13 +687,7 @@ new class extends Component
                 'is_required' => $lesson->is_required,
                 'minimum_watch_percentage' => $lesson->minimum_watch_percentage,
                 'passing_score' => $lesson->passing_score,
-                'video' => $lesson->video === null ? null : [
-                    'status' => $lesson->video->status->value,
-                    'status_label' => $lesson->video->status->label(),
-                    'pill' => $lesson->video->status->pillModifier(),
-                    'duration' => $lesson->video->formattedDuration(),
-                    'preview' => rescue(fn (): ?array => app(VideoLibrary::class)->preview($lesson->video), null, report: false),
-                ],
+                'video' => $this->videoState($lesson->video),
                 'questions' => $lesson->questions->map(fn (Question $question): array => [
                     'id' => $question->id,
                     'prompt' => $question->prompt,
@@ -698,6 +700,29 @@ new class extends Component
                     ])->all(),
                 ])->all(),
             ])->all();
+    }
+
+    private function refreshLessonVideo(int $lessonIndex): void
+    {
+        $lesson = $this->lessonAt($lessonIndex);
+        $lesson->load('video');
+        $this->lessons[$lessonIndex]['video'] = $this->videoState($lesson->video);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function videoState(?Video $video): ?array
+    {
+        if ($video === null) {
+            return null;
+        }
+
+        return [
+            'status' => $video->status->value,
+            'status_label' => $video->status->label(),
+            'pill' => $video->status->pillModifier(),
+            'duration' => $video->formattedDuration(),
+            'preview' => rescue(fn (): ?array => app(VideoLibrary::class)->preview($video), null, report: false),
+        ];
     }
 
     private function touchSaved(): void
@@ -957,7 +982,7 @@ new class extends Component
                                                             class="size-4 rounded border-[#8e989f] text-[#1c6b84] focus:ring-[#3e8ba3]"
                                                             aria-label="{{ __('Correct answer') }}">
                                                     @endif
-                                                    <flux:input wire:model="lessons.{{ $lessonIndex }}.questions.{{ $questionIndex }}.options.{{ $optionIndex }}.text" class="admin-control flex-1" :placeholder="__('Answer option')" />
+                                                    <flux:input wire:model.blur="lessons.{{ $lessonIndex }}.questions.{{ $questionIndex }}.options.{{ $optionIndex }}.text" class="admin-control flex-1" :placeholder="__('Answer option')" />
                                                     <flux:button wire:click="removeOption({{ $lessonIndex }}, {{ $questionIndex }}, {{ $optionIndex }})" variant="ghost" size="sm" icon="x-mark" :aria-label="__('Remove option')" />
                                                 </div>
                                             @endforeach

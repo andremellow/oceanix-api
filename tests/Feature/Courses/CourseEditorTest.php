@@ -150,6 +150,57 @@ it('keeps typed option text when adding an option and selecting the correct answ
         ->and($question->options()->count())->toBe(3);
 });
 
+it('never loses draft questions or answers while changing type and uploading video', function (): void {
+    Http::fake([
+        'api.cloudflare.com/*' => Http::response([
+            'result' => ['uid' => 'draft-video', 'uploadURL' => 'https://upload.cloudflarestream.com/draft'],
+        ]),
+    ]);
+
+    $course = draftCourse();
+    $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id]);
+    $question = Question::factory()->create([
+        'lesson_id' => $lesson->id,
+        'prompt' => 'Original question',
+        'type' => QuestionType::MultipleChoice,
+    ]);
+    $first = QuestionOption::factory()->correct()->create([
+        'question_id' => $question->id,
+        'position' => 1,
+        'text' => 'Original first answer',
+    ]);
+    $second = QuestionOption::factory()->correct()->create([
+        'question_id' => $question->id,
+        'position' => 2,
+        'text' => 'Original second answer',
+    ]);
+
+    $component = Livewire::actingAs(adminUser())
+        ->test('courses.editor', ['course' => $course])
+        ->assertSee('wire:model.blur="lessons.0.questions.0.options.0.text"', escape: false)
+        ->set('lessons.0.questions.0.prompt', 'Edited draft question')
+        ->set('lessons.0.questions.0.options.0.text', 'Edited first answer')
+        ->set('lessons.0.questions.0.options.1.text', 'Edited second answer')
+        ->call('requestUpload', 0)
+        ->call('uploadCompleted', 0)
+        ->set('lessons.0.questions.0.type', QuestionType::SingleChoice->value)
+        ->call('selectSingleCorrect', 0, 0, 1)
+        ->assertSet('lessons.0.questions.0.prompt', 'Edited draft question')
+        ->assertSet('lessons.0.questions.0.options.0.text', 'Edited first answer')
+        ->assertSet('lessons.0.questions.0.options.1.text', 'Edited second answer')
+        ->assertSet('lessons.0.questions.0.options.0.is_correct', false)
+        ->assertSet('lessons.0.questions.0.options.1.is_correct', true);
+
+    expect($question->fresh())
+        ->prompt->toBe('Edited draft question')
+        ->type->toBe(QuestionType::SingleChoice)
+        ->and($first->fresh()->text)->toBe('Edited first answer')
+        ->and($first->fresh()->is_correct)->toBeFalse()
+        ->and($second->fresh()->text)->toBe('Edited second answer')
+        ->and($second->fresh()->is_correct)->toBeTrue()
+        ->and($lesson->fresh()->video->status)->toBe(VideoStatus::Processing);
+});
+
 it('reorders lessons and renumbers their positions', function (): void {
     $course = draftCourse();
     $version = $course->versions()->first();
