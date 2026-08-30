@@ -214,8 +214,8 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function requestUpload(int $moduleIndex, RequestVideoUpload $action, PlatformAccess $access): string
     {
-        $access->authorize();
-        $upload = $action->handle($this->moduleAt($moduleIndex));
+        $actor = $access->authorize();
+        $upload = $action->handle($this->moduleAt($moduleIndex), platformActor: $actor);
         $this->loadModules();
 
         return $upload->uploadUrl;
@@ -249,12 +249,12 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function selectLibraryVideo(string $assetId, LinkExistingVideo $action, PlatformAccess $access): void
     {
-        $access->authorize();
+        $actor = $access->authorize();
         abort_unless(preg_match('/^modules\.(\d+)\.content_markdown$/', $this->videoEditorModel, $matches) === 1, 422);
         abort_unless(collect($this->videoLibraryItems)->contains(fn (array $item): bool => hash_equals((string) $item['asset_id'], $assetId) && $item['status'] === VideoStatus::Ready->value), 404);
 
         $item = collect($this->videoLibraryItems)->first(fn (array $item): bool => hash_equals((string) $item['asset_id'], $assetId));
-        $action->handle($this->moduleAt((int) $matches[1]), $assetId, allowAnyOwner: true);
+        $action->handle($this->moduleAt((int) $matches[1]), $assetId, allowAnyOwner: true, platformActor: $actor);
         $this->dispatch('oceanix:insert-video', model: $this->videoEditorModel, previewUrl: $item['preview_url'], posterUrl: $item['thumbnail_url'], title: $item['title'], aspectRatio: $item['aspect_ratio']);
         $this->videoLibraryOpen = false;
         $this->loadModules();
