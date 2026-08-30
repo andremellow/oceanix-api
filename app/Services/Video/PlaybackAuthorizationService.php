@@ -27,7 +27,7 @@ class PlaybackAuthorizationService
 
     public function authorize(UserTrainingAssignment $assignment, Lesson $lesson): PlaybackAuthorization
     {
-        if ($lesson->course_version_id !== $assignment->course_version_id) {
+        if (! $assignment->includesLesson($lesson)) {
             throw new AuthorizationException('The lesson does not belong to the assigned course version.');
         }
 

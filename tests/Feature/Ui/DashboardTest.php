@@ -4,7 +4,9 @@ use App\Enums\AssignmentStatus;
 use App\Enums\Permission;
 use App\Models\Course;
 use App\Models\CourseVersion;
+use App\Models\CourseVersionModule;
 use App\Models\Department;
+use App\Models\ModuleVersion;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
 
@@ -145,6 +147,34 @@ it('lets the assignee open their own assignment', function (): void {
         ->get(route('my-training.show', ['assignment' => $assignment]))
         ->assertOk()
         ->assertSee($assignment->course->title);
+});
+
+it('shows and opens frozen module compositions in an employee assignment', function (): void {
+    $user = employeeUser();
+    $course = assignableCourse();
+    $version = $course->currentPublishedVersion;
+    $module = ModuleVersion::factory()->published()->create([
+        'title' => 'Structural steel safety',
+        'course_version_id' => null,
+    ]);
+    CourseVersionModule::query()->create([
+        'course_version_id' => $version->id,
+        'module_version_id' => $module->id,
+        'position' => 1,
+        'is_required' => true,
+    ]);
+    $assignment = UserTrainingAssignment::factory()->forCourse($course)->create(['user_id' => $user->id]);
+
+    $this->actingAs($user)
+        ->get(route('my-training.show', ['assignment' => $assignment]))
+        ->assertOk()
+        ->assertSee('Structural steel safety')
+        ->assertDontSee(__('ui.no_lessons'));
+
+    $this->actingAs($user)
+        ->get(route('my-training.lesson', ['assignment' => $assignment, 'lesson' => $module]))
+        ->assertOk()
+        ->assertSee('Structural steel safety');
 });
 
 it('lets an operator open an assignment for review', function (): void {

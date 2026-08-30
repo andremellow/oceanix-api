@@ -13,5 +13,7 @@ class VideoLibraryItem
         public readonly ?int $durationSeconds = null,
         public readonly ?string $createdAt = null,
         public readonly ?string $hlsUrl = null,
+        public readonly ?int $width = null,
+        public readonly ?int $height = null,
     ) {}
 }

@@ -2,21 +2,26 @@
 
 use App\Actions\Courses\PublishSharedCourseDraft;
 use App\Actions\Modules\CreateModuleDraft;
+use App\Actions\Videos\LinkExistingVideo;
 use App\Actions\Videos\RequestVideoUpload;
 use App\Enums\CourseVersionStatus;
 use App\Enums\ModuleVersionStatus;
 use App\Enums\QuestionType;
 use App\Enums\VideoStatus;
 use App\Exceptions\CoursePublicationException;
+use App\Exceptions\VideoProviderException;
+use App\Models\ContentImage;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
-use App\Models\ContentImage;
 use App\Models\ModuleVersion;
 use App\Models\Question;
 use App\Models\QuestionOption;
+use App\Services\Courses\LessonContentRenderer;
+use App\Services\Courses\LessonContentSanitizer;
 use App\Services\Platform\PlatformAccess;
 use App\Services\SharedContent\SharedContentCatalog;
+use App\Services\Video\VideoLibrary;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Layout;
@@ -28,18 +33,40 @@ new #[Layout('layouts::platform')] class extends Component
     use WithFileUploads;
 
     public Course $course;
+
     public CourseVersion $version;
+
     public array $courseForm = [];
+
     public array $versionForm = [];
+
     public array $modules = [];
+
     public array $expanded = [];
+
     public string $moduleSearch = '';
+
     public ?int $selectedModuleId = null;
+
     public bool $confirmingPublish = false;
+
     public bool $restartInProgress = false;
+
     public bool $imageLibraryOpen = false;
+
     public string $imageEditorModel = '';
+
     public $contentImageUpload;
+
+    public bool $videoLibraryOpen = false;
+
+    public string $videoEditorModel = '';
+
+    public array $videoLibraryItems = [];
+
+    public string $videoLibrarySearch = '';
+
+    public ?string $videoLibraryError = null;
 
     public function mount(Course $course, PlatformAccess $access, CreateModuleDraft $createModuleDraft): void
     {
@@ -61,18 +88,23 @@ new #[Layout('layouts::platform')] class extends Component
             abort_unless(in_array($field, ['code', 'title', 'description'], true), 404);
             $this->validate(['courseForm.code' => ['required', 'string', 'max:40', 'unique:courses,code,'.$this->course->id], 'courseForm.title' => ['required', 'string', 'max:200'], 'courseForm.description' => ['nullable', 'string', 'max:2000']]);
             $this->course->update([$field => $value]);
-            if ($field === 'title') $this->version->update(['title' => $value]);
+            if ($field === 'title') {
+                $this->version->update(['title' => $value]);
+            }
+
             return;
         }
 
         if ($property === 'versionForm.description') {
             $this->validate(['versionForm.description' => ['nullable', 'string', 'max:2000']]);
             $this->version->update(['description' => $value]);
+
             return;
         }
 
         if (preg_match('/^modules\.(\d+)\.([a-z_]+)$/', $property, $matches)) {
-            $index = (int) $matches[1]; $field = $matches[2];
+            $index = (int) $matches[1];
+            $field = $matches[2];
             abort_unless(in_array($field, ['title', 'description', 'content_markdown', 'minimum_watch_percentage', 'passing_score'], true), 404);
             $this->validate([
                 "modules.{$index}.title" => ['required', 'string', 'max:200'],
@@ -81,8 +113,13 @@ new #[Layout('layouts::platform')] class extends Component
                 "modules.{$index}.minimum_watch_percentage" => ['required', 'integer', 'min:1', 'max:100'],
                 "modules.{$index}.passing_score" => ['required', 'integer', 'min:1', 'max:100'],
             ]);
+            if ($field === 'content_markdown') {
+                $value = app(LessonContentSanitizer::class)->sanitize((string) $value);
+                $this->modules[$index][$field] = $value;
+            }
             $module = $this->moduleAt($index);
             $module->update([$field => $value]);
+
             return;
         }
 
@@ -95,6 +132,7 @@ new #[Layout('layouts::platform')] class extends Component
             ]);
             $question = $this->questionAt((int) $matches[1], (int) $matches[2]);
             $question->update([$matches[3] => $value]);
+
             return;
         }
 
@@ -138,7 +176,9 @@ new #[Layout('layouts::platform')] class extends Component
     {
         abort_unless(isset($this->modules[$moduleIndex]), 404);
         $this->version->moduleCompositions()->whereKey($this->modules[$moduleIndex]['composition_id'])->delete();
-        foreach ($this->version->moduleCompositions()->get()->values() as $index => $composition) $composition->update(['position' => $index + 1]);
+        foreach ($this->version->moduleCompositions()->get()->values() as $index => $composition) {
+            $composition->update(['position' => $index + 1]);
+        }
         $this->loadModules();
     }
 
@@ -147,7 +187,9 @@ new #[Layout('layouts::platform')] class extends Component
         $module = $this->moduleAt($moduleIndex);
         DB::transaction(function () use ($module): void {
             $question = Question::query()->create(['company_id' => null, 'lesson_id' => $module->id, 'type' => QuestionType::SingleChoice, 'prompt' => __('New question'), 'position' => $module->questions()->count() + 1, 'max_attempts' => 3]);
-            foreach ([1, 2] as $position) QuestionOption::query()->create(['company_id' => null, 'question_id' => $question->id, 'text' => __('Option :number', ['number' => $position]), 'is_correct' => $position === 1, 'position' => $position]);
+            foreach ([1, 2] as $position) {
+                QuestionOption::query()->create(['company_id' => null, 'question_id' => $question->id, 'text' => __('Option :number', ['number' => $position]), 'is_correct' => $position === 1, 'position' => $position]);
+            }
         });
         $this->loadModules();
     }
@@ -161,19 +203,61 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function selectSingleCorrect(int $moduleIndex, int $questionIndex, int $optionIndex): void
     {
-        $question = $this->questionAt($moduleIndex, $questionIndex); $option = $this->optionAt($moduleIndex, $questionIndex, $optionIndex);
-        DB::transaction(function () use ($question, $option): void { $question->options()->update(['is_correct' => false]); $option->update(['is_correct' => true]); });
+        $question = $this->questionAt($moduleIndex, $questionIndex);
+        $option = $this->optionAt($moduleIndex, $questionIndex, $optionIndex);
+        DB::transaction(function () use ($question, $option): void {
+            $question->options()->update(['is_correct' => false]);
+            $option->update(['is_correct' => true]);
+        });
         $this->loadModules();
     }
 
     public function requestUpload(int $moduleIndex, RequestVideoUpload $action, PlatformAccess $access): string
     {
-        $access->authorize(); $upload = $action->handle($this->moduleAt($moduleIndex)); $this->loadModules(); return $upload->uploadUrl;
+        $access->authorize();
+        $upload = $action->handle($this->moduleAt($moduleIndex));
+        $this->loadModules();
+
+        return $upload->uploadUrl;
     }
 
     public function uploadCompleted(int $moduleIndex, PlatformAccess $access): void
     {
-        $access->authorize(); $this->moduleAt($moduleIndex)->video?->update(['status' => VideoStatus::Processing]); $this->loadModules();
+        $access->authorize();
+        $this->moduleAt($moduleIndex)->video?->update(['status' => VideoStatus::Processing]);
+        $this->loadModules();
+    }
+
+    public function openEditorVideoLibrary(string $model, VideoLibrary $library, PlatformAccess $access): void
+    {
+        $access->authorize();
+        abort_unless(preg_match('/^modules\.(\d+)\.content_markdown$/', $model, $matches) === 1, 422);
+        $this->moduleAt((int) $matches[1]);
+        $this->videoEditorModel = $model;
+        $this->videoLibrarySearch = '';
+        $this->videoLibraryError = null;
+        $this->videoLibraryOpen = true;
+        $this->loadVideoLibrary($library);
+    }
+
+    public function searchVideoLibrary(VideoLibrary $library, PlatformAccess $access): void
+    {
+        $access->authorize();
+        abort_unless($this->videoLibraryOpen, 404);
+        $this->loadVideoLibrary($library);
+    }
+
+    public function selectLibraryVideo(string $assetId, LinkExistingVideo $action, PlatformAccess $access): void
+    {
+        $access->authorize();
+        abort_unless(preg_match('/^modules\.(\d+)\.content_markdown$/', $this->videoEditorModel, $matches) === 1, 422);
+        abort_unless(collect($this->videoLibraryItems)->contains(fn (array $item): bool => hash_equals((string) $item['asset_id'], $assetId) && $item['status'] === VideoStatus::Ready->value), 404);
+
+        $item = collect($this->videoLibraryItems)->first(fn (array $item): bool => hash_equals((string) $item['asset_id'], $assetId));
+        $action->handle($this->moduleAt((int) $matches[1]), $assetId, allowAnyOwner: true);
+        $this->dispatch('oceanix:insert-video', model: $this->videoEditorModel, previewUrl: $item['preview_url'], posterUrl: $item['thumbnail_url'], title: $item['title'], aspectRatio: $item['aspect_ratio']);
+        $this->videoLibraryOpen = false;
+        $this->loadModules();
     }
 
     public function openImageLibrary(string $model, PlatformAccess $access): void
@@ -213,23 +297,8 @@ new #[Layout('layouts::platform')] class extends Component
         $image = ContentImage::query()->where('is_shared', true)->findOrFail($imageId);
         abort_unless(preg_match('/^modules\.(\d+)\.content_markdown$/', $this->imageEditorModel, $matches) === 1, 422);
 
-        $moduleIndex = (int) $matches[1];
-        $module = $this->moduleAt($moduleIndex);
         $alt = pathinfo($image->name, PATHINFO_FILENAME);
-        $markdown = rtrim((string) $module->content_markdown)."\n\n".sprintf(
-            ':::image{src="%s" align="center" width="50%%" alt="%s"}',
-            $image->url(),
-            str_replace('"', '', $alt),
-        );
-        $module->update(['content_markdown' => ltrim($markdown)]);
-        $this->modules[$moduleIndex]['content_markdown'] = $module->content_markdown;
-
-        $payload = json_encode([
-            'model' => $this->imageEditorModel,
-            'url' => $image->url(),
-            'alt' => $alt,
-        ], JSON_THROW_ON_ERROR);
-        $this->js("window.oceanixInsertContentImage?.({$payload})");
+        $this->dispatch('oceanix:insert-image', model: $this->imageEditorModel, url: $image->url(), alt: $alt);
         $this->imageLibraryOpen = false;
     }
 
@@ -238,8 +307,10 @@ new #[Layout('layouts::platform')] class extends Component
         $actor = $access->authorize();
         try {
             $action->handle($this->version, $actor, $this->restartInProgress);
-        } catch (CoursePublicationException|\LogicException $exception) {
-            $this->addError('publish', $exception instanceof CoursePublicationException ? ($exception->problems[0] ?? $exception->getMessage()) : $exception->getMessage()); return;
+        } catch (CoursePublicationException|LogicException $exception) {
+            $this->addError('publish', $exception instanceof CoursePublicationException ? ($exception->problems[0] ?? $exception->getMessage()) : $exception->getMessage());
+
+            return;
         }
         session()->flash('status', __('Version :number published', ['number' => $this->version->version_number]));
         $this->redirect(route('platform.shared-courses.show', ['course' => $this->course]), navigate: true);
@@ -262,7 +333,9 @@ new #[Layout('layouts::platform')] class extends Component
     {
         foreach ($this->version->moduleCompositions()->with('moduleVersion')->get() as $composition) {
             $source = $composition->moduleVersion;
-            if ($source->status === ModuleVersionStatus::Draft) continue;
+            if ($source->status === ModuleVersionStatus::Draft) {
+                continue;
+            }
             $draft = ModuleVersion::query()->where('lineage_uuid', $source->lineage_uuid)->where('status', ModuleVersionStatus::Draft->value)->first() ?? $action->handle($source, $actor);
             $composition->update(['module_version_id' => $draft->id]);
         }
@@ -270,22 +343,52 @@ new #[Layout('layouts::platform')] class extends Component
 
     private function loadModules(): void
     {
+        $renderer = app(LessonContentRenderer::class);
         $this->modules = $this->version->moduleCompositions()->with(['moduleVersion.video', 'moduleVersion.questions.options'])->get()->map(fn ($composition) => [
             'composition_id' => $composition->id, 'id' => $composition->moduleVersion->id, 'title' => $composition->moduleVersion->title,
-            'description' => $composition->moduleVersion->description, 'content_markdown' => $composition->moduleVersion->content_markdown,
+            'description' => $composition->moduleVersion->description, 'content_markdown' => $renderer->editorContent((string) $composition->moduleVersion->content_markdown),
             'minimum_watch_percentage' => $composition->moduleVersion->minimum_watch_percentage, 'passing_score' => $composition->moduleVersion->passing_score,
-            'video' => $composition->moduleVersion->video ? ['status_label' => $composition->moduleVersion->video->status->label(), 'duration' => $composition->moduleVersion->video->formattedDuration()] : null,
+            'video' => $composition->moduleVersion->video ? ['status_label' => $composition->moduleVersion->video->status->label(), 'duration' => $composition->moduleVersion->video->formattedDuration(), 'preview' => rescue(fn (): ?array => app(VideoLibrary::class)->preview($composition->moduleVersion->video), null, report: false)] : null,
             'questions' => $composition->moduleVersion->questions->map(fn ($q) => ['id' => $q->id, 'prompt' => $q->prompt, 'type' => $q->type->value, 'max_attempts' => $q->max_attempts, 'options' => $q->options->map(fn ($o) => ['id' => $o->id, 'text' => $o->text, 'is_correct' => $o->is_correct])->all()])->all(),
         ])->all();
     }
 
-    private function moduleAt(int $index): ModuleVersion { abort_unless(isset($this->modules[$index]), 404); return ModuleVersion::query()->whereKey($this->modules[$index]['id'])->where('status', ModuleVersionStatus::Draft->value)->firstOrFail(); }
-    private function questionAt(int $moduleIndex, int $questionIndex): Question { $module = $this->moduleAt($moduleIndex); abort_unless(isset($this->modules[$moduleIndex]['questions'][$questionIndex]), 404); return $module->questions()->whereKey($this->modules[$moduleIndex]['questions'][$questionIndex]['id'])->firstOrFail(); }
-    private function optionAt(int $moduleIndex, int $questionIndex, int $optionIndex): QuestionOption { $question = $this->questionAt($moduleIndex, $questionIndex); abort_unless(isset($this->modules[$moduleIndex]['questions'][$questionIndex]['options'][$optionIndex]), 404); return $question->options()->whereKey($this->modules[$moduleIndex]['questions'][$questionIndex]['options'][$optionIndex]['id'])->firstOrFail(); }
+    private function loadVideoLibrary(VideoLibrary $library): void
+    {
+        try {
+            $this->videoLibraryItems = $library->items($this->videoLibrarySearch, allOwners: true);
+        } catch (VideoProviderException) {
+            $this->videoLibraryItems = [];
+            $this->videoLibraryError = __('The video library could not be loaded. Try again.');
+        }
+    }
+
+    private function moduleAt(int $index): ModuleVersion
+    {
+        abort_unless(isset($this->modules[$index]), 404);
+
+        return ModuleVersion::query()->whereKey($this->modules[$index]['id'])->where('status', ModuleVersionStatus::Draft->value)->firstOrFail();
+    }
+
+    private function questionAt(int $moduleIndex, int $questionIndex): Question
+    {
+        $module = $this->moduleAt($moduleIndex);
+        abort_unless(isset($this->modules[$moduleIndex]['questions'][$questionIndex]), 404);
+
+        return $module->questions()->whereKey($this->modules[$moduleIndex]['questions'][$questionIndex]['id'])->firstOrFail();
+    }
+
+    private function optionAt(int $moduleIndex, int $questionIndex, int $optionIndex): QuestionOption
+    {
+        $question = $this->questionAt($moduleIndex, $questionIndex);
+        abort_unless(isset($this->modules[$moduleIndex]['questions'][$questionIndex]['options'][$optionIndex]), 404);
+
+        return $question->options()->whereKey($this->modules[$moduleIndex]['questions'][$questionIndex]['options'][$optionIndex]['id'])->firstOrFail();
+    }
 };
 ?>
 
-<div class="admin-page space-y-7">
+<div class="admin-page space-y-7" x-on:oceanix-open-image-library.window="$wire.openImageLibrary($event.detail.model)" x-on:oceanix-open-video-library.window="$wire.openEditorVideoLibrary($event.detail.model)">
     <x-page-hero :kicker="__('Shared course draft')" :title="$courseForm['title']" :description="__('Edit the complete course on one continuous screen. Module versions are managed automatically.')">
         <span class="status-pill status-pill--accent">{{ __('Shared') }}</span><flux:button :href="route('platform.shared-courses.show', ['course' => $course])" wire:navigate variant="ghost">{{ __('Cancel') }}</flux:button>
     </x-page-hero>
@@ -314,6 +417,16 @@ new #[Layout('layouts::platform')] class extends Component
                 @if (in_array($module['id'], $expanded, true))
                     <div class="mt-5 space-y-5 border-t border-[#e5eaed] pt-5">
                         <div class="grid gap-4 lg:grid-cols-2"><flux:input wire:model.blur="modules.{{ $moduleIndex }}.title" :label="__('Module title')" /><flux:textarea wire:model.blur="modules.{{ $moduleIndex }}.description" :label="__('Description')" rows="2" /></div>
+                        <flux:editor
+                            wire:model.live.debounce.500ms="modules.{{ $moduleIndex }}.content_markdown"
+                            data-oceanix-editor-model="modules.{{ $moduleIndex }}.content_markdown"
+                            data-oceanix-video-preview-url="{{ data_get($module, 'video.preview.preview_url') }}"
+                            data-oceanix-video-poster-url="{{ data_get($module, 'video.preview.poster_url') }}"
+                            data-oceanix-video-title="{{ $module['title'] }}"
+                            data-oceanix-video-aspect-ratio="{{ data_get($module, 'video.preview.aspect_ratio', '16/9') }}"
+                            class="oceanix-content-editor"
+                            :label="__('Module content')"
+                            toolbar="heading | bold italic underline strike | bullet ordered blockquote link | align | image image-left image-center image-right image-size video ~ fullscreen undo redo" />
                         <div class="grid gap-4 sm:grid-cols-2"><flux:input type="number" wire:model.blur="modules.{{ $moduleIndex }}.minimum_watch_percentage" :label="__('Watch threshold (%)')" /><flux:input type="number" wire:model.blur="modules.{{ $moduleIndex }}.passing_score" :label="__('Passing score (%)')" /></div>
                         <div class="flex items-center justify-between rounded-[18px] bg-[#f7f9fa] p-4" x-data="lessonVideoUpload({{ $moduleIndex }}, {{ Js::from(['fileTooLarge' => __('This video is larger than 200 MB. Select a smaller file.')]) }})"><div><p class="font-bold">{{ __('Video') }}</p><p class="text-xs text-[#8a9298]">{{ $module['video'] ? $module['video']['status_label'].' · '.$module['video']['duration'] : __('No video attached') }}</p><p x-show="uploading" x-text="`${progress}%`"></p></div><div><input type="file" accept="video/*" class="hidden" x-ref="file" @change="start($event)"><flux:button x-on:click="$refs.file.click()" variant="ghost">{{ $module['video'] ? __('Replace video') : __('Upload video') }}</flux:button></div></div>
                         <div>
@@ -378,6 +491,27 @@ new #[Layout('layouts::platform')] class extends Component
                     </div>
                 @endif
             </div>
+        </div>
+    </flux:modal>
+
+    <flux:modal wire:model.self="videoLibraryOpen" class="max-w-4xl">
+        <div class="space-y-5">
+            <div><flux:heading size="lg">{{ __('Video library') }}</flux:heading><flux:text class="mt-2">{{ __('Select a ready video from the platform Cloudflare library.') }}</flux:text></div>
+            <div class="flex gap-2"><flux:input wire:model="videoLibrarySearch" wire:keydown.enter="searchVideoLibrary" class="flex-1" :label="__('Search videos')" /><flux:button wire:click="searchVideoLibrary" class="self-end" variant="ghost">{{ __('Search') }}</flux:button></div>
+            @if ($videoLibraryError)
+                <flux:callout variant="danger" :heading="$videoLibraryError" />
+            @elseif ($videoLibraryItems === [])
+                <x-empty-state icon="film" :title="__('No videos found')" :description="__('Upload a video and it will appear here.')" />
+            @else
+                <div class="grid max-h-[55vh] gap-3 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
+                    @foreach ($videoLibraryItems as $item)
+                        <article class="overflow-hidden rounded-2xl border border-[#dde3e7] bg-white" wire:key="shared-video-{{ $item['asset_id'] }}">
+                            <div class="aspect-video bg-[#e8eef1]">@if ($item['thumbnail_url'])<img src="{{ $item['thumbnail_url'] }}" alt="" class="size-full object-cover">@else<span class="grid size-full place-items-center"><flux:icon.film class="size-8 text-[#8a9298]" /></span>@endif</div>
+                            <div class="space-y-2 p-3"><p class="truncate text-sm font-bold">{{ $item['title'] }}</p><p class="text-xs text-[#7d878e]">{{ $item['duration'] }} · {{ $item['status_label'] }}</p><flux:button wire:click="selectLibraryVideo('{{ $item['asset_id'] }}')" variant="primary" size="sm" class="w-full" :disabled="$item['status'] !== App\Enums\VideoStatus::Ready->value">{{ __('Use video') }}</flux:button></div>
+                        </article>
+                    @endforeach
+                </div>
+            @endif
         </div>
     </flux:modal>
 </div>

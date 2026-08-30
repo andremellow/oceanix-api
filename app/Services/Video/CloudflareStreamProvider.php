@@ -152,7 +152,7 @@ class CloudflareStreamProvider implements VideoProvider
             ->filter(fn (mixed $asset): bool => is_array($asset)
                 && filled($asset['uid'] ?? null)
                 && $ownerKey !== ''
-                && data_get($asset, 'meta.oceanix_owner') === $ownerKey)
+                && ($ownerKey === '*' || data_get($asset, 'meta.oceanix_owner') === $ownerKey))
             ->map(function (array $asset): VideoLibraryItem {
                 $state = (string) data_get($asset, 'status.state', '');
                 $duration = $asset['duration'] ?? null;
@@ -169,6 +169,8 @@ class CloudflareStreamProvider implements VideoProvider
                     durationSeconds: is_numeric($duration) ? (int) round((float) $duration) : null,
                     createdAt: is_string($asset['created'] ?? null) ? $asset['created'] : null,
                     hlsUrl: is_string(data_get($asset, 'playback.hls')) ? data_get($asset, 'playback.hls') : null,
+                    width: is_numeric(data_get($asset, 'input.width')) ? (int) data_get($asset, 'input.width') : null,
+                    height: is_numeric(data_get($asset, 'input.height')) ? (int) data_get($asset, 'input.height') : null,
                 );
             })
             ->take(min(max($limit, 1), 1000))
@@ -226,6 +228,8 @@ class CloudflareStreamProvider implements VideoProvider
                 'hls' => $response->json('result.playback.hls'),
                 'oceanix_owner' => $response->json('result.meta.oceanix_owner'),
                 'require_signed_urls' => $response->json('result.requireSignedURLs') === true,
+                'width' => is_numeric($response->json('result.input.width')) ? (int) $response->json('result.input.width') : null,
+                'height' => is_numeric($response->json('result.input.height')) ? (int) $response->json('result.input.height') : null,
             ],
         );
     }

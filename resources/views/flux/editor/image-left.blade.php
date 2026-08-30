@@ -1,0 +1,1 @@
+<flux:editor.button icon="bars-3-bottom-left" :tooltip="__('Align image left')" x-on:click="$el.closest('[data-flux-editor]').editor.chain().focus().updateAttributes('image', { align: 'left' }).run()" />

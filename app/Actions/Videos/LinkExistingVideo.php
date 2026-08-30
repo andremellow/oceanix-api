@@ -17,13 +17,13 @@ class LinkExistingVideo
         private readonly AuditLogger $audit,
     ) {}
 
-    public function handle(Lesson $lesson, string $assetId): Video
+    public function handle(Lesson $lesson, string $assetId, bool $allowAnyOwner = false): Video
     {
         $asset = $this->provider->getAssetStatus($assetId);
         $ownerKey = $lesson->company_id === null ? 'platform' : 'company:'.$lesson->company_id;
 
         if ($asset->status !== VideoStatus::Ready
-            || ($asset->metadata['oceanix_owner'] ?? null) !== $ownerKey
+            || (! $allowAnyOwner && ($asset->metadata['oceanix_owner'] ?? null) !== $ownerKey)
             || ($asset->metadata['require_signed_urls'] ?? false) !== true) {
             throw ValidationException::withMessages([
                 'videoLibrary' => __('Only ready, private videos owned by this company can be linked.'),

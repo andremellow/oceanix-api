@@ -46,7 +46,7 @@ class TrainingPlaybackController extends Controller
     ): JsonResponse {
         $this->authorize('execute', $assignment);
 
-        abort_unless($lesson->course_version_id === $assignment->course_version_id, 404);
+        abort_unless($assignment->includesLesson($lesson), 404);
 
         $recorder->ingestBatch($assignment->user_id, $request->events($assignment, $lesson));
 

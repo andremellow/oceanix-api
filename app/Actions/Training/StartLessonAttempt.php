@@ -18,7 +18,7 @@ class StartLessonAttempt
 
     public function handle(UserTrainingAssignment $assignment, CourseAttempt $courseAttempt, Lesson $lesson): LessonAttempt
     {
-        if ($lesson->course_version_id !== $assignment->course_version_id) {
+        if (! $assignment->includesLesson($lesson)) {
             throw new AuthorizationException('This lesson does not belong to the assigned course version.');
         }
 

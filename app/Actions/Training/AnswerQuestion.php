@@ -122,7 +122,7 @@ class AnswerQuestion
             throw new AuthorizationException('This question does not belong to the lesson being attempted.');
         }
 
-        if ($lesson->course_version_id !== $assignment->course_version_id) {
+        if (! $assignment->includesLesson($lesson)) {
             throw new AuthorizationException('This lesson does not belong to the assigned course version.');
         }
 

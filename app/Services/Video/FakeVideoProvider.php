@@ -58,7 +58,37 @@ class FakeVideoProvider implements VideoProvider
     /** @return list<VideoLibraryItem> */
     public function listAssets(int $limit = 12, string $search = '', string $ownerKey = ''): array
     {
-        return [];
+        $companyId = str_starts_with($ownerKey, 'company:')
+            ? (int) str($ownerKey)->after('company:')->toString()
+            : null;
+
+        return Video::query()
+            ->with('lesson')
+            ->where('provider', $this->key())
+            ->when($ownerKey !== '*', fn ($query) => $query->whereHas('lesson', fn ($lesson) => $ownerKey === 'platform'
+                ? $lesson->whereNull('company_id')
+                : $lesson->where('company_id', $companyId)))
+            ->when(trim($search) !== '', fn ($query) => $query->whereHas(
+                'lesson',
+                fn ($lesson) => $lesson->where('title', 'like', '%'.trim($search).'%'),
+            ))
+            ->latest()
+            ->get()
+            ->unique('provider_asset_id')
+            ->take(min(max($limit, 1), 1000))
+            ->map(function (Video $video): VideoLibraryItem {
+                $asset = $this->getAssetStatus($video->provider_asset_id);
+
+                return new VideoLibraryItem(
+                    assetId: $video->provider_asset_id,
+                    title: $video->lesson?->title ?: __('Untitled video'),
+                    status: $asset->status,
+                    durationSeconds: $asset->durationSeconds,
+                    createdAt: $video->created_at?->toIso8601String(),
+                );
+            })
+            ->values()
+            ->all();
     }
 
     public function createAssetPreviewAuthorization(string $assetId, ?string $hlsUrl, int $ttlMinutes): PlaybackAuthorization
@@ -80,13 +110,22 @@ class FakeVideoProvider implements VideoProvider
             return new VideoAssetStatus(VideoStatus::Uploading);
         }
 
+        $video = Video::query()->with('lesson')->where('provider_asset_id', $assetId)->first();
+        $ownerKey = $video?->lesson?->company_id === null
+            ? 'platform'
+            : 'company:'.$video->lesson->company_id;
+
         return new VideoAssetStatus(
             status: VideoStatus::Ready,
             playbackId: $assetId,
             // There is no encoder here, so approximate a duration from the file size just to
             // keep the interface honest. Never treat this as real metadata.
             durationSeconds: max(30, (int) round(Storage::disk(self::DISK)->size($path) / 120_000)),
-            metadata: ['fake' => true],
+            metadata: [
+                'fake' => true,
+                'oceanix_owner' => $ownerKey,
+                'require_signed_urls' => true,
+            ],
         );
     }
 
