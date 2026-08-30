@@ -560,5 +560,15 @@
     "This module cannot be added to new course compositions. Published courses and existing evidence remain unchanged.": "Este módulo não pode ser adicionado a novas composições de curso. Cursos publicados e evidências existentes permanecem inalterados.",
     "Upload a new video": "Enviar um novo vídeo",
     "The file is uploaded directly and will appear in this library while it is processing.": "O arquivo será enviado diretamente e aparecerá nesta biblioteca durante o processamento.",
-    "Choose video": "Escolher vídeo"
+    "Choose video": "Escolher vídeo",
+    "Conversation": "Conversa",
+    "Comments": "Comentários",
+    "Share progress, decisions, and what still needs attention.": "Compartilhe o andamento, as decisões e o que ainda precisa de atenção.",
+    "No comments yet.": "Nenhum comentário ainda.",
+    "Start the conversation with an update or question.": "Comece a conversa com uma atualização ou pergunta.",
+    "Add a comment": "Adicionar comentário",
+    "Write an update, question, or decision…": "Escreva uma atualização, pergunta ou decisão…",
+    "Comment": "Comentar",
+    "Open task": "Abrir task",
+    ":count comment|:count comments": ":count comentário|:count comentários"
 }

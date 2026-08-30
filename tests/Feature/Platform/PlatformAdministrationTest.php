@@ -1,6 +1,8 @@
 <?php
 
 use Andremellow\Tasks\Models\Task;
+use Andremellow\Tasks\Models\TaskComment;
+use Andremellow\Tasks\Models\TaskType;
 use App\Actions\Auth\AuthenticatePlatformAccount;
 use App\Data\SocialIdentity;
 use App\Http\Middleware\AuthenticatePlatformTaskUser;
@@ -84,6 +86,48 @@ it('keeps platform task authentication on Livewire updates and lists each accoun
         ->toContain(EnsureUserIsPlatformAdmin::class)
         ->toContain(AuthenticatePlatformTaskUser::class)
         ->and(PlatformTaskUser::query()->where('account_id', $account->id)->count())->toBe(1);
+});
+
+it('lets a platform administrator add a persistent comment to a task', function (): void {
+    $account = Account::factory()->platformAdmin()->create();
+    $user = User::factory()->create([
+        'account_id' => $account->id,
+        'email' => $account->email,
+    ]);
+    $type = TaskType::query()->create([
+        'name' => 'Improvement',
+        'slug' => 'improvement',
+    ]);
+    $task = Task::query()->create([
+        'task_type_id' => $type->id,
+        'created_by' => $user->id,
+        'title' => 'Improve the dashboard',
+        'description' => 'Match the Control Center design.',
+        'priority' => 'medium',
+        'status' => 'backlog',
+    ]);
+
+    $component = Livewire\Livewire::actingAs($user)
+        ->test('tasks::tasks.show', ['task' => $task, 'embedded' => true]);
+
+    $component
+        ->set('newComment', '   ')
+        ->call('addComment')
+        ->assertHasErrors(['newComment' => 'required']);
+
+    $component
+        ->set('newComment', 'The first review is complete. Please check the spacing.')
+        ->call('addComment')
+        ->assertHasNoErrors()
+        ->assertSet('newComment', '')
+        ->assertSee('The first review is complete. Please check the spacing.')
+        ->assertSee($user->name);
+
+    $comment = TaskComment::query()->sole();
+
+    expect($comment->task_id)->toBe($task->id)
+        ->and($comment->author_id)->toBe($user->id)
+        ->and($comment->body)->toBe('The first review is complete. Please check the spacing.');
 });
 
 it('links each company on the platform dashboard to its administration page', function (): void {
