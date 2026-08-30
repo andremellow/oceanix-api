@@ -108,7 +108,9 @@ it('lets a platform administrator add a persistent comment to a task', function 
     ]);
 
     $component = Livewire\Livewire::actingAs($user)
-        ->test('tasks::tasks.show', ['task' => $task, 'embedded' => true]);
+        ->test('tasks::tasks.show', ['task' => $task, 'embedded' => true])
+        ->assertDontSee('Edit Markdown')
+        ->assertDontSee('Preview');
 
     $component
         ->set('newComment', '   ')
