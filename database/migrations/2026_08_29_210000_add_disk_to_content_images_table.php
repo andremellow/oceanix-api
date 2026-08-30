@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('content_images', function (Blueprint $table): void {
-            $table->string('disk')->default('public')->after('name');
+            $table->string('disk')->default('legacy-public')->after('name');
         });
     }
 
