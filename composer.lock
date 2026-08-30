@@ -11,13 +11,13 @@
             "version": "dev-codex/task-media-editor",
             "source": {
                 "type": "git",
-                "url": "git@github.com:andremellow/laravel-tasks.git",
-                "reference": "022589e28f236a5f36fd9dc2140d7694c7342a31"
+                "url": "https://github.com/andremellow/laravel-tasks.git",
+                "reference": "45ca1d252e289870c9d1b60c00cb3b34fde46d31"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/andremellow/laravel-tasks/zipball/022589e28f236a5f36fd9dc2140d7694c7342a31",
-                "reference": "022589e28f236a5f36fd9dc2140d7694c7342a31",
+                "url": "https://api.github.com/repos/andremellow/laravel-tasks/zipball/45ca1d252e289870c9d1b60c00cb3b34fde46d31",
+                "reference": "45ca1d252e289870c9d1b60c00cb3b34fde46d31",
                 "shasum": ""
             },
             "require": {
@@ -53,7 +53,7 @@
                 "source": "https://github.com/andremellow/laravel-tasks/tree/codex/task-media-editor",
                 "issues": "https://github.com/andremellow/laravel-tasks/issues"
             },
-            "time": "2026-08-30T00:51:05+00:00"
+            "time": "2026-08-30T22:18:19+00:00"
         },
         {
             "name": "aws/aws-crt-php",
