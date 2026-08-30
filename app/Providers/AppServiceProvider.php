@@ -7,7 +7,6 @@ use App\Enums\Permission;
 use App\Models\Certificate;
 use App\Models\Course;
 use App\Models\Module;
-use App\Models\PlatformTaskUser;
 use App\Models\Role;
 use App\Models\TrainingRequirement;
 use App\Models\User;
@@ -73,9 +72,6 @@ class AppServiceProvider extends ServiceProvider
         foreach (Permission::cases() as $permission) {
             Gate::define($permission->value, fn (User $user): bool => $user->hasPermission($permission));
         }
-
-        Gate::define('tasks.access', fn (User|PlatformTaskUser $user): bool => $user->account?->is_platform_admin === true
-            && $user->account->status === 'active');
 
         Gate::policy(Course::class, CoursePolicy::class);
         Gate::policy(Module::class, ModulePolicy::class);

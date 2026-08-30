@@ -344,7 +344,7 @@
     .oceanix-content-editor [data-slot="content"] .oceanix-video-block:has(.oceanix-video-thumbnail)::before { content: none; }
     .oceanix-content-editor [data-slot="content"] .oceanix-video-block .oceanix-video-thumbnail { @apply size-full max-w-none rounded-none border-0 object-cover shadow-none; width: 100%; }
     .oceanix-content-editor [data-slot="content"] .oceanix-video-play-badge { @apply absolute grid size-14 place-items-center rounded-full bg-black/65 pl-1 text-xl text-white shadow-lg; }
-    body > .oceanix-content-editor.is-fullscreen {
+    .oceanix-content-editor.is-fullscreen {
         @apply fixed inset-3 z-[9999] flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[22px] border border-[#cfd8dd] bg-white shadow-2xl sm:inset-6;
         box-sizing: border-box;
         width: auto !important;
@@ -352,14 +352,14 @@
         height: auto;
         max-height: none;
     }
-    body > .oceanix-content-editor.is-fullscreen ui-toolbar { @apply min-w-0 overflow-x-auto; }
+    .oceanix-content-editor.is-fullscreen ui-toolbar { @apply min-w-0 overflow-x-auto; }
     @media (min-width: 640px) {
-        body > .oceanix-content-editor.is-fullscreen { max-width: calc(100dvw - 3rem) !important; }
+        .oceanix-content-editor.is-fullscreen { max-width: calc(100dvw - 3rem) !important; }
     }
-    body > .oceanix-content-editor.is-fullscreen [data-flux-editor] { @apply flex min-h-0 flex-1 flex-col; }
-    body > [data-flux-editor].oceanix-content-editor.is-fullscreen { @apply flex min-h-0 flex-col; }
-    body > .oceanix-content-editor.is-fullscreen [data-slot="content"],
-    body > [data-flux-editor].oceanix-content-editor.is-fullscreen [data-slot="content"] {
+    .oceanix-content-editor.is-fullscreen [data-flux-editor] { @apply flex min-h-0 flex-1 flex-col; }
+    [data-flux-editor].oceanix-content-editor.is-fullscreen { @apply flex min-h-0 flex-col; }
+    .oceanix-content-editor.is-fullscreen [data-slot="content"],
+    [data-flux-editor].oceanix-content-editor.is-fullscreen [data-slot="content"] {
         @apply flex-1 overflow-y-auto px-7 py-6 text-base;
         min-height: 0 !important;
         max-height: none !important;

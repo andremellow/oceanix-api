@@ -82,19 +82,9 @@ const OceanixVideo = Node.create({
 });
 
 window.oceanixContentEditors = window.oceanixContentEditors || new Map();
-const fullscreenEditors = new WeakMap();
 
 const exitEditorFullscreen = (element) => {
-    const state = fullscreenEditors.get(element);
     element.classList.remove('is-fullscreen');
-
-    if (state?.placeholder?.isConnected) {
-        state.placeholder.replaceWith(element);
-    } else if (state?.parent?.isConnected) {
-        state.parent.insertBefore(element, state.nextSibling?.isConnected ? state.nextSibling : null);
-    }
-
-    fullscreenEditors.delete(element);
     document.documentElement.classList.remove('overflow-hidden');
     document.body.classList.remove('overflow-hidden');
 };
@@ -108,15 +98,6 @@ window.oceanixToggleEditorFullscreen = (element) => {
 
     if (!entering) return;
 
-    const placeholder = document.createElement('div');
-    placeholder.hidden = true;
-    fullscreenEditors.set(element, {
-        parent: element.parentNode,
-        nextSibling: element.nextSibling,
-        placeholder,
-    });
-    element.before(placeholder);
-    document.body.append(element);
     element.classList.add('is-fullscreen');
     document.documentElement.classList.add('overflow-hidden');
     document.body.classList.add('overflow-hidden');
