@@ -23,6 +23,9 @@ jobs:
           composer config --global --auth http-basic.composer.fluxui.dev \
             "${{ secrets.FLUX_USERNAME }}" "${{ secrets.FLUX_LICENSE_KEY }}"
 
+      - name: Authenticate private GitHub packages
+        run: composer config --global --auth github-oauth.github.com "${{ secrets.LARAVEL_TASKS_TOKEN }}"
+
       - name: Install PHP dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
