@@ -131,6 +131,14 @@ it('lets a platform administrator add a persistent comment to a task', function 
         ->and($comment->renderedBody())->toContain('<strong>The first review is complete.</strong>');
 });
 
+it('does not live sync rich text while the user is formatting a task', function (): void {
+    $editorTemplate = file_get_contents(base_path('vendor/andremellow/laravel-tasks/resources/views/components/markdown-editor.blade.php'));
+
+    expect($editorTemplate)
+        ->toContain('wire:model="{{ $model }}"')
+        ->not->toContain('wire:model.live');
+});
+
 it('links each company on the platform dashboard to its administration page', function (): void {
     $company = Company::factory()->create(['name' => 'Linked Maritime']);
     $viewer = Account::factory()->platformAdmin()->create();
