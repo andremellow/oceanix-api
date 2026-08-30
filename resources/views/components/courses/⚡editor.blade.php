@@ -396,13 +396,15 @@ new class extends Component
         $this->validate(['contentImageUpload' => ['required', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240']]);
 
         $upload = $this->contentImageUpload;
-        $path = $upload->storePublicly('content-images', 'public');
+        $disk = (string) config('filesystems.content_images_disk', 'public');
+        $path = $upload->store((string) config('filesystems.content_images_path', 'content-images'), $disk);
         abort_if($path === false, 500);
 
         $image = ContentImage::query()->create([
             'company_id' => $this->course->company_id,
             'is_shared' => false,
             'name' => $upload->getClientOriginalName(),
+            'disk' => $disk,
             'path' => $path,
             'mime_type' => $upload->getMimeType() ?: 'application/octet-stream',
             'size_bytes' => $upload->getSize(),

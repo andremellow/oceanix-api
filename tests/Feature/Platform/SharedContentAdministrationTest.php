@@ -169,6 +169,8 @@ it('uploads and reuses images from the shared visual editor library', function (
 
     $image = ContentImage::query()->sole();
     expect($image->is_shared)->toBeTrue()
-        ->and($image->company_id)->toBeNull();
+        ->and($image->company_id)->toBeNull()
+        ->and($image->disk)->toBe('public')
+        ->and($image->url())->toBe(Storage::disk('public')->url($image->path));
     Storage::disk('public')->assertExists($image->path);
 });
