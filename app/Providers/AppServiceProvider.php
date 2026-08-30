@@ -4,9 +4,12 @@ namespace App\Providers;
 
 use App\Contracts\VideoProvider;
 use App\Enums\Permission;
+use App\Http\Middleware\AuthenticatePlatformTaskUser;
+use App\Http\Middleware\EnsureUserIsPlatformAdmin;
 use App\Models\Certificate;
 use App\Models\Course;
 use App\Models\Module;
+use App\Models\PlatformTaskUser;
 use App\Models\Role;
 use App\Models\TrainingRequirement;
 use App\Models\User;
@@ -30,6 +33,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Livewire\Livewire;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -58,9 +62,23 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Livewire actions are posted to its own update endpoint. Reapply the
+        // platform route's authentication there so task modals keep the same actor.
+        Livewire::addPersistentMiddleware([
+            EnsureUserIsPlatformAdmin::class,
+            AuthenticatePlatformTaskUser::class,
+        ]);
+
         // Administrators bypass permission Gates here — never inside domain Actions or
         // Policies, so the bypass stays auditable in one place.
         Gate::before(function (User $user, string $ability, array $arguments): ?bool {
+            // This model is only installed by the platform Tasks middleware after the
+            // platform administrator session has been validated. Tasks are a global
+            // platform workspace, so that administrator may perform every task action.
+            if ($user instanceof PlatformTaskUser) {
+                return true;
+            }
+
             $record = $arguments[0] ?? null;
             $isSharedContentWrite = in_array($ability, ['update', 'updateVersion', 'publish', 'retire'], true)
                 && ($record instanceof Course || $record instanceof Module)
@@ -72,6 +90,9 @@ class AppServiceProvider extends ServiceProvider
         foreach (Permission::cases() as $permission) {
             Gate::define($permission->value, fn (User $user): bool => $user->hasPermission($permission));
         }
+
+        Gate::define('tasks.access', fn (User|PlatformTaskUser $user): bool => $user->account?->is_platform_admin === true
+            && $user->account->status === 'active');
 
         Gate::policy(Course::class, CoursePolicy::class);
         Gate::policy(Module::class, ModulePolicy::class);

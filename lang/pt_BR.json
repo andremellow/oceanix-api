@@ -557,5 +557,8 @@
     "New associations and assignments are blocked.": "Novas associações e atribuições estão bloqueadas.",
     "New course compositions are blocked.": "Novas composições de curso estão bloqueadas.",
     "Companies cannot add this course or create new assignments. Existing assignments and evidence remain available.": "As empresas não podem adicionar este curso nem criar novas atribuições. Atribuições e evidências existentes permanecem disponíveis.",
-    "This module cannot be added to new course compositions. Published courses and existing evidence remain unchanged.": "Este módulo não pode ser adicionado a novas composições de curso. Cursos publicados e evidências existentes permanecem inalterados."
+    "This module cannot be added to new course compositions. Published courses and existing evidence remain unchanged.": "Este módulo não pode ser adicionado a novas composições de curso. Cursos publicados e evidências existentes permanecem inalterados.",
+    "Upload a new video": "Enviar um novo vídeo",
+    "The file is uploaded directly and will appear in this library while it is processing.": "O arquivo será enviado diretamente e aparecerá nesta biblioteca durante o processamento.",
+    "Choose video": "Escolher vídeo"
 }

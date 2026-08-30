@@ -1,14 +1,20 @@
 <?php
 
+use Andremellow\Tasks\Models\Task;
 use App\Actions\Auth\AuthenticatePlatformAccount;
 use App\Data\SocialIdentity;
+use App\Http\Middleware\AuthenticatePlatformTaskUser;
+use App\Http\Middleware\EnsureUserIsPlatformAdmin;
 use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Company;
+use App\Models\PlatformTaskUser;
 use App\Models\User;
 use App\Services\Platform\PlatformOverview;
 use App\Tenancy\TenantContext;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
+use Livewire\Mechanisms\PersistentMiddleware\PersistentMiddleware;
 
 it('denies the platform area to a company administrator', function (): void {
     $this->actingAs(adminUser())
@@ -40,6 +46,44 @@ it('allows a platform administrator to view cross-company metrics', function ():
         ->assertSee(__('Global overview'))
         ->assertSee(__('Sign out'))
         ->assertSee(route('platform.logout'), escape: false);
+});
+
+it('authenticates a platform administrator in the tasks area as a normal user', function (): void {
+    $user = User::factory()->create();
+    $account = Account::factory()->platformAdmin()->create(['email' => $user->email]);
+    $user->update(['account_id' => $account->id]);
+
+    $this->withSession(['platform_account_id' => $account->id])
+        ->get(route('platform.tasks.index'))
+        ->assertOk();
+
+    expect(auth()->user())
+        ->toBeInstanceOf(User::class)
+        ->and(auth()->user()?->getKey())->toBe($user->id)
+        ->and(Gate::forUser(auth()->user())->allows('create', Task::class))->toBeTrue()
+        ->and(Gate::forUser(auth()->user())->allows('update', new Task))->toBeTrue()
+        ->and(Gate::forUser(auth()->user())->allows('delete', new Task))->toBeTrue();
+});
+
+it('keeps platform task authentication on Livewire updates and lists each account once', function (): void {
+    $account = Account::factory()->platformAdmin()->create();
+    User::factory()->create([
+        'account_id' => $account->id,
+        'company_id' => Company::factory()->create()->id,
+        'email' => $account->email,
+    ]);
+    User::factory()->create([
+        'account_id' => $account->id,
+        'company_id' => Company::factory()->create()->id,
+        'email' => $account->email,
+    ]);
+
+    $middleware = app(PersistentMiddleware::class)->getPersistentMiddleware();
+
+    expect($middleware)
+        ->toContain(EnsureUserIsPlatformAdmin::class)
+        ->toContain(AuthenticatePlatformTaskUser::class)
+        ->and(PlatformTaskUser::query()->where('account_id', $account->id)->count())->toBe(1);
 });
 
 it('links each company on the platform dashboard to its administration page', function (): void {
