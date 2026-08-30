@@ -1,5 +1,7 @@
 <?php
 
+$cloudPublicDisk = filled(env('AWS_BUCKET')) && filled(env('AWS_ENDPOINT'));
+
 return [
 
     /*
@@ -14,6 +16,8 @@ return [
     */
 
     'default' => env('FILESYSTEM_DISK', 'local'),
+    'content_images_disk' => env('CONTENT_IMAGES_DISK', 'public'),
+    'content_images_path' => env('CONTENT_IMAGES_PATH', 'content-images'),
 
     /*
     |--------------------------------------------------------------------------
@@ -38,14 +42,27 @@ return [
             'report' => false,
         ],
 
-        'public' => [
-            'driver' => 'local',
-            'root' => storage_path('app/public'),
-            'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/storage',
-            'visibility' => 'public',
-            'throw' => false,
-            'report' => false,
-        ],
+        'public' => $cloudPublicDisk
+            ? [
+                'driver' => 's3',
+                'key' => env('AWS_ACCESS_KEY_ID'),
+                'secret' => env('AWS_SECRET_ACCESS_KEY'),
+                'region' => env('AWS_DEFAULT_REGION', 'auto'),
+                'bucket' => env('AWS_BUCKET'),
+                'url' => env('AWS_URL'),
+                'endpoint' => env('AWS_ENDPOINT'),
+                'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+                'throw' => false,
+                'report' => false,
+            ]
+            : [
+                'driver' => 'local',
+                'root' => storage_path('app/public'),
+                'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/storage',
+                'visibility' => 'public',
+                'throw' => false,
+                'report' => false,
+            ],
 
         's3' => [
             'driver' => 's3',
