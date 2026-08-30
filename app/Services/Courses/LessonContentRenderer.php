@@ -8,9 +8,35 @@ use Illuminate\Support\Str;
 
 class LessonContentRenderer
 {
+    public function __construct(private readonly LessonContentSanitizer $sanitizer) {}
+
     public function render(Lesson $lesson): HtmlString
     {
-        return $this->renderMarkdown((string) $lesson->content_markdown, $lesson->video?->formattedDuration());
+        return $this->renderContent((string) $lesson->content_markdown, $lesson->video?->formattedDuration());
+    }
+
+    public function editorContent(string $content): string
+    {
+        if ($this->isHtml($content)) {
+            return $this->sanitizer->sanitize($content);
+        }
+
+        return (string) $this->renderMarkdown($content);
+    }
+
+    public function renderContent(string $content, ?string $videoDuration = null): HtmlString
+    {
+        if (! $this->isHtml($content)) {
+            return $this->renderMarkdown($content, $videoDuration);
+        }
+
+        $html = $this->sanitizer->sanitize($content);
+        $placeholder = $videoDuration === null
+            ? '<div class="lesson-video-placeholder">'.e(__('No video attached')).'</div>'
+            : '<div class="lesson-video-placeholder">'.e(__('Video')).' · '.e($videoDuration).'</div>';
+        $html = preg_replace('/<div\s+data-oceanix-video(?:="")?\s*>.*?<\/div>/s', $placeholder, $html) ?? $html;
+
+        return new HtmlString($html);
     }
 
     public function renderMarkdown(string $markdown, ?string $videoDuration = null): HtmlString
@@ -71,5 +97,10 @@ class LessonContentRenderer
         preg_match_all('/([a-z_]+)="([^"]*)"/', $source, $matches, PREG_SET_ORDER);
 
         return collect($matches)->mapWithKeys(fn (array $match): array => [$match[1] => $match[2]])->all();
+    }
+
+    private function isHtml(string $content): bool
+    {
+        return preg_match('/<\/?(?:p|h[1-3]|strong|em|ul|ol|li|blockquote|img|div|br|hr|pre|code|a)\b/i', $content) === 1;
     }
 }

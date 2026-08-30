@@ -29,6 +29,21 @@ it('tags uploads and only lists assets owned by the active company', function ()
         && data_get($request->data(), 'meta.oceanix_owner') === 'company:'.$company->id);
 });
 
+it('lists videos from every owner for the platform administration library', function (): void {
+    Http::fake([
+        'api.cloudflare.com/client/v4/accounts/*/stream?*' => Http::response(['result' => [
+            ['uid' => 'platform-video', 'meta' => ['name' => 'Platform', 'oceanix_owner' => 'platform'], 'status' => ['state' => 'ready']],
+            ['uid' => 'company-video', 'meta' => ['name' => 'Company', 'oceanix_owner' => 'company:99'], 'status' => ['state' => 'ready']],
+            ['uid' => 'legacy-video', 'meta' => ['name' => 'Legacy'], 'status' => ['state' => 'ready']],
+        ]]),
+    ]);
+
+    $assets = app(CloudflareStreamProvider::class)->listAssets(ownerKey: '*');
+
+    expect(collect($assets)->pluck('assetId')->all())
+        ->toBe(['platform-video', 'company-video', 'legacy-video']);
+});
+
 it('rejects unsigned and cross-company assets before linking', function (bool $signed, string $owner): void {
     $company = currentCompany();
     $owner = $owner === 'current' ? 'company:'.$company->id : $owner;
@@ -45,6 +60,20 @@ it('rejects unsigned and cross-company assets before linking', function (bool $s
     'unsigned company asset' => [false, 'current'],
     'signed foreign asset' => [true, 'company:999'],
 ]);
+
+it('allows platform administration to link a ready signed company video', function (): void {
+    $lesson = Lesson::factory()->create(['company_id' => null, 'is_shared' => true]);
+    Http::fake(['api.cloudflare.com/*' => Http::response(['result' => [
+        'uid' => 'company-asset',
+        'status' => ['state' => 'ready'],
+        'requireSignedURLs' => true,
+        'meta' => ['oceanix_owner' => 'company:99'],
+    ]])]);
+
+    app(LinkExistingVideo::class)->handle($lesson, 'company-asset', allowAnyOwner: true);
+
+    expect($lesson->fresh()->video?->provider_asset_id)->toBe('company-asset');
+});
 
 it('normalizes Cloudflare connection failures for the library UI', function (): void {
     Http::fake(fn () => Http::failedConnection());

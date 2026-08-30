@@ -37,3 +37,20 @@ it('strips html unsafe links and invalid image sources', function (): void {
         ->not->toContain('href="javascript:')
         ->not->toContain('<img');
 });
+
+it('sanitizes visual editor html and preserves controlled media attributes', function (): void {
+    $lesson = new Lesson([
+        'content_markdown' => '<h2>Emergency response</h2><p onclick="alert(1)">Follow the <strong>muster procedure</strong>.</p><img src="/storage/content-images/muster.jpg" data-align="right" data-width="40" onerror="alert(2)"><div data-oceanix-video></div><script>alert(3)</script>',
+    ]);
+
+    $html = (string) app(LessonContentRenderer::class)->render($lesson);
+
+    expect($html)->toContain('<h2>Emergency response</h2>')
+        ->toContain('data-align="right"')
+        ->toContain('data-width="40"')
+        ->toContain('lesson-video-placeholder')
+        ->not->toContain('onclick')
+        ->not->toContain('onerror')
+        ->not->toContain('<script')
+        ->not->toContain('alert(3)');
+});

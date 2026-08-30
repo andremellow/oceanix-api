@@ -11,6 +11,7 @@ use App\Enums\QuestionType;
 use App\Enums\VideoStatus;
 use App\Exceptions\CoursePublicationException;
 use App\Exceptions\VideoProviderException;
+use App\Models\ContentImage;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
@@ -19,10 +20,13 @@ use App\Models\QuestionOption;
 use App\Models\UserTrainingAssignment;
 use App\Models\Video;
 use App\Services\Courses\CourseVersionValidator;
+use App\Services\Courses\LessonContentRenderer;
+use App\Services\Courses\LessonContentSanitizer;
 use App\Services\Modules\EligibleModuleCatalog;
 use App\Services\Video\VideoLibrary;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 /**
  * Single-screen course editor (docs/product-spec.md §14).
@@ -34,6 +38,8 @@ use Livewire\Component;
  */
 new class extends Component
 {
+    use WithFileUploads;
+
     public Course $course;
 
     public CourseVersion $version;
@@ -75,6 +81,12 @@ new class extends Component
     public ?string $videoLibraryPreviewPoster = null;
 
     public ?string $videoLibraryPreviewTitle = null;
+
+    public bool $imageLibraryOpen = false;
+
+    public string $editorMediaModel = '';
+
+    public $contentImageUpload;
 
     public string $moduleSearch = '';
 
@@ -293,6 +305,7 @@ new class extends Component
     public function openVideoLibrary(int $lessonIndex, VideoLibrary $library): void
     {
         $this->lessonAt($lessonIndex);
+        $this->editorMediaModel = '';
         $this->videoLibraryLessonIndex = $lessonIndex;
         $this->videoLibraryError = null;
         $this->videoLibrarySearch = '';
@@ -305,6 +318,14 @@ new class extends Component
             $this->videoLibraryItems = [];
             $this->videoLibraryError = __('The video library could not be loaded. Try again.');
         }
+    }
+
+    public function openEditorVideoLibrary(string $model, VideoLibrary $library): void
+    {
+        abort_unless(preg_match('/^lessons\.(\d+)\.content_markdown$/', $model, $matches) === 1, 422);
+        $this->editorMediaModel = $model;
+        $this->openVideoLibrary((int) $matches[1], $library);
+        $this->editorMediaModel = $model;
     }
 
     public function searchVideoLibrary(VideoLibrary $library): void
@@ -338,16 +359,73 @@ new class extends Component
         abort_if($this->videoLibraryLessonIndex === null, 404);
 
         $listed = collect($this->videoLibraryItems)
-            ->contains(fn (array $item): bool => hash_equals((string) $item['asset_id'], $assetId));
-        abort_unless($listed, 404);
+            ->first(fn (array $item): bool => hash_equals((string) $item['asset_id'], $assetId));
+        abort_if($listed === null, 404);
 
         $action->handle($this->lessonAt($this->videoLibraryLessonIndex), $assetId);
+
+        if ($this->editorMediaModel !== '') {
+            $this->dispatch('oceanix:insert-video',
+                model: $this->editorMediaModel,
+                previewUrl: $listed['preview_url'],
+                posterUrl: $listed['thumbnail_url'],
+                title: $listed['title'],
+                aspectRatio: $listed['aspect_ratio'],
+            );
+        }
 
         $this->videoLibraryOpen = false;
         $this->videoLibraryLessonIndex = null;
         $this->videoLibraryItems = [];
         $this->loadLessons();
         $this->touchSaved();
+    }
+
+    public function openImageLibrary(string $model): void
+    {
+        abort_unless(preg_match('/^lessons\.(\d+)\.content_markdown$/', $model, $matches) === 1, 422);
+        $this->lessonAt((int) $matches[1]);
+        $this->editorMediaModel = $model;
+        $this->imageLibraryOpen = true;
+        $this->resetValidation('contentImageUpload');
+    }
+
+    public function uploadContentImage(): void
+    {
+        $this->authorize('updateVersion', $this->version);
+        $this->validate(['contentImageUpload' => ['required', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240']]);
+
+        $upload = $this->contentImageUpload;
+        $path = $upload->storePublicly('content-images', 'public');
+        abort_if($path === false, 500);
+
+        $image = ContentImage::query()->create([
+            'company_id' => $this->course->company_id,
+            'is_shared' => false,
+            'name' => $upload->getClientOriginalName(),
+            'path' => $path,
+            'mime_type' => $upload->getMimeType() ?: 'application/octet-stream',
+            'size_bytes' => $upload->getSize(),
+        ]);
+
+        $this->reset('contentImageUpload');
+        $this->selectContentImage($image->id);
+    }
+
+    public function selectContentImage(int $imageId): void
+    {
+        abort_unless($this->editorMediaModel !== '', 422);
+        $image = ContentImage::query()
+            ->where('company_id', $this->course->company_id)
+            ->where('is_shared', false)
+            ->findOrFail($imageId);
+
+        $this->dispatch('oceanix:insert-image',
+            model: $this->editorMediaModel,
+            url: $image->url(),
+            alt: pathinfo($image->name, PATHINFO_FILENAME),
+        );
+        $this->imageLibraryOpen = false;
     }
 
     private function clearVideoLibraryPreview(): void
@@ -423,6 +501,12 @@ new class extends Component
             ),
             'moduleGroups' => $moduleGroups,
             'selectedModules' => $this->version->moduleCompositions()->with('moduleVersion')->get(),
+            'contentImages' => ContentImage::query()
+                ->where('company_id', $this->course->company_id)
+                ->where('is_shared', false)
+                ->latest()
+                ->limit(60)
+                ->get(),
         ];
     }
 
@@ -484,6 +568,11 @@ new class extends Component
             "lessons.{$index}.minimum_watch_percentage" => ['required', 'integer', 'min:1', 'max:100'],
             "lessons.{$index}.passing_score" => ['required', 'integer', 'min:1', 'max:100'],
         ]);
+
+        if ($field === 'content_markdown') {
+            $value = app(LessonContentSanitizer::class)->sanitize((string) $value);
+            $this->lessons[$index][$field] = $value;
+        }
 
         $this->lessonAt($index)->update([$field => $value]);
         $this->touchSaved();
@@ -572,12 +661,13 @@ new class extends Component
     {
         $this->version->refresh();
 
+        $renderer = app(LessonContentRenderer::class);
         $this->lessons = $this->version->lessons()->with(['video', 'questions.options'])->get()
             ->map(fn (Lesson $lesson): array => [
                 'id' => $lesson->id,
                 'title' => $lesson->title,
                 'description' => $lesson->description,
-                'content_markdown' => $lesson->content_markdown,
+                'content_markdown' => $renderer->editorContent((string) $lesson->content_markdown),
                 'position' => $lesson->position,
                 'is_required' => $lesson->is_required,
                 'minimum_watch_percentage' => $lesson->minimum_watch_percentage,
@@ -587,6 +677,7 @@ new class extends Component
                     'status_label' => $lesson->video->status->label(),
                     'pill' => $lesson->video->status->pillModifier(),
                     'duration' => $lesson->video->formattedDuration(),
+                    'preview' => rescue(fn (): ?array => app(VideoLibrary::class)->preview($lesson->video), null, report: false),
                 ],
                 'questions' => $lesson->questions->map(fn (Question $question): array => [
                     'id' => $question->id,
@@ -616,7 +707,11 @@ new class extends Component
 };
 ?>
 
-<div class="admin-page space-y-7" @if ($hasEncodingVideo) wire:poll.5s="syncVideos" @endif>
+<div
+    class="admin-page space-y-7"
+    x-on:oceanix-open-image-library.window="$wire.openImageLibrary($event.detail.model)"
+    x-on:oceanix-open-video-library.window="$wire.openEditorVideoLibrary($event.detail.model)"
+    @if ($hasEncodingVideo) wire:poll.5s="syncVideos" @endif>
     <x-page-hero
         :kicker="__('ui.draft_version', ['number' => $version->version_number])"
         :title="__('ui.course_editor')"
@@ -765,6 +860,21 @@ new class extends Component
                         <flux:textarea wire:model.blur="lessons.{{ $lessonIndex }}.description" class="admin-control mt-4" :label="__('Lesson description')" rows="2" />
                         <flux:checkbox wire:model.live="lessons.{{ $lessonIndex }}.is_required" class="mt-4" :label="__('Required to complete the course')" />
 
+                        <div class="mt-5">
+                            <flux:editor
+                                wire:model.live.debounce.500ms="lessons.{{ $lessonIndex }}.content_markdown"
+                                data-oceanix-editor-model="lessons.{{ $lessonIndex }}.content_markdown"
+                                data-oceanix-video-preview-url="{{ data_get($lesson, 'video.preview.preview_url') }}"
+                                data-oceanix-video-poster-url="{{ data_get($lesson, 'video.preview.poster_url') }}"
+                                data-oceanix-video-title="{{ $lesson['title'] }}"
+                                data-oceanix-video-aspect-ratio="{{ data_get($lesson, 'video.preview.aspect_ratio', '16/9') }}"
+                                class="oceanix-content-editor"
+                                :label="__('Lesson content')"
+                                :description="__('Format the lesson visually and insert images or the attached video where they should appear.')"
+                                toolbar="heading | bold italic underline strike | bullet ordered blockquote link | align | image image-left image-center image-right image-size video ~ fullscreen undo redo" />
+                            <flux:error name="lessons.{{ $lessonIndex }}.content_markdown" />
+                        </div>
+
                         {{-- Video --}}
                         <div class="mt-5 rounded-[18px] border border-[#e4e9ec] bg-[#f8fafb] p-4">
                             <div class="flex flex-wrap items-center justify-between gap-3" x-data="lessonVideoUpload({{ $lessonIndex }}, {{ Js::from(['fileTooLarge' => __('This video is larger than 200 MB. Select a smaller file.')]) }})">
@@ -868,6 +978,38 @@ new class extends Component
             </x-empty-state>
         @endforelse
     </section>
+
+    <flux:modal wire:model.self="imageLibraryOpen" class="max-w-4xl">
+        <div class="space-y-6">
+            <div>
+                <flux:heading size="lg">{{ __('Image library') }}</flux:heading>
+                <flux:text class="mt-2">{{ __('Upload an image or reuse one owned by this company.') }}</flux:text>
+            </div>
+            <form wire:submit="uploadContentImage" class="rounded-[18px] border border-dashed border-[#cfd8dd] bg-[#f7f9fa] p-5">
+                <label class="block text-sm font-bold text-[#262d33]">{{ __('Upload from computer') }}
+                    <input wire:model="contentImageUpload" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="mt-3 block w-full rounded-xl border border-[#cfd8dd] bg-white p-3 text-sm">
+                </label>
+                <p class="mt-2 text-xs text-[#7d878e]">{{ __('JPG, PNG, WebP or GIF, up to 10 MB.') }}</p>
+                @error('contentImageUpload') <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p> @enderror
+                <flux:button type="submit" wire:loading.attr="disabled" wire:target="contentImageUpload,uploadContentImage" variant="primary" class="mt-4">{{ __('Upload and insert image') }}</flux:button>
+            </form>
+            <div>
+                <h3 class="text-sm font-bold text-[#262d33]">{{ __('Company gallery') }}</h3>
+                @if ($contentImages->isEmpty())
+                    <div class="mt-3 rounded-[18px] border border-dashed border-[#d7dee3] p-6 text-center text-sm text-[#6f797f]">{{ __('No images have been uploaded yet.') }}</div>
+                @else
+                    <div class="mt-3 grid max-h-[45vh] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-4">
+                        @foreach ($contentImages as $image)
+                            <button type="button" wire:click="selectContentImage({{ $image->id }})" class="group overflow-hidden rounded-2xl border border-[#dde3e7] bg-white text-left" wire:key="content-image-{{ $image->id }}">
+                                <img src="{{ $image->url() }}" alt="" class="aspect-[4/3] w-full bg-[#eef3f6] object-cover transition group-hover:scale-[1.02]">
+                                <span class="block truncate px-3 py-2 text-xs font-semibold text-[#4f5960]">{{ $image->name }}</span>
+                            </button>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+        </div>
+    </flux:modal>
 
     <flux:modal wire:model.self="videoLibraryOpen" class="max-w-3xl">
         <div class="space-y-5">

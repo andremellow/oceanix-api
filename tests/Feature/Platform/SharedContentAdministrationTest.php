@@ -164,12 +164,11 @@ it('uploads and reuses images from the shared visual editor library', function (
         ->set('contentImageUpload', UploadedFile::fake()->image('procedure.webp', 800, 600))
         ->call('uploadContentImage')
         ->assertHasNoErrors()
+        ->assertDispatched('oceanix:insert-image')
         ->assertSet('imageLibraryOpen', false);
 
     $image = ContentImage::query()->sole();
-    $draft = ModuleVersion::query()->where('lineage_uuid', $module->lineage_uuid)->where('status', 'draft')->firstOrFail();
     expect($image->is_shared)->toBeTrue()
-        ->and($image->company_id)->toBeNull()
-        ->and($draft->content_markdown)->toContain($image->url());
+        ->and($image->company_id)->toBeNull();
     Storage::disk('public')->assertExists($image->path);
 });

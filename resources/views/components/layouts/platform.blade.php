@@ -20,6 +20,9 @@
                 <a href="{{ route('platform.dashboard') }}" wire:navigate class="hidden rounded-xl px-3 py-2 hover:bg-[#eef3f5] sm:inline-flex">{{ __('Overview') }}</a>
                 <a href="{{ route('platform.companies') }}" wire:navigate class="hidden rounded-xl px-3 py-2 hover:bg-[#eef3f5] sm:inline-flex">{{ __('Companies') }}</a>
                 <a href="{{ route('platform.shared-courses.index') }}" wire:navigate class="rounded-xl px-3 py-2 hover:bg-[#eef3f5]">{{ __('Shared courses') }}</a>
+                @can('tasks.access')
+                    <a href="{{ route('platform.tasks.index') }}" wire:navigate class="rounded-xl px-3 py-2 hover:bg-[#eef3f5]">{{ __('Tasks') }}</a>
+                @endcan
                 <a href="{{ route('platform.users') }}" wire:navigate class="hidden rounded-xl px-3 py-2 hover:bg-[#eef3f5] sm:inline-flex">{{ __('Super admins') }}</a>
                 @if ($companyIdentities->count() === 1)
                     @php($identity = $companyIdentities->first())

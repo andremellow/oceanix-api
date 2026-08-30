@@ -49,24 +49,25 @@ it('autosaves a lesson field straight to the database', function (): void {
         ->and($lesson->fresh()->minimum_watch_percentage)->toBe(95);
 });
 
-it('preserves markdown content while its authoring interface is hidden', function (): void {
+it('edits visual html content and renders it safely in the lesson preview', function (): void {
     $course = draftCourse();
     $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id]);
-    $markdown = "## Emergency response\n\nFollow the **muster procedure**.\n\n:::image{src=\"https://example.com/muster.jpg\" align=\"right\" width=\"40%\" alt=\"Muster station\"}";
+    $html = '<h2>Emergency response</h2><p>Follow the <strong>muster procedure</strong>.</p><img src="https://example.com/muster.jpg" alt="Muster station" data-align="right" data-width="40">';
 
     Livewire::actingAs(adminUser())
         ->test('courses.editor', ['course' => $course])
-        ->set('lessons.0.content_markdown', $markdown)
+        ->set('lessons.0.content_markdown', $html)
         ->assertDontSee(__('Open full preview'))
-        ->assertDontSee('visual-markdown-editor', escape: false);
+        ->assertSee('oceanix-content-editor', escape: false);
 
-    expect($lesson->fresh()->content_markdown)->toBe($markdown);
+    expect($lesson->fresh()->content_markdown)->toContain('<strong>muster procedure</strong>')
+        ->toContain('data-align="right"');
 
     $this->actingAs(adminUser())
         ->get(route('courses.lessons.preview', ['course' => $course, 'lesson' => $lesson]))
         ->assertOk()
         ->assertSee('Emergency response')
-        ->assertSee('lesson-media--right', escape: false);
+        ->assertSee('data-align="right"', escape: false);
 });
 
 it('never opens a shared course editor from tenant context even for a platform administrator', function (): void {

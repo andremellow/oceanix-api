@@ -195,6 +195,12 @@ class UserTrainingAssignment extends Model
             ->values();
     }
 
+    public function includesLesson(Lesson $lesson): bool
+    {
+        return $this->courseVersion !== null
+            && $this->courseVersion->allLessonIds()->contains($lesson->id);
+    }
+
     public function scopeOpen(Builder $query): void
     {
         $query->whereIn('status', array_column(AssignmentStatus::open(), 'value'));

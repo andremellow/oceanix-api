@@ -14,13 +14,21 @@ new class extends Component
         $this->authorize('view', $assignment);
 
         $this->assignment = $assignment->load([
-            'course', 'courseVersion.lessons.video', 'courseVersion.lessons.questions', 'certificate',
+            'course', 'courseVersion.lessons.video', 'courseVersion.lessons.questions',
+            'courseVersion.moduleCompositions.moduleVersion.video',
+            'courseVersion.moduleCompositions.moduleVersion.questions', 'certificate',
         ]);
     }
 
     public function with(): array
     {
+        $version = $this->assignment->courseVersion;
+        $lessons = $version->moduleCompositions->isNotEmpty()
+            ? $version->moduleCompositions->pluck('moduleVersion')->filter()->values()
+            : $version->lessons;
+
         return [
+            'lessons' => $lessons,
             'progress' => $this->assignment->lessonProgress()->get()->keyBy('lesson_id'),
             'events' => $this->assignment->complianceEvents()
                 ->latest('occurred_at')
@@ -81,10 +89,10 @@ new class extends Component
         </div>
 
         <div class="mt-5 space-y-3">
-            @forelse ($assignment->courseVersion->lessons as $lesson)
+            @forelse ($lessons as $lesson)
                 @php($lessonProgress = $progress->get($lesson->id))
                 <div class="flex flex-col gap-3 rounded-[18px] border border-[#e4e9ec] bg-[#f8fafb] p-4 sm:flex-row sm:items-center">
-                    <span class="grid size-9 shrink-0 place-items-center rounded-xl bg-white text-sm font-bold text-[#1c6b84] shadow-sm ring-1 ring-[#dfe7eb]">{{ $lesson->position }}</span>
+                    <span class="grid size-9 shrink-0 place-items-center rounded-xl bg-white text-sm font-bold text-[#1c6b84] shadow-sm ring-1 ring-[#dfe7eb]">{{ $loop->iteration }}</span>
                     <div class="min-w-0 flex-1">
                         <p class="font-semibold text-[#262d33]">{{ $lesson->title }}</p>
                         <p class="mt-0.5 text-xs text-[#8a9298]">
