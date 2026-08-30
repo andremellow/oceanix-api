@@ -570,5 +570,6 @@
     "Write an update, question, or decision…": "Escreva uma atualização, pergunta ou decisão…",
     "Comment": "Comentar",
     "Open task": "Abrir task",
-    ":count comment|:count comments": ":count comentário|:count comentários"
+    ":count comment|:count comments": ":count comentário|:count comentários",
+    "Format your comment visually.": "Formate seu comentário visualmente."
 }

@@ -116,18 +116,19 @@ it('lets a platform administrator add a persistent comment to a task', function 
         ->assertHasErrors(['newComment' => 'required']);
 
     $component
-        ->set('newComment', 'The first review is complete. Please check the spacing.')
+        ->set('newComment', '**The first review is complete.** Please check the spacing.')
         ->call('addComment')
         ->assertHasNoErrors()
         ->assertSet('newComment', '')
-        ->assertSee('The first review is complete. Please check the spacing.')
+        ->assertSeeHtml('<strong>The first review is complete.</strong>')
         ->assertSee($user->name);
 
     $comment = TaskComment::query()->sole();
 
     expect($comment->task_id)->toBe($task->id)
         ->and($comment->author_id)->toBe($user->id)
-        ->and($comment->body)->toBe('The first review is complete. Please check the spacing.');
+        ->and($comment->body)->toBe('**The first review is complete.** Please check the spacing.')
+        ->and($comment->renderedBody())->toContain('<strong>The first review is complete.</strong>');
 });
 
 it('links each company on the platform dashboard to its administration page', function (): void {
