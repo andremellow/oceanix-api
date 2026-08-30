@@ -292,7 +292,7 @@ new class extends Component
         return $upload->uploadUrl;
     }
 
-    public function uploadCompleted(int $lessonIndex): void
+    public function uploadCompleted(int $lessonIndex, VideoLibrary $library): void
     {
         $lesson = $this->lessonAt($lessonIndex);
 
@@ -300,6 +300,11 @@ new class extends Component
 
         $this->loadLessons();
         $this->touchSaved();
+
+        if ($this->videoLibraryOpen && $this->videoLibraryLessonIndex === $lessonIndex) {
+            $this->videoLibrarySearch = '';
+            $this->searchVideoLibrary($library);
+        }
     }
 
     public function openVideoLibrary(int $lessonIndex, VideoLibrary $library): void
@@ -1019,6 +1024,27 @@ new class extends Component
                 <flux:heading size="lg">{{ __('Video library') }}</flux:heading>
                 <flux:text class="mt-2">{{ __('Select a ready video from Cloudflare Stream to reuse in this lesson.') }}</flux:text>
             </div>
+
+            @if ($videoLibraryLessonIndex !== null)
+                <div
+                    class="rounded-[18px] border border-dashed border-[#cfd8dd] bg-[#f7f9fa] p-4"
+                    x-data="lessonVideoUpload({{ $videoLibraryLessonIndex }}, {{ Js::from(['fileTooLarge' => __('This video is larger than 200 MB. Select a smaller file.')]) }})">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p class="text-sm font-bold text-[#293238]">{{ __('Upload a new video') }}</p>
+                            <p class="mt-1 text-xs text-[#707a80]">{{ __('The file is uploaded directly and will appear in this library while it is processing.') }}</p>
+                        </div>
+                        <div>
+                            <input type="file" accept="video/*" class="hidden" x-ref="file" x-on:change="start($event)">
+                            <flux:button variant="primary" icon="arrow-up-tray" x-on:click="$refs.file.click()" ::disabled="uploading">
+                                <span x-show="! uploading">{{ __('Choose video') }}</span>
+                                <span x-show="uploading" x-text="`${progress}%`"></span>
+                            </flux:button>
+                        </div>
+                    </div>
+                    <p class="mt-3 text-sm font-medium text-red-600" x-show="error" x-text="error"></p>
+                </div>
+            @endif
 
             <div class="flex gap-2">
                 <flux:input

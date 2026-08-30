@@ -98,12 +98,17 @@ new #[Layout('layouts::platform')] class extends Component
         return $upload->uploadUrl;
     }
 
-    public function uploadCompleted(int $lessonIndex, PlatformAccess $access): void
+    public function uploadCompleted(int $lessonIndex, PlatformAccess $access, VideoLibrary $library): void
     {
         $access->authorize();
         abort_unless($lessonIndex === 0, 404);
         $this->version->video?->update(['status' => VideoStatus::Processing]);
         $this->version->load('video');
+
+        if ($this->videoLibraryOpen) {
+            $this->videoLibrarySearch = '';
+            $this->loadVideoLibrary($library);
+        }
     }
 
     public function openEditorVideoLibrary(string $model, VideoLibrary $library, PlatformAccess $access): void
@@ -243,6 +248,13 @@ new #[Layout('layouts::platform')] class extends Component
     <flux:modal wire:model.self="videoLibraryOpen" class="max-w-4xl">
         <div class="space-y-5">
             <div><flux:heading size="lg">{{ __('Video library') }}</flux:heading><flux:text class="mt-2">{{ __('Select a ready video from the platform Cloudflare library.') }}</flux:text></div>
+            <div class="rounded-[18px] border border-dashed border-[#cfd8dd] bg-[#f7f9fa] p-4" x-data="lessonVideoUpload(0, {{ Js::from(['fileTooLarge' => __('This video is larger than 200 MB. Select a smaller file.')]) }})">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div><p class="text-sm font-bold">{{ __('Upload a new video') }}</p><p class="mt-1 text-xs text-[#707a80]">{{ __('The file is uploaded directly and will appear in this library while it is processing.') }}</p></div>
+                    <div><input type="file" accept="video/*" class="hidden" x-ref="file" x-on:change="start($event)"><flux:button variant="primary" icon="arrow-up-tray" x-on:click="$refs.file.click()" ::disabled="uploading"><span x-show="! uploading">{{ __('Choose video') }}</span><span x-show="uploading" x-text="`${progress}%`"></span></flux:button></div>
+                </div>
+                <p class="mt-3 text-sm font-medium text-red-600" x-show="error" x-text="error"></p>
+            </div>
             <div class="flex gap-2"><flux:input wire:model="videoLibrarySearch" wire:keydown.enter="searchVideoLibrary" class="flex-1" :label="__('Search videos')" /><flux:button wire:click="searchVideoLibrary" class="self-end" variant="ghost">{{ __('Search') }}</flux:button></div>
             @if ($videoLibraryError)
                 <flux:callout variant="danger" :heading="$videoLibraryError" />
