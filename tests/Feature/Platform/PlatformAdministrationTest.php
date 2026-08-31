@@ -182,6 +182,16 @@ it('does not live sync rich text while the user is formatting a task', function 
         ->not->toContain('wire:model.live');
 });
 
+it('ships the kanban as a responsive four-column board with self-contained drag positioning', function (): void {
+    $template = file_get_contents(base_path('vendor/andremellow/laravel-tasks/resources/views/tasks/index.blade.php'));
+
+    expect($template)
+        ->toContain('md:grid-cols-2 xl:grid-cols-4')
+        ->toContain('dropPosition(event)')
+        ->toContain('dropPosition($event)')
+        ->not->toContain('window.taskDropPosition');
+});
+
 it('denies task comments without global platform access and revokes access immediately', function (): void {
     $account = Account::factory()->platformAdmin()->create();
     $platformUser = User::factory()->create([
