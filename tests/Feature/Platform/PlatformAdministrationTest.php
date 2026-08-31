@@ -1,7 +1,6 @@
 <?php
 
 use Andremellow\Tasks\Actions\AddTaskComment;
-use Andremellow\Tasks\Actions\DeleteTaskComment;
 use Andremellow\Tasks\Models\Task;
 use Andremellow\Tasks\Models\TaskComment;
 use Andremellow\Tasks\Models\TaskType;
@@ -144,15 +143,17 @@ it('lets a platform administrator add a persistent comment to a task', function 
 
 it('lets only the comment owner remove it while preserving the record', function (): void {
     $ownerAccount = Account::factory()->platformAdmin()->create();
-    $owner = User::factory()->create([
+    User::factory()->create([
         'account_id' => $ownerAccount->id,
         'email' => $ownerAccount->email,
     ]);
     $otherAccount = Account::factory()->platformAdmin()->create();
-    $otherAdministrator = User::factory()->create([
+    User::factory()->create([
         'account_id' => $otherAccount->id,
         'email' => $otherAccount->email,
     ]);
+    $owner = PlatformTaskUser::query()->where('account_id', $ownerAccount->id)->sole();
+    $otherAdministrator = PlatformTaskUser::query()->where('account_id', $otherAccount->id)->sole();
     $type = TaskType::query()->create(['name' => 'Bug', 'slug' => 'bug']);
     $task = Task::query()->create([
         'task_type_id' => $type->id,
@@ -162,12 +163,16 @@ it('lets only the comment owner remove it while preserving the record', function
         'status' => 'backlog',
     ]);
     $comment = app(AddTaskComment::class)->handle($owner, $task, '<p>Owner note</p>');
-    $deleteComment = app(DeleteTaskComment::class);
 
-    expect(fn () => $deleteComment->handle($otherAdministrator, $comment))
-        ->toThrow(AuthorizationException::class);
+    Livewire\Livewire::actingAs($otherAdministrator)
+        ->test('tasks::tasks.comments', ['task' => $task])
+        ->call('deleteComment', $comment->id)
+        ->assertForbidden();
 
-    $deleteComment->handle($owner, $comment);
+    Livewire\Livewire::actingAs($owner)
+        ->test('tasks::tasks.comments', ['task' => $task])
+        ->call('deleteComment', $comment->id)
+        ->assertHasNoErrors();
 
     expect(TaskComment::query()->count())->toBe(0)
         ->and(TaskComment::withTrashed()->count())->toBe(1)
