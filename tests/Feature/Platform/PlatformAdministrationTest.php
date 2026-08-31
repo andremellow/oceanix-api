@@ -1,6 +1,7 @@
 <?php
 
 use Andremellow\Tasks\Actions\AddTaskComment;
+use Andremellow\Tasks\Actions\DeleteTaskComment;
 use Andremellow\Tasks\Models\Task;
 use Andremellow\Tasks\Models\TaskComment;
 use Andremellow\Tasks\Models\TaskType;
@@ -120,19 +121,53 @@ it('lets a platform administrator add a persistent comment to a task', function 
         ->assertHasErrors(['newComment' => 'required']);
 
     $component
-        ->set('newComment', '**The first review is complete.** Please check the spacing.')
+        ->set('newComment', '<p><strong>The first review is complete.</strong> Please check the spacing.</p><script>alert(1)</script>')
         ->call('addComment')
         ->assertHasNoErrors()
         ->assertSet('newComment', '')
         ->assertSeeHtml('<strong>The first review is complete.</strong>')
+        ->assertDontSee('alert(1)')
         ->assertSee($user->name);
 
     $comment = TaskComment::query()->sole();
 
     expect($comment->task_id)->toBe($task->id)
         ->and($comment->author_id)->toBe($user->id)
-        ->and($comment->body)->toBe('**The first review is complete.** Please check the spacing.')
-        ->and($comment->renderedBody())->toContain('<strong>The first review is complete.</strong>');
+        ->and($comment->body)->toBe('<p><strong>The first review is complete.</strong> Please check the spacing.</p><script>alert(1)</script>')
+        ->and($comment->renderedBody())->toContain('<strong>The first review is complete.</strong>')
+        ->and($comment->renderedBody())->not->toContain('alert(1)');
+});
+
+it('lets only the comment owner remove it while preserving the record', function (): void {
+    $ownerAccount = Account::factory()->platformAdmin()->create();
+    $owner = User::factory()->create([
+        'account_id' => $ownerAccount->id,
+        'email' => $ownerAccount->email,
+    ]);
+    $otherAccount = Account::factory()->platformAdmin()->create();
+    $otherAdministrator = User::factory()->create([
+        'account_id' => $otherAccount->id,
+        'email' => $otherAccount->email,
+    ]);
+    $type = TaskType::query()->create(['name' => 'Bug', 'slug' => 'bug']);
+    $task = Task::query()->create([
+        'task_type_id' => $type->id,
+        'created_by' => $owner->id,
+        'title' => 'Protect comment ownership',
+        'priority' => 'urgent',
+        'status' => 'backlog',
+    ]);
+    $comment = app(AddTaskComment::class)->handle($owner, $task, '<p>Owner note</p>');
+    $deleteComment = app(DeleteTaskComment::class);
+
+    expect(fn () => $deleteComment->handle($otherAdministrator, $comment))
+        ->toThrow(AuthorizationException::class);
+
+    $deleteComment->handle($owner, $comment);
+
+    expect(TaskComment::query()->count())->toBe(0)
+        ->and(TaskComment::withTrashed()->count())->toBe(1)
+        ->and($comment->fresh()->deleted_at)->not->toBeNull();
 });
 
 it('does not live sync rich text while the user is formatting a task', function (): void {
