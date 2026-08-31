@@ -110,8 +110,12 @@ it('lets a platform administrator add a persistent comment to a task', function 
         'status' => 'backlog',
     ]);
 
-    $component = Livewire\Livewire::actingAs($user)
+    Livewire\Livewire::actingAs($user)
         ->test('tasks::tasks.show', ['task' => $task, 'embedded' => true])
+        ->assertSeeLivewire('tasks::tasks.comments');
+
+    $component = Livewire\Livewire::actingAs($user)
+        ->test('tasks::tasks.comments', ['task' => $task])
         ->assertDontSee('Edit Markdown')
         ->assertDontSee('Preview');
 
