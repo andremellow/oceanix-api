@@ -1,5 +1,6 @@
 <?php
 
+use Andremellow\Tasks\Actions\AddTaskComment;
 use Andremellow\Tasks\Models\Task;
 use Andremellow\Tasks\Models\TaskComment;
 use Andremellow\Tasks\Models\TaskType;
@@ -14,6 +15,7 @@ use App\Models\PlatformTaskUser;
 use App\Models\User;
 use App\Services\Platform\PlatformOverview;
 use App\Tenancy\TenantContext;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
 use Livewire\Mechanisms\PersistentMiddleware\PersistentMiddleware;
@@ -139,6 +141,37 @@ it('does not live sync rich text while the user is formatting a task', function 
     expect($editorTemplate)
         ->toContain('wire:model="{{ $model }}"')
         ->not->toContain('wire:model.live');
+});
+
+it('denies task comments without global platform access and revokes access immediately', function (): void {
+    $account = Account::factory()->platformAdmin()->create();
+    $platformUser = User::factory()->create([
+        'account_id' => $account->id,
+        'email' => $account->email,
+    ]);
+    $regularUser = User::factory()->create();
+    $type = TaskType::query()->create([
+        'name' => 'Bug',
+        'slug' => 'bug',
+    ]);
+    $task = Task::query()->create([
+        'task_type_id' => $type->id,
+        'created_by' => $platformUser->id,
+        'title' => 'Keep comments globally protected',
+        'priority' => 'urgent',
+        'status' => 'backlog',
+    ]);
+    $addComment = app(AddTaskComment::class);
+
+    expect(fn () => $addComment->handle($regularUser, $task, 'Unauthorized'))
+        ->toThrow(AuthorizationException::class);
+
+    $addComment->handle($platformUser, $task, 'Authorized platform comment');
+    $account->update(['is_platform_admin' => false]);
+
+    expect(fn () => $addComment->handle($platformUser->fresh(), $task, 'Access was revoked'))
+        ->toThrow(AuthorizationException::class)
+        ->and(TaskComment::query()->count())->toBe(1);
 });
 
 it('links each company on the platform dashboard to its administration page', function (): void {
