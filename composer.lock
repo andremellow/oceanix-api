@@ -12,12 +12,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/andremellow/laravel-tasks.git",
-                "reference": "45ca1d252e289870c9d1b60c00cb3b34fde46d31"
+                "reference": "0ca11a8f2778df894cee54300377832de0b7e8e7"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/andremellow/laravel-tasks/zipball/45ca1d252e289870c9d1b60c00cb3b34fde46d31",
-                "reference": "45ca1d252e289870c9d1b60c00cb3b34fde46d31",
+                "url": "https://api.github.com/repos/andremellow/laravel-tasks/zipball/0ca11a8f2778df894cee54300377832de0b7e8e7",
+                "reference": "0ca11a8f2778df894cee54300377832de0b7e8e7",
                 "shasum": ""
             },
             "require": {
@@ -53,7 +53,7 @@
                 "source": "https://github.com/andremellow/laravel-tasks/tree/codex/task-media-editor",
                 "issues": "https://github.com/andremellow/laravel-tasks/issues"
             },
-            "time": "2026-08-30T22:18:19+00:00"
+            "time": "2026-08-30T23:08:15+00:00"
         },
         {
             "name": "aws/aws-crt-php",
