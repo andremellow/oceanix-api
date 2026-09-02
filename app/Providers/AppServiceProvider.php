@@ -62,6 +62,19 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // The package names this action `upload`, which collides with Livewire's
+        // client-side file-upload helper. Rename it while compiling the package's
+        // single-file component until the upstream component can adopt the name.
+        Livewire::prepareViewsForCompilationUsing(function (string $contents, string $path): string {
+            $taskEditorPath = base_path('vendor/andremellow/laravel-tasks/resources/views/tasks/show.blade.php');
+
+            if (realpath($path) !== realpath($taskEditorPath)) {
+                return $contents;
+            }
+
+            return str_replace('public function upload(', 'public function attachTaskMedia(', $contents);
+        });
+
         // Livewire actions are posted to its own update endpoint. Reapply the
         // platform route's authentication there so task modals keep the same actor.
         Livewire::addPersistentMiddleware([

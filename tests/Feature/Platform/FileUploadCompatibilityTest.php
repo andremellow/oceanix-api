@@ -1,6 +1,12 @@
 <?php
 
+use Andremellow\Tasks\Models\Task;
+use Andremellow\Tasks\Models\TaskType;
 use App\Enums\Permission;
+use App\Models\Account;
+use App\Models\User;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Facades\GenerateSignedUploadUrlFacade;
 use Livewire\Features\SupportFileUploads\S3DoesntSupportMultipleFileUploads;
 use Livewire\Livewire;
@@ -9,10 +15,13 @@ it('uses the host task media override with single-file S3 selections and an uplo
     $finder = app('view')->getFinder();
     $templatePath = $finder->find('tasks::components.editor-content');
     $template = file_get_contents($templatePath);
-    $component = file_get_contents(base_path('vendor/andremellow/laravel-tasks/resources/views/tasks/show.blade.php'));
+    $packageComponentPath = base_path('vendor/andremellow/laravel-tasks/resources/views/tasks/show.blade.php');
+    $component = file_get_contents($packageComponentPath);
 
     expect($templatePath)
-        ->toBe(resource_path('views/vendor/tasks/components/editor-content.blade.php'));
+        ->toBe(resource_path('views/vendor/tasks/components/editor-content.blade.php'))
+        ->and(realpath(app('livewire.finder')->resolveSingleFileComponentPath('tasks::tasks.show')))
+        ->toBe(realpath($packageComponentPath));
 
     preg_match('/<input\s+type="file"\s+wire:model="uploads"[^>]*>/', $template, $inputMatches);
 
@@ -20,7 +29,11 @@ it('uses the host task media override with single-file S3 selections and an uplo
         ->and($inputMatches[0])->not->toContain(' multiple')
         ->and($component)->toContain('public array $uploads = []')
         ->and($component)->toContain('foreach ($this->uploads as $upload)')
-        ->and($template)->toContain('@foreach($uploads as $upload)');
+        ->and($template)->toContain('@foreach($uploads as $upload)')
+        ->and($template)->toContain('wire:submit="attachTaskMedia"')
+        ->and($template)->toContain('wire:target="uploads,attachTaskMedia"')
+        ->and($template)->not->toContain('wire:submit="upload"')
+        ->and($template)->not->toContain('$wire.call(\'upload\')');
 });
 
 it('keeps the people spreadsheet importer as a single-file upload', function (): void {
@@ -32,6 +45,39 @@ it('keeps the people spreadsheet importer as a single-file upload', function ():
         ->and($inputMatches[0])->not->toContain(' multiple')
         ->and($template)->toContain('public $spreadsheet;')
         ->and($template)->not->toContain('public array $spreadsheet');
+});
+
+it('stores task media through the renamed Livewire action', function (): void {
+    Storage::fake('local');
+
+    $account = Account::factory()->platformAdmin()->create();
+    $user = User::factory()->create([
+        'account_id' => $account->id,
+        'email' => $account->email,
+    ]);
+    $type = TaskType::query()->create([
+        'name' => 'Improvement',
+        'slug' => 'improvement',
+    ]);
+    $task = Task::query()->create([
+        'task_type_id' => $type->id,
+        'created_by' => $user->id,
+        'title' => 'Verify media upload',
+        'priority' => 'medium',
+        'status' => 'backlog',
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('tasks::tasks.show', ['task' => $task, 'embedded' => true])
+        ->set('uploads', [UploadedFile::fake()->image('evidence.jpg')])
+        ->call('attachTaskMedia')
+        ->assertHasNoErrors()
+        ->assertSet('uploads', [])
+        ->assertSet('mediaUploadOpen', false);
+
+    expect($task->fresh()->getMedia('task-attachments'))
+        ->toHaveCount(1)
+        ->first()->name->toBe('evidence.jpg');
 });
 
 it('renders the people spreadsheet file input without the multiple attribute', function (): void {

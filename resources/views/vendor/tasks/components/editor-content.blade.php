@@ -57,7 +57,7 @@
 
     @can('manageAttachments', $task)
         <flux:modal wire:model.self="mediaUploadOpen" class="max-w-xl">
-            <form wire:submit="upload" class="space-y-5">
+            <form wire:submit="attachTaskMedia" class="space-y-5">
                 <div>
                     <flux:heading size="lg">{{ __('Add task media') }}</flux:heading>
                     <flux:text class="mt-2">{{ __('Upload screenshots, screen recordings, or supporting files. They will only be available from this task.') }}</flux:text>
@@ -82,9 +82,9 @@
 
                 <div class="flex justify-end gap-2">
                     <flux:button type="button" wire:click="$set('mediaUploadOpen', false)" variant="ghost">{{ __('Cancel') }}</flux:button>
-                    <flux:button type="submit" variant="primary" :disabled="$uploads === []" wire:loading.attr="disabled" wire:target="uploads,upload">{{ __('Upload media') }}</flux:button>
+                    <flux:button type="submit" variant="primary" :disabled="$uploads === []" wire:loading.attr="disabled" wire:target="uploads,attachTaskMedia">{{ __('Upload media') }}</flux:button>
                 </div>
-                <p wire:loading wire:target="uploads,upload" class="text-center text-xs text-[#737a72]">{{ __('Uploading… Keep this page open.') }}</p>
+                <p wire:loading wire:target="uploads,attachTaskMedia" class="text-center text-xs text-[#737a72]">{{ __('Uploading… Keep this page open.') }}</p>
             </form>
         </flux:modal>
     @endcan
