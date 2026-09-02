@@ -122,6 +122,7 @@ Route::prefix('platform')
         Route::livewire('/shared-courses', 'platform.shared-courses.index')->name('platform.shared-courses.index');
         Route::livewire('/shared-courses/{course}', 'platform.shared-courses.show')->name('platform.shared-courses.show');
         Route::livewire('/shared-courses/{course}/editor', 'platform.shared-courses.editor')->name('platform.shared-courses.editor');
+        Route::livewire('/shared-modules', 'platform.shared-modules.index')->name('platform.shared-modules.index');
         Route::livewire('/shared-modules/{module}', 'platform.shared-modules.show')->name('platform.shared-modules.show');
         Route::livewire('/shared-modules/{module}/editor', 'platform.shared-modules.editor')->name('platform.shared-modules.editor');
         Route::livewire('/shared-modules/{module}/preview', 'platform.shared-modules.preview')->name('platform.shared-modules.preview');

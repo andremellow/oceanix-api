@@ -1,6 +1,8 @@
 <?php
 
 use App\Actions\Modules\CreateModule;
+use App\Models\Module;
+use App\Services\Modules\ModuleStatusPresentation;
 use App\Services\Platform\PlatformAccess;
 use App\Services\SharedContent\SharedContentCatalog;
 use Livewire\Attributes\Layout;
@@ -11,8 +13,11 @@ new #[Layout('layouts::platform')] class extends Component
 {
     #[Url]
     public string $search = '';
+
     public string $code = '';
+
     public string $title = '';
+
     public string $description = '';
 
     public function create(CreateModule $action, PlatformAccess $access): void
@@ -28,11 +33,16 @@ new #[Layout('layouts::platform')] class extends Component
         session()->flash('status', __('Shared module created.'));
     }
 
-    public function with(SharedContentCatalog $catalog, PlatformAccess $access): array
+    public function with(SharedContentCatalog $catalog, PlatformAccess $access, ModuleStatusPresentation $statusPresentation): array
     {
         $access->authorize();
 
-        return ['modules' => $catalog->platformModules($this->search)];
+        $modules = $catalog->platformModules($this->search);
+
+        return [
+            'modules' => $modules,
+            'moduleStatuses' => $modules->mapWithKeys(fn (Module $module): array => [$module->id => $statusPresentation->for($module->status)])->all(),
+        ];
     }
 };
 ?>
@@ -55,11 +65,12 @@ new #[Layout('layouts::platform')] class extends Component
             @else
                 <div class="grid gap-4 sm:grid-cols-2">
                     @foreach ($modules as $module)
+                        @php($status = $moduleStatuses[$module->id])
                         <a href="{{ route('platform.shared-modules.show', ['module' => $module]) }}" wire:navigate wire:key="shared-module-{{ $module->id }}" class="saas-feature-card">
                             <p class="admin-kicker">{{ __('Shared Module') }}</p>
                             <h2 class="mt-2 font-bold text-[#262d33]">{{ $module->title }}</h2>
                             <p class="mt-1 text-xs text-[#7d878d]">{{ $module->code }} · {{ $module->versions_count }} {{ __('versions') }}</p>
-                            <span class="status-pill mt-4">{{ __($module->status->value) }}</span>
+                            <span class="status-pill {{ $status['modifier'] }} mt-4">{{ $status['label'] }}</span>
                         </a>
                     @endforeach
                 </div>

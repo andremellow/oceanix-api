@@ -20,6 +20,7 @@
                 <a href="{{ route('platform.dashboard') }}" wire:navigate class="hidden rounded-xl px-3 py-2 hover:bg-[#eef3f5] sm:inline-flex">{{ __('Overview') }}</a>
                 <a href="{{ route('platform.companies') }}" wire:navigate class="hidden rounded-xl px-3 py-2 hover:bg-[#eef3f5] sm:inline-flex">{{ __('Companies') }}</a>
                 <a href="{{ route('platform.shared-courses.index') }}" wire:navigate class="rounded-xl px-3 py-2 hover:bg-[#eef3f5]">{{ __('Shared courses') }}</a>
+                <a href="{{ route('platform.shared-modules.index') }}" wire:navigate class="rounded-xl px-3 py-2 hover:bg-[#eef3f5]">{{ __('Shared modules') }}</a>
                 @if ($platformAccount)
                     <a href="{{ route('platform.tasks.index') }}" wire:navigate class="rounded-xl px-3 py-2 hover:bg-[#eef3f5]">{{ __('Tasks') }}</a>
                 @endif
