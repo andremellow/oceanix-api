@@ -20,6 +20,10 @@ return [
         'name' => 'api.tasks.',
         'middleware' => ['api', 'auth:sanctum', 'tasks.access'],
     ],
+    'platform_api' => [
+        'key_hash' => env('OCEANIX_TASKS_API_KEY_HASH'),
+        'actor_email' => env('OCEANIX_TASKS_API_ACTOR_EMAIL'),
+    ],
     'assignee_resolver' => null,
     'user_name_column' => 'name',
     'board' => ['done_limit' => 100],
