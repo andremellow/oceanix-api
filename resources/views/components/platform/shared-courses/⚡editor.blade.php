@@ -26,6 +26,7 @@ use App\Services\SharedContent\SharedContentCatalog;
 use App\Services\Video\VideoLibrary;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -62,6 +63,8 @@ new #[Layout('layouts::platform')] class extends Component
     public ?string $saveError = null;
 
     public bool $uploadInProgress = false;
+
+    public array $activeUploads = [];
 
     public string $moduleSearch = '';
 
@@ -287,27 +290,36 @@ new #[Layout('layouts::platform')] class extends Component
         }
     }
 
-    public function requestUpload(int $moduleIndex, RequestVideoUpload $action, PlatformAccess $access): string
+    public function requestUpload(int $moduleIndex, RequestVideoUpload $action, PlatformAccess $access): array
     {
         $actor = $access->authorize();
         $upload = $action->handle($this->moduleAt($moduleIndex), platformActor: $actor);
-        $this->uploadInProgress = true;
+        $token = (string) Str::uuid();
+        $this->activeUploads[$token] = $moduleIndex;
+        $this->syncUploadState();
         $this->reloadModulesPreservingDraftState();
 
-        return $upload->uploadUrl;
+        return ['url' => $upload->uploadUrl, 'token' => $token];
     }
 
-    public function uploadCompleted(int $moduleIndex, PlatformAccess $access, VideoLibrary $library): void
+    public function uploadCompleted(int $moduleIndex, PlatformAccess $access, VideoLibrary $library, ?string $uploadToken = null): void
     {
         $access->authorize();
         $this->moduleAt($moduleIndex)->video?->update(['status' => VideoStatus::Processing]);
-        $this->uploadInProgress = false;
+        $this->finishUpload($moduleIndex, $uploadToken);
         $this->reloadModulesPreservingDraftState();
 
         if ($this->videoLibraryOpen) {
             $this->videoLibrarySearch = '';
             $this->loadVideoLibrary($library);
         }
+    }
+
+    public function uploadFailed(int $moduleIndex, PlatformAccess $access, ?string $uploadToken = null): void
+    {
+        $access->authorize();
+        $this->moduleAt($moduleIndex);
+        $this->finishUpload($moduleIndex, $uploadToken);
     }
 
     public function openEditorVideoLibrary(string $model, VideoLibrary $library, PlatformAccess $access): void
@@ -512,6 +524,27 @@ new #[Layout('layouts::platform')] class extends Component
         // Retained form values must keep the revisions they were originally based on.
         $this->courseRevision = $courseRevision;
         $this->moduleRevisions = $moduleRevisions;
+    }
+
+    private function finishUpload(int $moduleIndex, ?string $uploadToken): void
+    {
+        if ($uploadToken !== null) {
+            if (($this->activeUploads[$uploadToken] ?? null) === $moduleIndex) {
+                unset($this->activeUploads[$uploadToken]);
+            }
+        } else {
+            $token = array_search($moduleIndex, $this->activeUploads, true);
+            if ($token !== false) {
+                unset($this->activeUploads[$token]);
+            }
+        }
+
+        $this->syncUploadState();
+    }
+
+    private function syncUploadState(): void
+    {
+        $this->uploadInProgress = $this->activeUploads !== [];
     }
 };
 ?>

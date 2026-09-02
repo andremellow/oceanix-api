@@ -20,6 +20,7 @@ use App\Services\Modules\SharedModuleDraftWriter;
 use App\Services\Platform\PlatformAccess;
 use App\Services\Video\VideoLibrary;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -57,6 +58,8 @@ new #[Layout('layouts::platform')] class extends Component
 
     public bool $uploadInProgress = false;
 
+    public array $activeUploads = [];
+
     public bool $restartInProgress = false;
 
     public bool $imageLibraryOpen = false;
@@ -91,29 +94,38 @@ new #[Layout('layouts::platform')] class extends Component
         // Persistible editor fields are intentionally deferred to the global save action.
     }
 
-    public function requestUpload(int $lessonIndex, RequestVideoUpload $action, PlatformAccess $access): string
+    public function requestUpload(int $lessonIndex, RequestVideoUpload $action, PlatformAccess $access): array
     {
         $actor = $access->authorize();
         abort_unless($lessonIndex === 0, 404);
         $upload = $action->handle($this->version, platformActor: $actor);
-        $this->uploadInProgress = true;
+        $token = (string) Str::uuid();
+        $this->activeUploads[$token] = $lessonIndex;
+        $this->syncUploadState();
         $this->version->load('video');
 
-        return $upload->uploadUrl;
+        return ['url' => $upload->uploadUrl, 'token' => $token];
     }
 
-    public function uploadCompleted(int $lessonIndex, PlatformAccess $access, VideoLibrary $library): void
+    public function uploadCompleted(int $lessonIndex, PlatformAccess $access, VideoLibrary $library, ?string $uploadToken = null): void
     {
         $access->authorize();
         abort_unless($lessonIndex === 0, 404);
         $this->version->video?->update(['status' => VideoStatus::Processing]);
-        $this->uploadInProgress = false;
+        $this->finishUpload($lessonIndex, $uploadToken);
         $this->version->load('video');
 
         if ($this->videoLibraryOpen) {
             $this->videoLibrarySearch = '';
             $this->loadVideoLibrary($library);
         }
+    }
+
+    public function uploadFailed(int $lessonIndex, PlatformAccess $access, ?string $uploadToken = null): void
+    {
+        $access->authorize();
+        abort_unless($lessonIndex === 0, 404);
+        $this->finishUpload($lessonIndex, $uploadToken);
     }
 
     public function openEditorVideoLibrary(string $model, VideoLibrary $library, PlatformAccess $access): void
@@ -322,6 +334,27 @@ new #[Layout('layouts::platform')] class extends Component
         $this->assessmentRevision = app(SharedModuleDraftWriter::class)->revision($this->version);
         $this->assessmentDirty = false;
         $this->assessmentError = null;
+    }
+
+    private function finishUpload(int $lessonIndex, ?string $uploadToken): void
+    {
+        if ($uploadToken !== null) {
+            if (($this->activeUploads[$uploadToken] ?? null) === $lessonIndex) {
+                unset($this->activeUploads[$uploadToken]);
+            }
+        } else {
+            $token = array_search($lessonIndex, $this->activeUploads, true);
+            if ($token !== false) {
+                unset($this->activeUploads[$token]);
+            }
+        }
+
+        $this->syncUploadState();
+    }
+
+    private function syncUploadState(): void
+    {
+        $this->uploadInProgress = $this->activeUploads !== [];
     }
 };
 ?>

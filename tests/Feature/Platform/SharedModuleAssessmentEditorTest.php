@@ -9,6 +9,7 @@ use App\Models\Module;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
 function editableAssessmentModule(): array
@@ -262,4 +263,51 @@ it('preserves staged module values and their original revision when selecting a 
         ->assertSet('saveError', __('This module changed elsewhere. Reload the page before saving again.'));
 
     expect($module->fresh()->title)->toBe('Concurrent title');
+});
+
+it('keeps the shared course editor blocked until every concurrent upload settles', function (): void {
+    Http::fake(['api.cloudflare.com/*' => Http::response(['result' => ['uid' => 'course-upload', 'uploadURL' => 'https://upload.example/course']])]);
+    $account = Account::factory()->platformAdmin()->create();
+    [$module] = editableAssessmentModule();
+    $course = Course::factory()->shared()->draft()->create();
+    $version = CourseVersion::factory()->create(['course_id' => $course]);
+    CourseVersionModule::query()->create(['course_version_id' => $version->id, 'lesson_id' => $module->id, 'position' => 1, 'is_required' => true]);
+    $this->withSession(['platform_account_id' => $account->id]);
+
+    $editor = Livewire::test('platform.shared-courses.editor', ['course' => $course])
+        ->call('requestUpload', 0)
+        ->call('requestUpload', 0)
+        ->assertSet('uploadInProgress', true);
+
+    $tokens = array_keys($editor->get('activeUploads'));
+    expect($tokens)->toHaveCount(2);
+
+    $editor->call('uploadFailed', 0, $tokens[0])
+        ->assertSet('uploadInProgress', true);
+    expect($editor->get('activeUploads'))->toHaveCount(1);
+
+    $editor->call('uploadCompleted', 0, $tokens[1])
+        ->assertSet('uploadInProgress', false);
+    expect($editor->get('activeUploads'))->toBe([]);
+});
+
+it('cleans up failed concurrent uploads in the standalone shared module editor', function (): void {
+    Http::fake(['api.cloudflare.com/*' => Http::response(['result' => ['uid' => 'module-upload', 'uploadURL' => 'https://upload.example/module']])]);
+    $account = Account::factory()->platformAdmin()->create();
+    [$module] = editableAssessmentModule();
+    $this->withSession(['platform_account_id' => $account->id]);
+
+    $editor = Livewire::test('platform.shared-modules.editor', ['module' => $module])
+        ->call('requestUpload', 0)
+        ->call('requestUpload', 0)
+        ->assertSet('uploadInProgress', true);
+
+    $tokens = array_keys($editor->get('activeUploads'));
+    expect($tokens)->toHaveCount(2);
+
+    $editor->call('uploadCompleted', 0, $tokens[0])
+        ->assertSet('uploadInProgress', true);
+    $editor->call('uploadFailed', 0, $tokens[1])
+        ->assertSet('uploadInProgress', false);
+    expect($editor->get('activeUploads'))->toBe([]);
 });
