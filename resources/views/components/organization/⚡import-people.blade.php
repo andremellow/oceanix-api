@@ -38,7 +38,7 @@ new class extends Component
         ]);
 
         try {
-            $prepared = $preview->prepare($parser->parse($this->spreadsheet->getRealPath()));
+            $prepared = $preview->prepare($parser->parseContents($this->spreadsheet->get()));
         } catch (Throwable $exception) {
             $this->addError('spreadsheet', $exception->getMessage());
 

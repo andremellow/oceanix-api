@@ -58,6 +58,18 @@ it('reads the first four columns positionally and always ignores row one', funct
         ->and($rows[1]['department'])->toBe('');
 });
 
+it('parses a workbook the caller read through a disk, without needing a local path', function (): void {
+    $contents = file_get_contents(positionalPeopleWorkbook([
+        ['Header', 'Header', 'Header', 'Header'],
+        ['Maria Costa', 'maria@example.com', 'Welder I', 'Operations'],
+    ]));
+
+    $rows = app(PeopleSpreadsheetParser::class)->parseContents($contents);
+
+    expect($rows)->toHaveCount(1)
+        ->and($rows[0]['email'])->toBe('maria@example.com');
+});
+
 it('matches organization values after safe normalization and leaves new values ready to create', function (): void {
     $function = JobFunction::factory()->create(['name' => 'Mecânico de Manutenção III']);
     Department::factory()->create(['name' => 'Operations']);

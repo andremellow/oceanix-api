@@ -10,6 +10,32 @@ use ZipArchive;
 class PeopleSpreadsheetParser
 {
     /**
+     * A temporary upload does not necessarily live on a local disk. When Livewire's temporary
+     * upload disk is S3, the file has no path ZipArchive can open, so the caller hands us the
+     * bytes it read through the disk and we stage them locally for the duration of the parse.
+     *
+     * @return list<array{row: int, name: string, email: string, job_function: string, department: string}>
+     */
+    public function parseContents(string $contents): array
+    {
+        $path = tempnam(sys_get_temp_dir(), 'people-import-');
+
+        if ($path === false) {
+            throw new RuntimeException(__('The spreadsheet could not be opened.'));
+        }
+
+        try {
+            if (file_put_contents($path, $contents) === false) {
+                throw new RuntimeException(__('The spreadsheet could not be opened.'));
+            }
+
+            return $this->parse($path);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    /**
      * The import contract is positional. Row one is always a header and is ignored:
      * A = name, B = email, C = job function, D = department.
      *
