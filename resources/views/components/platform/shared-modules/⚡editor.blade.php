@@ -215,6 +215,7 @@ new #[Layout('layouts::platform')] class extends Component
         $this->assessmentDirty = true;
         $this->assessmentStatus = 'unsaved';
         $this->assessmentError = null;
+        $this->dispatch('assessment-dirty');
     }
 
     public function saveDraft(bool $close, SaveSharedModuleEditorDraft $action, PlatformAccess $access): void
@@ -267,7 +268,8 @@ new #[Layout('layouts::platform')] class extends Component
             return;
         }
 
-        $this->assessmentDirty = false;
+        $this->version->refresh();
+        $this->loadAssessment();
         $this->contentDirty = false;
         $this->assessmentStatus = 'saved';
         $this->dispatch('assessment-saved', moduleId: $this->version->id);
@@ -281,38 +283,32 @@ new #[Layout('layouts::platform')] class extends Component
     public function addQuestion(PlatformAccess $access): void
     {
         $access->authorizePermission(Permission::SharedModulesUpdate);
-        if ($this->assessmentDirty) {
-            $this->assessmentError = __('Save the assessment before adding questions or answers.');
-
-            return;
-        }
-
-        DB::transaction(function (): void {
-            $version = ModuleVersion::query()->lockForUpdate()->whereKey($this->version->id)->whereNull('company_id')->where('is_shared', true)->where('status', ModuleVersionStatus::Draft->value)->firstOrFail();
-            $question = Question::query()->create(['company_id' => null, 'lesson_id' => $version->id, 'type' => QuestionType::SingleChoice, 'prompt' => 'New question', 'position' => $version->questions()->count() + 1, 'max_attempts' => 3]);
-            foreach ([1, 2] as $position) {
-                QuestionOption::query()->create(['company_id' => null, 'question_id' => $question->id, 'text' => "Option {$position}", 'is_correct' => $position === 1, 'position' => $position]);
-            }
-        });
-        $this->loadAssessment();
+        $this->questions[] = $this->newQuestion();
+        $this->markAssessmentDirty();
     }
 
     public function addOption(int $questionIndex, PlatformAccess $access): void
     {
         $access->authorizePermission(Permission::SharedModulesUpdate);
-        if ($this->assessmentDirty) {
-            $this->assessmentError = __('Save the assessment before adding questions or answers.');
-
-            return;
-        }
-
         abort_unless(isset($this->questions[$questionIndex]), 404);
-        DB::transaction(function () use ($questionIndex): void {
-            $version = ModuleVersion::query()->lockForUpdate()->whereKey($this->version->id)->whereNull('company_id')->where('is_shared', true)->where('status', ModuleVersionStatus::Draft->value)->firstOrFail();
-            $question = $version->questions()->whereKey($this->questions[$questionIndex]['id'])->firstOrFail();
-            QuestionOption::query()->create(['company_id' => null, 'question_id' => $question->id, 'text' => 'New option', 'is_correct' => false, 'position' => $question->options()->count() + 1]);
-        });
-        $this->loadAssessment();
+        $this->questions[$questionIndex]['options'][] = $this->newOption(count($this->questions[$questionIndex]['options']) + 1, false);
+        $this->markAssessmentDirty();
+    }
+
+    public function removeQuestion(int $questionIndex, PlatformAccess $access): void
+    {
+        $access->authorizePermission(Permission::SharedModulesUpdate);
+        abort_unless(isset($this->questions[$questionIndex]), 404);
+        array_splice($this->questions, $questionIndex, 1);
+        $this->markAssessmentDirty();
+    }
+
+    public function removeOption(int $questionIndex, int $optionIndex, PlatformAccess $access): void
+    {
+        $access->authorizePermission(Permission::SharedModulesUpdate);
+        abort_unless(isset($this->questions[$questionIndex]['options'][$optionIndex]), 404);
+        array_splice($this->questions[$questionIndex]['options'], $optionIndex, 1);
+        $this->markAssessmentDirty();
     }
 
     public function with(ModulePropagationImpact $impact, ModuleVersionValidator $validator): array
@@ -340,12 +336,12 @@ new #[Layout('layouts::platform')] class extends Component
     private function loadAssessment(): void
     {
         $this->questions = $this->version->questions()->with('options')->get()->map(fn (Question $question): array => [
-            'id' => $question->id,
+            'id' => $question->id, 'key' => "question-{$question->id}",
             'prompt' => $question->prompt,
             'type' => $question->type->value,
             'max_attempts' => $question->max_attempts,
             'options' => $question->options->map(fn (QuestionOption $option): array => [
-                'id' => $option->id,
+                'id' => $option->id, 'key' => "option-{$option->id}",
                 'text' => $option->text,
                 'is_correct' => $option->is_correct,
             ])->all(),
@@ -353,6 +349,17 @@ new #[Layout('layouts::platform')] class extends Component
         $this->assessmentRevision = app(SharedModuleDraftWriter::class)->revision($this->version);
         $this->assessmentDirty = false;
         $this->assessmentError = null;
+    }
+
+    private function newQuestion(): array
+    {
+        return ['id' => null, 'key' => 'question-'.Str::uuid(), 'prompt' => 'New question', 'type' => QuestionType::SingleChoice->value, 'max_attempts' => 3,
+            'options' => [$this->newOption(1, true), $this->newOption(2, false)]];
+    }
+
+    private function newOption(int $number, bool $correct): array
+    {
+        return ['id' => null, 'key' => 'option-'.Str::uuid(), 'text' => "Option {$number}", 'is_correct' => $correct];
     }
 
     private function finishUpload(int $lessonIndex, ?string $uploadToken): void
@@ -424,19 +431,19 @@ new #[Layout('layouts::platform')] class extends Component
         <div class="space-y-3">
             @if ($questions === [])<x-empty-state icon="question-mark-circle" :title="__('No assessment questions yet')" :description="__('Add a question to build this assessment.')" />@endif
             @foreach ($questions as $questionIndex => $question)
-                <div class="rounded-[18px] border border-[#e4e9ec] p-4" wire:key="standalone-question-{{ $question['id'] }}">
-                    <p class="mb-3 text-sm font-bold text-[#4f5960]">{{ __('Question :number', ['number' => $questionIndex + 1]) }}</p>
+                <div class="rounded-[18px] border border-[#e4e9ec] p-4" wire:key="standalone-{{ $question['key'] }}">
+                    <div class="mb-3 flex items-center justify-between gap-3"><p class="text-sm font-bold text-[#4f5960]">{{ __('Question :number', ['number' => $questionIndex + 1]) }}</p><flux:button wire:click="removeQuestion({{ $questionIndex }})" wire:confirm="{{ __('ui.confirm_remove_question') }}" variant="ghost" size="sm" icon="trash" :aria-label="__('Remove question')" /></div>
                     <div class="grid gap-3 sm:grid-cols-[1fr_180px_140px]"><flux:input wire:model.defer="questions.{{ $questionIndex }}.prompt" x-on:input="markDirty" :label="__('Question')" /><flux:select wire:model.live="questions.{{ $questionIndex }}.type" x-on:change="markDirty" :label="__('Question type')"><flux:select.option value="single_choice">{{ __('Single choice') }}</flux:select.option><flux:select.option value="multiple_choice">{{ __('Multiple choice') }}</flux:select.option></flux:select><flux:input type="number" wire:model.defer="questions.{{ $questionIndex }}.max_attempts" x-on:input="markDirty" :label="__('Attempts')" /></div>
                     <fieldset class="mt-3 space-y-2"><legend class="mb-2 text-sm font-semibold">{{ __('Correct answer') }}</legend>
                         @foreach ($question['options'] as $optionIndex => $option)
-                            <div class="flex items-center gap-2" wire:key="standalone-option-{{ $option['id'] }}">@if ($question['type'] === 'single_choice')<input type="radio" x-on:change="@foreach ($question['options'] as $candidateIndex => $candidate) $wire.set('questions.{{ $questionIndex }}.options.{{ $candidateIndex }}.is_correct', {{ $candidateIndex === $optionIndex ? 'true' : 'false' }}, false); @endforeach markDirty()" @checked($option['is_correct']) name="standalone-correct-{{ $question['id'] }}" aria-label="{{ __('Mark answer :number as correct', ['number' => $optionIndex + 1]) }}">@else<input type="checkbox" wire:model.defer="questions.{{ $questionIndex }}.options.{{ $optionIndex }}.is_correct" x-on:change="markDirty" aria-label="{{ __('Mark answer :number as correct', ['number' => $optionIndex + 1]) }}">@endif<flux:input wire:model.defer="questions.{{ $questionIndex }}.options.{{ $optionIndex }}.text" x-on:input="markDirty" :label="__('Answer :number', ['number' => $optionIndex + 1])" field:class="min-w-0 flex-1" /></div>
+                            <div class="flex items-center gap-2" wire:key="standalone-{{ $option['key'] }}">@if ($question['type'] === 'single_choice')<input type="radio" x-on:change="@foreach ($question['options'] as $candidateIndex => $candidate) $wire.set('questions.{{ $questionIndex }}.options.{{ $candidateIndex }}.is_correct', {{ $candidateIndex === $optionIndex ? 'true' : 'false' }}, false); @endforeach markDirty()" @checked($option['is_correct']) name="standalone-correct-{{ $question['key'] }}" aria-label="{{ __('Mark answer :number as correct', ['number' => $optionIndex + 1]) }}">@else<input type="checkbox" wire:model.defer="questions.{{ $questionIndex }}.options.{{ $optionIndex }}.is_correct" x-on:change="markDirty" aria-label="{{ __('Mark answer :number as correct', ['number' => $optionIndex + 1]) }}">@endif<flux:input wire:model.defer="questions.{{ $questionIndex }}.options.{{ $optionIndex }}.text" x-on:input="markDirty" :label="__('Answer :number', ['number' => $optionIndex + 1])" field:class="min-w-0 flex-1" /><flux:button wire:click="removeOption({{ $questionIndex }}, {{ $optionIndex }})" variant="ghost" size="sm" icon="x-mark" :aria-label="__('Remove option')" /></div>
                         @endforeach
                     </fieldset>
-                    <flux:button wire:click="addOption({{ $questionIndex }})" x-bind:disabled="dirty" variant="ghost" size="sm" class="mt-3">{{ __('Add option') }}</flux:button>
+                    <flux:button wire:click="addOption({{ $questionIndex }})" variant="ghost" size="sm" class="mt-3" icon="plus">{{ __('Add option') }}</flux:button>
                 </div>
             @endforeach
         </div>
-        <div class="flex justify-end"><flux:button wire:click="addQuestion" x-bind:disabled="dirty" variant="ghost" icon="plus" class="w-full sm:w-auto">{{ __('Add question') }}</flux:button></div>
+        <div class="flex justify-end"><flux:button wire:click="addQuestion" variant="ghost" icon="plus" class="w-full sm:w-auto">{{ __('Add question') }}</flux:button></div>
     </section>
 
     <flux:modal wire:model.self="imageLibraryOpen" class="max-w-4xl">
