@@ -631,5 +631,6 @@
     "Comment": "Comentar",
     "Open task": "Abrir task",
     ":count comment|:count comments": ":count comentário|:count comentários",
-    "Format your comment visually.": "Formate seu comentário visualmente."
+    "Format your comment visually.": "Formate seu comentário visualmente.",
+    "Format the lesson visually and insert images or videos where they should appear.": "Formate a aula visualmente e insira imagens ou vídeos onde eles devem aparecer."
 }

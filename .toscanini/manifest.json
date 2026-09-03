@@ -1,0 +1,88 @@
+{
+  "version": "0.1.0",
+  "configuration": {
+    "adapters": [
+      "laravel",
+      "spec-kit",
+      "terminal-ui"
+    ],
+    "agents": [
+      "architect",
+      "architecture-reviewer",
+      "code-reviewer",
+      "design-agent",
+      "design-reviewer",
+      "qa",
+      "test-expert"
+    ],
+    "extensions": []
+  },
+  "files": {
+    "AGENTS.md": {
+      "sha256": "0523564da97f94c71b0db7e4a4bd2337e772c55610c1be4cea0523411d29ed3b"
+    },
+    ".codex/agents/design-agent.toml": {
+      "sha256": "07be803275d3308c9ce6d83227cccf34e403cb3e2c60f74d8ab0840b002bba7f"
+    },
+    ".codex/agents/code-reviewer.toml": {
+      "sha256": "43a701f42fa93363182934577815265005fa2ca512465c975c8a087420826bb3"
+    },
+    ".codex/agents/test-expert.toml": {
+      "sha256": "819b7a4541e4a4a68737f449c47fb1a66edad036b84c7b2a3656beb6d5c03fcb"
+    },
+    ".codex/agents/design-reviewer.toml": {
+      "sha256": "1e060b633aa945f79a6ea908644dc06533dfe9e7afa0a5f6b8b7249652065bfc"
+    },
+    ".codex/agents/architecture-reviewer.toml": {
+      "sha256": "04a5fcbf605f806756af2a0b5e405b0e4ec1548ca923291352b8572d67d8d9ff"
+    },
+    ".codex/agents/architect.toml": {
+      "sha256": "d5d11f7f0b40c6531161c41a3ac38dbdc0dc90e14e3fdd90901783966bbd96d9"
+    },
+    ".codex/agents/qa.toml": {
+      "sha256": "83628e6c41dafacf882b92043aa38de7c43322a3dfb6c9b3341d237716bde458"
+    },
+    ".agents/skills/toscanini-verification/SKILL.md": {
+      "sha256": "f002fadf6219df4bdcf50e87c1966700af27da912ec479d674dcd663536e8b41"
+    },
+    ".agents/skills/toscanini-architecture/SKILL.md": {
+      "sha256": "1567cc69e606c995959662f58b5d568f7ee23052ba602cdf96186a684168e869"
+    },
+    ".agents/skills/toscanini-workflow/SKILL.md": {
+      "sha256": "f7b32c5466720b162b6f2d5417191e83097c50cd156252c7ae8b32eb30f1df62"
+    },
+    ".agents/skills/toscanini-workflow/references/orchestration.md": {
+      "sha256": "82541a0b3578e65d3374bfafda8325ae1c8446b623849e801a8064371bd8f564"
+    },
+    ".agents/skills/toscanini-workflow/references/installation.md": {
+      "sha256": "2c5fd0d4ee9b8f2afc6916ca0a9fc37eda8971f6c69628d1ea67f87cf5a16223"
+    },
+    ".agents/skills/toscanini-workflow/agents/openai.yaml": {
+      "sha256": "99d0359317510779115e2b2f8cb542945cfe221b82c59da1de3b74cedd2483f9"
+    },
+    ".agents/skills/toscanini-design-review/SKILL.md": {
+      "sha256": "32f6f141f532e8c09624b6f5243dfeab4bc370e377a11d10b81d9d286a12e51c"
+    },
+    ".toscanini/bin/toscanini-event.py": {
+      "sha256": "03166a07337ef48f47146b49b4401ca0ef9fbb4474ff37b272dc32413b6af7eb"
+    },
+    ".toscanini/bin/toscanini-gate.py": {
+      "sha256": "94eb1b4b255f69f11872b445f9ca78759d64b1da24848532cb9d0f0c1aade1eb"
+    },
+    ".toscanini/.gitignore": {
+      "sha256": "fdcd0183a4babd894e7cce83ec87bd24f385c424cc83571009ed07ab34722d9f"
+    },
+    ".specify/templates/architecture.md": {
+      "sha256": "6e653b0df19b2cb55e3c23dc48505b227c9f8092c26fe888329dbec5222558b4"
+    },
+    ".specify/templates/ux.md": {
+      "sha256": "8e34accc6d6e1d63974f051bdccd49f3378260e7c515399837b5141abbfb9f43"
+    },
+    ".specify/templates/verification.md": {
+      "sha256": "53bb4f71e69e354bf2465389bc6772f4c3388a192d42675f63ab5373df18f9b5"
+    },
+    ".toscanini/gaps.md": {
+      "sha256": "15bf769c7591a0788404678699d1984991d5ba8f3689f967988ab99db0409d7a"
+    }
+  }
+}

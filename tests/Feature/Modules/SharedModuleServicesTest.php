@@ -22,13 +22,18 @@ it('keeps private content out of platform shared projections', function (): void
         ->and($modules->sole()->title)->toBe('Global module');
 });
 
-it('validates lesson content through a module version', function (): void {
-    $version = ModuleVersion::factory()->shared()->create();
+it('requires a video only when the module content contains a video block', function (): void {
+    $version = ModuleVersion::factory()->shared()->create(['content_markdown' => '<div data-oceanix-video></div>']);
 
     expect(app(ModuleVersionValidator::class)->problems($version))->toHaveCount(2)
         ->and(collect(app(ModuleVersionValidator::class)->problems($version))->join(' '))
         ->toContain('has no video')
         ->toContain('has no questions');
+
+    $version->update(['content_markdown' => '<p>Text-only module</p>']);
+
+    expect(collect(app(ModuleVersionValidator::class)->problems($version->fresh()))->join(' '))
+        ->not->toContain('has no video');
 });
 
 it('summarizes affected courses and separates started assignments', function (): void {

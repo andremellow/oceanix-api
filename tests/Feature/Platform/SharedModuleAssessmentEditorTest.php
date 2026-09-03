@@ -24,6 +24,15 @@ function editableAssessmentModule(): array
     return [$module, $question, $first, $second];
 }
 
+function expectFullWidthAssessmentOptionFields(string $html, array $models): void
+{
+    foreach ($models as $model) {
+        $fieldPattern = '/<ui-field(?=[^>]*class="[^"]*\\bflex-1\\b)(?=[^>]*class="[^"]*\\bmin-w-0\\b)[^>]*>.*?wire:model.defer="'.preg_quote($model, '/').'".*?<\\/ui-field>/s';
+
+        expect(preg_match_all($fieldPattern, $html))->toBe(1);
+    }
+}
+
 it('saves and reloads the complete assessment from the shared course editor', function (): void {
     $account = Account::factory()->platformAdmin()->create();
     [$module, $question, $first, $second] = editableAssessmentModule();
@@ -50,6 +59,11 @@ it('saves and reloads the complete assessment from the shared course editor', fu
         ->and($question->fresh()->prompt)->toBe('Last typed character!')
         ->and($first->fresh()->is_correct)->toBeFalse()
         ->and($second->fresh()->is_correct)->toBeTrue();
+
+    expectFullWidthAssessmentOptionFields($editor->html(), [
+        'modules.0.questions.0.options.0.text',
+        'modules.0.questions.0.options.1.text',
+    ]);
 });
 
 it('provides assessment parity in the standalone shared module editor', function (): void {
@@ -84,6 +98,11 @@ it('provides assessment parity in the standalone shared module editor', function
         ->and($module->fresh()->content_markdown)->toBe('# Saved content')
         ->and($module->fresh()->minimum_watch_percentage)->toBe(85)
         ->and($module->fresh()->passing_score)->toBe(75);
+
+    expectFullWidthAssessmentOptionFields($editor->html(), [
+        'questions.0.options.0.text',
+        'questions.0.options.1.text',
+    ]);
 });
 
 it('rolls back every module when a later module in the course draft is invalid', function (): void {
@@ -128,23 +147,147 @@ it('preserves staged values and rejects a stale global module draft revision', f
     expect($module->fresh()->title)->toBe('Concurrent title');
 });
 
-it('blocks structural changes and publication while assessment edits are dirty', function (): void {
+it('stages structural changes without writing and blocks publication until they are saved', function (): void {
     $account = Account::factory()->platformAdmin()->create();
     [$module, $question] = editableAssessmentModule();
     $before = Question::query()->where('lesson_id', $module->id)->count();
     $this->withSession(['platform_account_id' => $account->id]);
 
-    Livewire::test('platform.shared-modules.editor', ['module' => $module])
+    $editor = Livewire::test('platform.shared-modules.editor', ['module' => $module])
         ->set('questions.0.prompt', 'Unsaved prompt')
         ->call('markAssessmentDirty')
         ->call('addQuestion')
-        ->assertSet('assessmentError', __('Save the assessment before adding questions or answers.'))
+        ->assertCount('questions', 2)
+        ->assertSet('questions.1.id', null)
+        ->assertDispatched('assessment-dirty')
         ->call('publish')
         ->assertHasErrors('publish');
 
     expect(Question::query()->where('lesson_id', $module->id)->count())->toBe($before)
         ->and($question->fresh()->prompt)->toBe('Safety question')
         ->and($module->fresh()->getRawOriginal('status'))->toBe('draft');
+
+    $editor->call('saveDraft', false)->assertHasNoErrors()->assertCount('questions', 2);
+    expect(Question::query()->where('lesson_id', $module->id)->count())->toBe($before + 1)
+        ->and($question->fresh()->prompt)->toBe('Unsaved prompt');
+});
+
+it('atomically stages mixed assessment CRUD with temporary ids in the standalone editor', function (): void {
+    $account = Account::factory()->platformAdmin()->create();
+    [$module, $question, $first, $second] = editableAssessmentModule();
+    $this->withSession(['platform_account_id' => $account->id]);
+
+    $editor = Livewire::test('platform.shared-modules.editor', ['module' => $module])
+        ->set('questions.0.prompt', 'Existing edited')
+        ->call('markAssessmentDirty')
+        ->call('addOption', 0)
+        ->set('questions.0.options.2.text', 'Temporary third')
+        ->call('addQuestion')
+        ->call('addQuestion')
+        ->call('removeQuestion', 2)
+        ->set('questions.1.prompt', 'Temporary question')
+        ->call('addOption', 1)
+        ->set('questions.1.options.2.text', 'Temporary extra')
+        ->call('removeOption', 1, 1)
+        ->call('removeOption', 0, 1)
+        ->assertSet('questions.1.id', null)
+        ->assertSet('questions.1.options.1.id', null);
+
+    expect(Question::query()->where('lesson_id', $module->id)->count())->toBe(1)
+        ->and(QuestionOption::query()->where('question_id', $question->id)->count())->toBe(2);
+
+    $editor->call('saveDraft', false)
+        ->assertHasNoErrors()
+        ->assertSet('assessmentDirty', false)
+        ->assertCount('questions', 2)
+        ->assertSet('questions.1.prompt', 'Temporary question');
+
+    $saved = $module->questions()->with('options')->orderBy('position')->get();
+    expect($saved)->toHaveCount(2)
+        ->and($saved[0]->prompt)->toBe('Existing edited')
+        ->and($saved[0]->options)->toHaveCount(2)
+        ->and($saved[0]->options->pluck('text')->all())->toBe(['First answer', 'Temporary third'])
+        ->and($saved[1]->prompt)->toBe('Temporary question')
+        ->and($saved[1]->options->pluck('text')->all())->toBe(['Option 1', 'Temporary extra'])
+        ->and(QuestionOption::query()->whereKey($second->id)->exists())->toBeFalse();
+
+    $editor->call('addOption', 1)->call('saveDraft', false)->assertHasNoErrors();
+    expect($module->questions()->where('position', 2)->sole()->options()->count())->toBe(3);
+});
+
+it('saves temporary assessment structure before closing the standalone editor', function (): void {
+    $account = Account::factory()->platformAdmin()->create();
+    [$module] = editableAssessmentModule();
+    $this->withSession(['platform_account_id' => $account->id]);
+
+    Livewire::test('platform.shared-modules.editor', ['module' => $module])
+        ->call('addQuestion')
+        ->set('questions.1.prompt', 'Saved while closing')
+        ->call('saveDraft', true)
+        ->assertRedirect(route('platform.shared-modules.show', ['module' => $module]));
+
+    expect($module->questions()->where('prompt', 'Saved while closing')->exists())->toBeTrue();
+});
+
+it('preserves temporary assessment structure when a concurrent save makes its revision stale', function (): void {
+    $account = Account::factory()->platformAdmin()->create();
+    [$module, $question] = editableAssessmentModule();
+    $this->withSession(['platform_account_id' => $account->id]);
+
+    $stale = Livewire::test('platform.shared-modules.editor', ['module' => $module])
+        ->call('addQuestion')
+        ->set('questions.1.prompt', 'Unsaved temporary question')
+        ->call('removeQuestion', 0);
+
+    $module->update(['title' => 'Saved in another tab']);
+
+    $stale->call('saveDraft', false)
+        ->assertSet('assessmentDirty', true)
+        ->assertSet('questions.0.id', null)
+        ->assertSet('questions.0.prompt', 'Unsaved temporary question')
+        ->assertSet('saveError', __('This module changed elsewhere. Reload the page before saving again.'));
+
+    expect($module->questions()->count())->toBe(1)
+        ->and($question->fresh()->prompt)->toBe('Safety question');
+});
+
+it('preserves temporary structures after validation failure and saves them atomically in the course editor', function (): void {
+    $account = Account::factory()->platformAdmin()->create();
+    [$module, $question] = editableAssessmentModule();
+    $course = Course::factory()->shared()->draft()->create();
+    $version = CourseVersion::factory()->create(['course_id' => $course]);
+    CourseVersionModule::query()->create(['course_version_id' => $version->id, 'lesson_id' => $module->id, 'position' => 1, 'is_required' => true]);
+    $this->withSession(['platform_account_id' => $account->id]);
+
+    $editor = Livewire::test('platform.shared-courses.editor', ['course' => $course])
+        ->set('modules.0.questions.0.prompt', 'Existing staged')
+        ->call('markAssessmentDirty', $module->id)
+        ->call('addQuestion', 0)
+        ->assertDispatched('assessment-dirty')
+        ->set('modules.0.questions.1.prompt', 'Temporary staged')
+        ->call('addOption', 0, 1)
+        ->set('modules.0.questions.1.options.2.text', '')
+        ->call('saveDraft', false)
+        ->assertSet('editorDirty', true)
+        ->assertSet('modules.0.questions.1.prompt', 'Temporary staged')
+        ->assertSet('modules.0.questions.1.options.2.text', '')
+        ->assertSet('saveError', fn (?string $error): bool => filled($error));
+
+    expect($question->fresh()->prompt)->toBe('Safety question')
+        ->and($module->questions()->count())->toBe(1);
+
+    $editor->set('modules.0.questions.1.options.2.text', 'Valid third')
+        ->call('removeQuestion', 0, 0)
+        ->call('saveDraft', false)
+        ->assertHasNoErrors()
+        ->assertSet('editorDirty', false)
+        ->assertCount('modules.0.questions', 1);
+
+    $saved = $module->questions()->with('options')->sole();
+    expect($saved->prompt)->toBe('Temporary staged')
+        ->and($saved->position)->toBe(1)
+        ->and($saved->options)->toHaveCount(3)
+        ->and(Question::query()->whereKey($question->id)->exists())->toBeFalse();
 });
 
 it('does not convert revoked platform access into a retryable assessment error in either editor', function (): void {
@@ -321,6 +464,17 @@ it('cleans up failed concurrent uploads in the standalone shared module editor',
         ->and(Video::query()->findOrFail($uploads[$tokens[1]]['video_id'])->status)->toBe(VideoStatus::Failed);
 });
 
+it('keeps video management inside the shared module content editor', function (): void {
+    $account = Account::factory()->platformAdmin()->create();
+    [$module] = editableAssessmentModule();
+    $this->withSession(['platform_account_id' => $account->id]);
+
+    Livewire::test('platform.shared-modules.editor', ['module' => $module])
+        ->assertSee('oceanix-open-video-library', false)
+        ->assertDontSee(__('Replace video'))
+        ->assertDontSee(__('Watch threshold (%)'));
+});
+
 it('round trips multiple-choice answers through the shared course editor', function (): void {
     $account = Account::factory()->platformAdmin()->create();
     [$module, $question, $first, $second] = editableAssessmentModule();
@@ -341,9 +495,16 @@ it('round trips multiple-choice answers through the shared course editor', funct
         ->and($first->fresh()->is_correct)->toBeTrue()
         ->and($second->fresh()->is_correct)->toBeTrue();
 
-    Livewire::test('platform.shared-courses.editor', ['course' => $course])
+    $editor = Livewire::test('platform.shared-courses.editor', ['course' => $course])
         ->assertSet('modules.0.questions.0.type', 'multiple_choice')
-        ->assertSeeHtml('type="checkbox"');
+        ->assertSeeHtml('type="checkbox"')
+        ->assertSeeHtml('wire:model.defer="modules.0.questions.0.options.0.is_correct"')
+        ->assertSeeHtml('wire:model.defer="modules.0.questions.0.options.1.is_correct"');
+
+    expectFullWidthAssessmentOptionFields($editor->html(), [
+        'modules.0.questions.0.options.0.text',
+        'modules.0.questions.0.options.1.text',
+    ]);
 });
 
 it('rejects converting multiple choice with two correct answers to single choice atomically', function (): void {
@@ -403,9 +564,16 @@ it('round trips multiple-choice answers through the standalone module editor', f
         ->and($first->fresh()->is_correct)->toBeTrue()
         ->and($second->fresh()->is_correct)->toBeTrue();
 
-    Livewire::test('platform.shared-modules.editor', ['module' => $module])
+    $editor = Livewire::test('platform.shared-modules.editor', ['module' => $module])
         ->assertSet('questions.0.type', 'multiple_choice')
-        ->assertSeeHtml('type="checkbox"');
+        ->assertSeeHtml('type="checkbox"')
+        ->assertSeeHtml('wire:model.defer="questions.0.options.0.is_correct"')
+        ->assertSeeHtml('wire:model.defer="questions.0.options.1.is_correct"');
+
+    expectFullWidthAssessmentOptionFields($editor->html(), [
+        'questions.0.options.0.text',
+        'questions.0.options.1.text',
+    ]);
 });
 
 it('preserves canonical media directives during a standalone title-only save', function (): void {

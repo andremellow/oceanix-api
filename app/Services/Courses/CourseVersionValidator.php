@@ -15,6 +15,8 @@ use Illuminate\Support\Collection;
  */
 class CourseVersionValidator
 {
+    public function __construct(private readonly LessonContentRenderer $contentRenderer) {}
+
     /**
      * Problems that block publication. An empty list means the version is publishable.
      *
@@ -100,9 +102,11 @@ class CourseVersionValidator
         $problems = [];
         $label = __('Lesson :position (:title)', ['position' => $lesson->position, 'title' => $lesson->title]);
 
-        if ($lesson->video === null) {
+        $containsVideo = $this->contentRenderer->containsVideo((string) $lesson->content_markdown);
+
+        if ($containsVideo && $lesson->video === null) {
             $problems[] = __(':lesson has no video.', ['lesson' => $label]);
-        } elseif (! $lesson->video->isPlayable()) {
+        } elseif ($containsVideo && ! $lesson->video->isPlayable()) {
             $problems[] = __(':lesson has a video that is not ready yet (:status).', [
                 'lesson' => $label,
                 'status' => $lesson->video->status->label(),

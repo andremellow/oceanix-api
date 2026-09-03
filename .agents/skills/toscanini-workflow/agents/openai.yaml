@@ -1,0 +1,4 @@
+interface:
+  display_name: "Toscanini"
+  short_description: "Independent multi-agent software delivery"
+  default_prompt: "Use Toscanini to implement this change."

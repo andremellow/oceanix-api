@@ -80,7 +80,7 @@ new #[Layout('layouts::platform')] class extends Component
         <h2 class="detail-card-title">{{ __('Version history') }}</h2>
         <div class="mt-4 divide-y divide-[#e8edef]">
             @foreach ($versions as $version)
-                <div class="flex items-center justify-between py-3"><div><p class="font-semibold">{{ __('Version :number', ['number' => $version->version_number]) }}</p><p class="text-xs text-[#7d878d]">{{ $version->video ? __('Video attached') : __('No video') }}</p></div><span class="status-pill">{{ __($version->status->value) }}</span></div>
+                <div class="flex items-center justify-between py-3"><p class="font-semibold">{{ __('Version :number', ['number' => $version->version_number]) }}</p><span class="status-pill">{{ __($version->status->value) }}</span></div>
             @endforeach
         </div>
     </section>

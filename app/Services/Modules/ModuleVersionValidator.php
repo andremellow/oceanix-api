@@ -7,9 +7,12 @@ use App\Enums\VideoStatus;
 use App\Models\Lesson;
 use App\Models\ModuleVersion;
 use App\Models\Question;
+use App\Services\Courses\LessonContentRenderer;
 
 class ModuleVersionValidator
 {
+    public function __construct(private readonly LessonContentRenderer $contentRenderer) {}
+
     /** @return list<string> */
     public function problems(ModuleVersion $version): array
     {
@@ -29,15 +32,17 @@ class ModuleVersionValidator
         $label = __('Lesson :position (:title)', ['position' => $lesson->position, 'title' => $lesson->title]);
         $problems = [];
 
-        if ($lesson->video === null) {
+        $containsVideo = $this->contentRenderer->containsVideo((string) $lesson->content_markdown);
+
+        if ($containsVideo && $lesson->video === null) {
             $problems[] = __(':lesson has no video.', ['lesson' => $label]);
-        } elseif (! $lesson->video->isPlayable()) {
+        } elseif ($containsVideo && ! $lesson->video->isPlayable()) {
             $problems[] = __(':lesson has a video that is not ready yet (:status).', ['lesson' => $label, 'status' => $lesson->video->status->label()]);
         }
 
         $latestGeneration = (int) $lesson->videos()->max('replacement_generation');
         $cutoff = now()->subMinutes((int) config('oceanix.video_upload_expiry_minutes', 120));
-        if ($lesson->videos()->where('replacement_generation', $latestGeneration)->where(function ($query) use ($cutoff): void {
+        if ($containsVideo && $lesson->videos()->where('replacement_generation', $latestGeneration)->where(function ($query) use ($cutoff): void {
             $query->where('status', VideoStatus::Processing->value)
                 ->orWhere(fn ($query) => $query->where('status', VideoStatus::Uploading->value)->where('created_at', '>', $cutoff));
         })->exists()) {

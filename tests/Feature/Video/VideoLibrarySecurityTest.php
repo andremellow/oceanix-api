@@ -139,7 +139,7 @@ it('never lets an older ready candidate replace a newer requested video', functi
 });
 
 it('blocks publication while a replacement candidate is processing', function (): void {
-    $module = ModuleVersion::factory()->create(['company_id' => null, 'is_shared' => true, 'status' => 'draft']);
+    $module = ModuleVersion::factory()->create(['company_id' => null, 'is_shared' => true, 'status' => 'draft', 'content_markdown' => '<div data-oceanix-video></div>']);
     Video::factory()->create(['lesson_id' => $module->id, 'company_id' => null, 'status' => 'ready', 'is_current' => true, 'replacement_generation' => 1]);
     Video::factory()->create(['lesson_id' => $module->id, 'company_id' => null, 'status' => 'processing', 'is_current' => false, 'replacement_generation' => 2]);
 

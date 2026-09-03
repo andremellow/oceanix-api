@@ -5,6 +5,7 @@ namespace App\Services\Modules;
 use App\Enums\ModuleVersionStatus;
 use App\Enums\QuestionType;
 use App\Models\ModuleVersion;
+use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Services\Courses\LessonContentSanitizer;
 use Illuminate\Support\Collection;
@@ -51,12 +52,12 @@ class SharedModuleDraftWriter
             'minimum_watch_percentage' => ['required', 'integer', 'min:1', 'max:100'],
             'passing_score' => ['required', 'integer', 'min:1', 'max:100'],
             'questions' => ['present', 'array'],
-            'questions.*.id' => ['required', 'integer'],
+            'questions.*.id' => ['present', 'nullable', 'integer'],
             'questions.*.prompt' => ['required', 'string', 'max:1000'],
             'questions.*.type' => ['required', 'string', 'in:single_choice,multiple_choice'],
             'questions.*.max_attempts' => ['required', 'integer', 'min:1', 'max:10'],
             'questions.*.options' => ['required', 'array', 'min:2'],
-            'questions.*.options.*.id' => ['required', 'integer'],
+            'questions.*.options.*.id' => ['present', 'nullable', 'integer'],
             'questions.*.options.*.text' => ['required', 'string', 'max:1000'],
             'questions.*.options.*.is_correct' => ['required', 'boolean'],
         ])->validate();
@@ -66,17 +67,26 @@ class SharedModuleDraftWriter
         }
 
         $submitted = collect($data['questions']);
-        if ($submitted->pluck('id')->sort()->values()->all() !== $questions->pluck('id')->sort()->values()->all()) {
+        $submittedQuestionIds = $submitted->pluck('id')->filter()->values();
+        if ($submittedQuestionIds->duplicates()->isNotEmpty() || $submittedQuestionIds->diff($questions->pluck('id'))->isNotEmpty()) {
             throw ValidationException::withMessages(['questions' => __('One or more assessment questions are unavailable.')]);
         }
 
-        foreach ($questions as $question) {
-            $index = $submitted->search(fn (array $item): bool => $item['id'] === $question->id);
-            $answers = collect($submitted[$index]['options']);
-            if ($answers->pluck('id')->sort()->values()->all() !== $question->options->pluck('id')->sort()->values()->all()) {
+        foreach ($submitted as $index => $questionData) {
+            $answers = collect($questionData['options']);
+            $submittedOptionIds = $answers->pluck('id')->filter()->values();
+            if ($submittedOptionIds->duplicates()->isNotEmpty()) {
                 throw ValidationException::withMessages(["questions.{$index}.options" => __('One or more assessment answers are unavailable.')]);
             }
-            if (QuestionType::from($submitted[$index]['type']) === QuestionType::SingleChoice && $answers->where('is_correct', true)->count() !== 1) {
+            if ($questionData['id'] !== null) {
+                $question = $questions->firstWhere('id', $questionData['id']);
+                if ($question === null || $submittedOptionIds->diff($question->options->pluck('id'))->isNotEmpty()) {
+                    throw ValidationException::withMessages(["questions.{$index}.options" => __('One or more assessment answers are unavailable.')]);
+                }
+            } elseif ($submittedOptionIds->isNotEmpty()) {
+                throw ValidationException::withMessages(["questions.{$index}.options" => __('One or more assessment answers are unavailable.')]);
+            }
+            if (QuestionType::from($questionData['type']) === QuestionType::SingleChoice && $answers->where('is_correct', true)->count() !== 1) {
                 throw ValidationException::withMessages(["questions.{$index}.options" => __('Choose exactly one correct answer.')]);
             }
         }
@@ -94,12 +104,31 @@ class SharedModuleDraftWriter
         }
         $module->update(collect($data)->only($moduleFields)->all());
         $submitted = collect($data['questions']);
+        foreach ($prepared['questions']->whereNotIn('id', $submitted->pluck('id')->filter()) as $removedQuestion) {
+            $removedQuestion->delete();
+        }
 
-        foreach ($prepared['questions'] as $question) {
-            $questionData = $submitted->firstWhere('id', $question->id);
-            $question->update(['prompt' => trim($questionData['prompt']), 'type' => QuestionType::from($questionData['type']), 'max_attempts' => $questionData['max_attempts']]);
-            foreach ($questionData['options'] as $answer) {
-                $question->options->firstWhere('id', $answer['id'])->update(['text' => trim($answer['text']), 'is_correct' => $answer['is_correct']]);
+        foreach ($submitted->values() as $questionIndex => $questionData) {
+            $attributes = ['prompt' => trim($questionData['prompt']), 'type' => QuestionType::from($questionData['type']), 'max_attempts' => $questionData['max_attempts'], 'position' => $questionIndex + 1];
+            $question = $questionData['id'] === null
+                ? Question::query()->create([...$attributes, 'company_id' => null, 'lesson_id' => $module->id])
+                : $prepared['questions']->firstWhere('id', $questionData['id']);
+            if ($questionData['id'] !== null) {
+                $question->update($attributes);
+            }
+
+            $existingOptions = $questionData['id'] === null ? collect() : $question->options;
+            foreach ($existingOptions->whereNotIn('id', collect($questionData['options'])->pluck('id')->filter()) as $removedOption) {
+                $removedOption->delete();
+            }
+            foreach (collect($questionData['options'])->values() as $optionIndex => $answer) {
+                $attributes = ['text' => trim($answer['text']), 'is_correct' => $answer['is_correct'], 'position' => $optionIndex + 1];
+                $option = $answer['id'] === null
+                    ? QuestionOption::query()->create([...$attributes, 'company_id' => null, 'question_id' => $question->id])
+                    : $existingOptions->firstWhere('id', $answer['id']);
+                if ($answer['id'] !== null) {
+                    $option->update($attributes);
+                }
             }
         }
     }

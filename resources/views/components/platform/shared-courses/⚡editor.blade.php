@@ -6,8 +6,8 @@ use App\Actions\Modules\CreateAndAttachSharedModule;
 use App\Actions\Modules\CreateModuleDraft;
 use App\Actions\Videos\LinkExistingVideo;
 use App\Actions\Videos\RequestVideoUpload;
-use App\Enums\CourseVersionStatus;
 use App\Enums\CourseStatus;
+use App\Enums\CourseVersionStatus;
 use App\Enums\ModuleVersionStatus;
 use App\Enums\PlatformPermission as Permission;
 use App\Enums\QuestionType;
@@ -22,9 +22,9 @@ use App\Models\ModuleVersion;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Video;
+use App\Services\Courses\LessonContentRenderer;
 use App\Services\Modules\SharedModuleDraftWriter;
 use App\Services\Platform\PlatformAccess;
-use App\Services\Courses\LessonContentRenderer;
 use App\Services\SharedContent\SharedContentCatalog;
 use App\Services\Video\VideoLibrary;
 use Illuminate\Support\Facades\DB;
@@ -225,37 +225,35 @@ new #[Layout('layouts::platform')] class extends Component
     {
         $access->authorizePermission(Permission::SharedModulesUpdate);
         $module = $this->moduleAt($moduleIndex);
-        if ($this->editorDirty || ($this->assessmentDirty[$module->id] ?? false)) {
-            $this->assessmentErrors[$module->id] = __('Save the assessment before adding questions or answers.');
-
-            return;
-        }
-        DB::transaction(function () use ($module): void {
-            $module = ModuleVersion::query()->lockForUpdate()->whereKey($module->id)->whereNull('company_id')->where('is_shared', true)->where('status', ModuleVersionStatus::Draft->value)->firstOrFail();
-            $question = Question::query()->create(['company_id' => null, 'lesson_id' => $module->id, 'type' => QuestionType::SingleChoice, 'prompt' => 'New question', 'position' => $module->questions()->count() + 1, 'max_attempts' => 3]);
-            foreach ([1, 2] as $position) {
-                QuestionOption::query()->create(['company_id' => null, 'question_id' => $question->id, 'text' => "Option {$position}", 'is_correct' => $position === 1, 'position' => $position]);
-            }
-        });
-        $this->loadModules();
+        $this->modules[$moduleIndex]['questions'][] = $this->newQuestion();
+        $this->markAssessmentDirty($module->id);
     }
 
     public function addOption(int $moduleIndex, int $questionIndex, PlatformAccess $access): void
     {
         $access->authorizePermission(Permission::SharedModulesUpdate);
         $module = $this->moduleAt($moduleIndex);
-        if ($this->editorDirty || ($this->assessmentDirty[$module->id] ?? false)) {
-            $this->assessmentErrors[$module->id] = __('Save the assessment before adding questions or answers.');
+        abort_unless(isset($this->modules[$moduleIndex]['questions'][$questionIndex]), 404);
+        $this->modules[$moduleIndex]['questions'][$questionIndex]['options'][] = $this->newOption(count($this->modules[$moduleIndex]['questions'][$questionIndex]['options']) + 1, false);
+        $this->markAssessmentDirty($module->id);
+    }
 
-            return;
-        }
-        DB::transaction(function () use ($moduleIndex, $questionIndex): void {
-            $module = $this->moduleAt($moduleIndex);
-            ModuleVersion::query()->lockForUpdate()->whereKey($module->id)->whereNull('company_id')->where('is_shared', true)->where('status', ModuleVersionStatus::Draft->value)->firstOrFail();
-            $question = $this->questionAt($moduleIndex, $questionIndex);
-            QuestionOption::query()->create(['company_id' => null, 'question_id' => $question->id, 'text' => 'New option', 'is_correct' => false, 'position' => $question->options()->count() + 1]);
-        });
-        $this->loadModules();
+    public function removeQuestion(int $moduleIndex, int $questionIndex, PlatformAccess $access): void
+    {
+        $access->authorizePermission(Permission::SharedModulesUpdate);
+        $module = $this->moduleAt($moduleIndex);
+        abort_unless(isset($this->modules[$moduleIndex]['questions'][$questionIndex]), 404);
+        array_splice($this->modules[$moduleIndex]['questions'], $questionIndex, 1);
+        $this->markAssessmentDirty($module->id);
+    }
+
+    public function removeOption(int $moduleIndex, int $questionIndex, int $optionIndex, PlatformAccess $access): void
+    {
+        $access->authorizePermission(Permission::SharedModulesUpdate);
+        $module = $this->moduleAt($moduleIndex);
+        abort_unless(isset($this->modules[$moduleIndex]['questions'][$questionIndex]['options'][$optionIndex]), 404);
+        array_splice($this->modules[$moduleIndex]['questions'][$questionIndex]['options'], $optionIndex, 1);
+        $this->markAssessmentDirty($module->id);
     }
 
     public function markAssessmentDirty(int $moduleId): void
@@ -265,6 +263,7 @@ new #[Layout('layouts::platform')] class extends Component
         $this->assessmentStatus[$moduleId] = 'unsaved';
         unset($this->assessmentErrors[$moduleId]);
         $this->editorDirty = true;
+        $this->dispatch('assessment-dirty', moduleId: $moduleId);
     }
 
     public function saveDraft(bool $close, SaveSharedCourseEditorDraft $action, PlatformAccess $access): void
@@ -300,8 +299,9 @@ new #[Layout('layouts::platform')] class extends Component
 
             return;
         }
-        $this->courseRevision = $revisions['course_revision'];
-        $this->moduleRevisions = $revisions['module_revisions'];
+        $this->course->refresh();
+        $this->version->refresh();
+        $this->loadModules();
         $this->editorDirty = false;
         $this->contentDirty = collect($this->modules)->mapWithKeys(fn (array $module): array => [$module['id'] => false])->all();
         foreach (array_keys($this->assessmentDirty) as $moduleId) {
@@ -484,7 +484,7 @@ new #[Layout('layouts::platform')] class extends Component
             'description' => $composition->moduleVersion->description, 'content_markdown' => $renderer->editorContent((string) $composition->moduleVersion->content_markdown),
             'minimum_watch_percentage' => $composition->moduleVersion->minimum_watch_percentage, 'passing_score' => $composition->moduleVersion->passing_score,
             'video' => $composition->moduleVersion->video ? ['status_label' => $composition->moduleVersion->video->status->label(), 'duration' => $composition->moduleVersion->video->formattedDuration(), 'preview' => rescue(fn (): ?array => app(VideoLibrary::class)->preview($composition->moduleVersion->video), null, report: false)] : null,
-            'questions' => $composition->moduleVersion->questions->map(fn ($q) => ['id' => $q->id, 'prompt' => $q->prompt, 'type' => $q->type->value, 'max_attempts' => $q->max_attempts, 'options' => $q->options->map(fn ($o) => ['id' => $o->id, 'text' => $o->text, 'is_correct' => $o->is_correct])->all()])->all(),
+            'questions' => $composition->moduleVersion->questions->map(fn ($q) => ['id' => $q->id, 'key' => "question-{$q->id}", 'prompt' => $q->prompt, 'type' => $q->type->value, 'max_attempts' => $q->max_attempts, 'options' => $q->options->map(fn ($o) => ['id' => $o->id, 'key' => "option-{$o->id}", 'text' => $o->text, 'is_correct' => $o->is_correct])->all()])->all(),
         ])->all();
         $this->courseRevision = app(SaveSharedCourseEditorDraft::class)->revision($this->course->fresh(), $this->version->fresh());
         $this->moduleRevisions = collect($this->modules)->mapWithKeys(fn (array $module): array => [$module['id'] => app(SharedModuleDraftWriter::class)->revision(ModuleVersion::query()->findOrFail($module['id']))])->all();
@@ -498,6 +498,17 @@ new #[Layout('layouts::platform')] class extends Component
             $this->videoLibraryItems = [];
             $this->videoLibraryError = __('The video library could not be loaded. Try again.');
         }
+    }
+
+    private function newQuestion(): array
+    {
+        return ['id' => null, 'key' => 'question-'.Str::uuid(), 'prompt' => 'New question', 'type' => QuestionType::SingleChoice->value, 'max_attempts' => 3,
+            'options' => [$this->newOption(1, true), $this->newOption(2, false)]];
+    }
+
+    private function newOption(int $number, bool $correct): array
+    {
+        return ['id' => null, 'key' => 'option-'.Str::uuid(), 'text' => "Option {$number}", 'is_correct' => $correct];
     }
 
     private function moduleAt(int $index): ModuleVersion
@@ -641,7 +652,7 @@ new #[Layout('layouts::platform')] class extends Component
                     <button type="button" wire:click="toggleModule({{ $module['id'] }})" class="flex min-w-0 flex-1 items-center justify-between gap-4 text-left" aria-expanded="{{ in_array($module['id'], $expanded, true) ? 'true' : 'false' }}" aria-controls="shared-course-module-panel-{{ $module['id'] }}">
                         <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2"><p class="font-bold">{{ $module['title'] }}</p><span class="status-pill status-pill--accent">{{ __('Shared') }}</span><span class="status-pill">{{ __('Managed by platform') }}</span></div>
-                            <p class="mt-1 text-xs text-[#8a9298]">{{ $module['video'] ? $module['video']['status_label'].' · '.$module['video']['duration'] : __('No video') }} · {{ trans_choice('ui.questions_count', count($module['questions']), ['count' => count($module['questions'])]) }}</p>
+                            <p class="mt-1 text-xs text-[#8a9298]">{{ trans_choice('ui.questions_count', count($module['questions']), ['count' => count($module['questions'])]) }}</p>
                         </div>
                         <flux:icon.chevron-down class="size-5 shrink-0" />
                     </button>
@@ -661,8 +672,7 @@ new #[Layout('layouts::platform')] class extends Component
                             class="oceanix-content-editor"
                             :label="__('Module content')"
                             toolbar="heading | bold italic underline strike | bullet ordered blockquote link | align | image image-left image-center image-right image-size video ~ fullscreen undo redo" />
-                        <div class="grid gap-4 sm:grid-cols-2"><flux:input type="number" wire:model.defer="modules.{{ $moduleIndex }}.minimum_watch_percentage" x-on:input="markDirty" :label="__('Watch threshold (%)')" /><flux:input type="number" wire:model.defer="modules.{{ $moduleIndex }}.passing_score" x-on:input="markDirty" :label="__('Passing score (%)')" /></div>
-                        <div class="flex items-center justify-between rounded-[18px] bg-[#f7f9fa] p-4" x-data="lessonVideoUpload({{ $moduleIndex }}, {{ Js::from(['fileTooLarge' => __('This video is larger than 200 MB. Select a smaller file.')]) }})"><div><p class="font-bold">{{ __('Video') }}</p><p class="text-xs text-[#8a9298]">{{ $module['video'] ? $module['video']['status_label'].' · '.$module['video']['duration'] : __('No video attached') }}</p><p x-show="uploading" x-text="`${progress}%`"></p></div><div><input type="file" accept="video/*" class="hidden" x-ref="file" @change="start($event)"><flux:button x-on:click="$refs.file.click()" variant="ghost">{{ $module['video'] ? __('Replace video') : __('Upload video') }}</flux:button></div></div>
+                        <flux:input type="number" wire:model.defer="modules.{{ $moduleIndex }}.passing_score" x-on:input="markDirty" :label="__('Passing score (%)')" />
                         <div>
                             <div class="flex flex-wrap items-center justify-between gap-3">
                                 <div><p class="font-bold">{{ __('Assessment') }}</p><p class="text-xs text-[#707a80]">{{ __('Assessment changes are saved explicitly.') }}</p></div>
@@ -671,20 +681,20 @@ new #[Layout('layouts::platform')] class extends Component
                             <div class="mt-3 space-y-3">
                                 @if ($module['questions'] === [])<x-empty-state icon="question-mark-circle" :title="__('No assessment questions yet')" :description="__('Add a question to build this assessment.')" />@endif
                                 @foreach ($module['questions'] as $questionIndex => $question)
-                                    <div class="rounded-[18px] border border-[#e4e9ec] p-4" wire:key="question-{{ $question['id'] }}">
-                                        <p class="mb-3 text-sm font-bold text-[#4f5960]">{{ __('Question :number', ['number' => $questionIndex + 1]) }}</p>
+                                    <div class="rounded-[18px] border border-[#e4e9ec] p-4" wire:key="{{ $question['key'] }}">
+                                        <div class="mb-3 flex items-center justify-between gap-3"><p class="text-sm font-bold text-[#4f5960]">{{ __('Question :number', ['number' => $questionIndex + 1]) }}</p><flux:button wire:click="removeQuestion({{ $moduleIndex }}, {{ $questionIndex }})" wire:confirm="{{ __('ui.confirm_remove_question') }}" variant="ghost" size="sm" icon="trash" :aria-label="__('Remove question')" /></div>
                                         <div class="grid gap-3 sm:grid-cols-[1fr_180px_140px]"><flux:input wire:model.defer="modules.{{ $moduleIndex }}.questions.{{ $questionIndex }}.prompt" x-on:input="markDirty" :label="__('Question')" /><flux:select wire:model.live="modules.{{ $moduleIndex }}.questions.{{ $questionIndex }}.type" x-on:change="markDirty" :label="__('Question type')"><flux:select.option value="single_choice">{{ __('Single choice') }}</flux:select.option><flux:select.option value="multiple_choice">{{ __('Multiple choice') }}</flux:select.option></flux:select><flux:input type="number" wire:model.defer="modules.{{ $moduleIndex }}.questions.{{ $questionIndex }}.max_attempts" x-on:input="markDirty" :label="__('Attempts')" /></div>
                                         <fieldset class="mt-3 space-y-2"><legend class="mb-2 text-sm font-semibold">{{ __('Correct answer') }}</legend>
                                             @foreach ($question['options'] as $optionIndex => $option)
-                                                <div class="flex items-center gap-2" wire:key="option-{{ $option['id'] }}">@if ($question['type'] === 'single_choice')<input type="radio" x-on:change="@foreach ($question['options'] as $candidateIndex => $candidate) $wire.set('modules.{{ $moduleIndex }}.questions.{{ $questionIndex }}.options.{{ $candidateIndex }}.is_correct', {{ $candidateIndex === $optionIndex ? 'true' : 'false' }}, false); @endforeach markDirty()" @checked($option['is_correct']) name="correct-{{ $question['id'] }}" aria-label="{{ __('Mark answer :number as correct', ['number' => $optionIndex + 1]) }}">@else<input type="checkbox" wire:model.defer="modules.{{ $moduleIndex }}.questions.{{ $questionIndex }}.options.{{ $optionIndex }}.is_correct" x-on:change="markDirty" aria-label="{{ __('Mark answer :number as correct', ['number' => $optionIndex + 1]) }}">@endif<flux:input wire:model.defer="modules.{{ $moduleIndex }}.questions.{{ $questionIndex }}.options.{{ $optionIndex }}.text" x-on:input="markDirty" :label="__('Answer :number', ['number' => $optionIndex + 1])" class="flex-1" /></div>
+                                                <div class="flex items-center gap-2" wire:key="{{ $option['key'] }}">@if ($question['type'] === 'single_choice')<input type="radio" x-on:change="@foreach ($question['options'] as $candidateIndex => $candidate) $wire.set('modules.{{ $moduleIndex }}.questions.{{ $questionIndex }}.options.{{ $candidateIndex }}.is_correct', {{ $candidateIndex === $optionIndex ? 'true' : 'false' }}, false); @endforeach markDirty()" @checked($option['is_correct']) name="correct-{{ $question['key'] }}" aria-label="{{ __('Mark answer :number as correct', ['number' => $optionIndex + 1]) }}">@else<input type="checkbox" wire:model.defer="modules.{{ $moduleIndex }}.questions.{{ $questionIndex }}.options.{{ $optionIndex }}.is_correct" x-on:change="markDirty" aria-label="{{ __('Mark answer :number as correct', ['number' => $optionIndex + 1]) }}">@endif<flux:input wire:model.defer="modules.{{ $moduleIndex }}.questions.{{ $questionIndex }}.options.{{ $optionIndex }}.text" x-on:input="markDirty" :label="__('Answer :number', ['number' => $optionIndex + 1])" field:class="min-w-0 flex-1" /><flux:button wire:click="removeOption({{ $moduleIndex }}, {{ $questionIndex }}, {{ $optionIndex }})" variant="ghost" size="sm" icon="x-mark" :aria-label="__('Remove option')" /></div>
                                             @endforeach
                                         </fieldset>
-                                        <flux:button wire:click="addOption({{ $moduleIndex }}, {{ $questionIndex }})" x-bind:disabled="dirty" variant="ghost" size="sm" class="mt-3">{{ __('Add option') }}</flux:button>
+                                        <flux:button wire:click="addOption({{ $moduleIndex }}, {{ $questionIndex }})" variant="ghost" size="sm" class="mt-3" icon="plus">{{ __('Add option') }}</flux:button>
                                     </div>
                                 @endforeach
                             </div>
                             <div class="mt-4 flex justify-end">
-                                <flux:button wire:click="addQuestion({{ $moduleIndex }})" x-bind:disabled="dirty" variant="ghost" icon="plus" class="w-full sm:w-auto">{{ __('Add question') }}</flux:button>
+                                <flux:button wire:click="addQuestion({{ $moduleIndex }})" variant="ghost" icon="plus" class="w-full sm:w-auto">{{ __('Add question') }}</flux:button>
                             </div>
                         </div>
                     </div>
