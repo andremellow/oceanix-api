@@ -83,6 +83,19 @@ it('rejects company-owned courses from platform shared detail and editor routes'
         ->assertNotFound();
 });
 
+it('renders the shared course hero description at full width', function (): void {
+    $account = Account::factory()->platformAdmin()->create();
+    $course = Course::factory()->shared()->draft()->create([
+        'description' => 'A detailed shared course description.',
+    ]);
+
+    $this->withSession(['platform_account_id' => $account->id])
+        ->get(route('platform.shared-courses.show', ['course' => $course]))
+        ->assertOk()
+        ->assertSee('A detailed shared course description.')
+        ->assertSee('max-w-none', false);
+});
+
 it('creates shared courses with platform ownership from the directory', function (): void {
     $account = Account::factory()->platformAdmin()->create();
     $this->withSession(['platform_account_id' => $account->id]);

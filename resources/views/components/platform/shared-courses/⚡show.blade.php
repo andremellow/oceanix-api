@@ -92,7 +92,7 @@ new #[Layout('layouts::platform')] class extends Component
 ?>
 
 <div class="admin-page space-y-7">
-    <x-page-hero :kicker="$course->code" :title="$course->title" :description="$course->description ?: __('No description provided')">
+    <x-page-hero :kicker="$course->code" :title="$course->title" :description="$course->description ?: __('No description provided')" description-class="max-w-none">
         <span class="status-pill {{ $course->is_shared ? 'status-pill--accent' : 'status-pill--neutral' }}">{{ $course->is_shared ? __('Shared') : __('Company-owned') }}</span>
         <span class="status-pill {{ $course->status->pillModifier() }}">{{ $course->status->label() }}</span>
         <flux:button :href="$company ? route('platform.companies.show', ['company' => $company]) : route('platform.shared-courses.index')" variant="ghost" size="sm">{{ $company ? __('Back to company') : __('Back to shared courses') }}</flux:button>

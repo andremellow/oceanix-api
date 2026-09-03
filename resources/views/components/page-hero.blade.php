@@ -1,4 +1,4 @@
-@props(['kicker' => null, 'title', 'description' => null])
+@props(['kicker' => null, 'title', 'description' => null, 'descriptionClass' => 'max-w-2xl'])
 
 <section class="admin-hero">
     @if ($kicker || ! $slot->isEmpty())
@@ -14,6 +14,6 @@
 
     <h1 class="{{ $kicker || ! $slot->isEmpty() ? 'mt-3' : '' }} text-2xl font-bold tracking-tight text-[#1f262b]">{{ $title }}</h1>
     @if ($description)
-        <p class="mt-2 max-w-2xl text-sm leading-6 text-[#5f6a71]">{{ $description }}</p>
+        <p @class(['mt-2 text-sm leading-6 text-[#5f6a71]', $descriptionClass])>{{ $description }}</p>
     @endif
 </section>
