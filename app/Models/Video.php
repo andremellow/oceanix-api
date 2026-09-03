@@ -16,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'company_id', 'lesson_id', 'provider', 'provider_asset_id', 'provider_playback_id',
     'duration_seconds', 'status', 'metadata',
+    'is_current',
+    'replacement_generation',
 ])]
 class Video extends Model
 {
@@ -28,6 +30,8 @@ class Video extends Model
             'status' => VideoStatus::class,
             'metadata' => 'array',
             'duration_seconds' => 'integer',
+            'is_current' => 'boolean',
+            'replacement_generation' => 'integer',
         ];
     }
 

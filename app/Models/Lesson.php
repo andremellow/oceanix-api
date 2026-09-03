@@ -15,7 +15,7 @@ use Illuminate\Support\Str;
 
 #[Fillable([
     'company_id', 'course_version_id', 'is_shared', 'code', 'lineage_uuid', 'version_number',
-    'status', 'published_at', 'published_by_account_id', 'source_lesson_id', 'title', 'description', 'content_markdown',
+    'status', 'published_at', 'lineage_archived_at', 'published_by_account_id', 'source_lesson_id', 'title', 'description', 'content_markdown',
     'type', 'position', 'is_required', 'minimum_watch_percentage', 'passing_score',
 ])]
 class Lesson extends Model
@@ -29,6 +29,7 @@ class Lesson extends Model
             'type' => LessonType::class,
             'is_shared' => 'boolean',
             'published_at' => 'datetime',
+            'lineage_archived_at' => 'datetime',
             'is_required' => 'boolean',
             'minimum_watch_percentage' => 'integer',
             'passing_score' => 'integer',
@@ -70,7 +71,13 @@ class Lesson extends Model
      */
     public function video(): HasOne
     {
-        return $this->hasOne(Video::class, 'lesson_id');
+        return $this->hasOne(Video::class, 'lesson_id')->where('is_current', true)->latestOfMany('id');
+    }
+
+    /** @return HasMany<Video, $this> */
+    public function videos(): HasMany
+    {
+        return $this->hasMany(Video::class, 'lesson_id');
     }
 
     /**

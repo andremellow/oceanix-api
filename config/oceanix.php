@@ -58,6 +58,8 @@ return [
     'due_soon_days' => (int) env('OCEANIX_DUE_SOON_DAYS', 14),
     'critical_overdue_days' => (int) env('OCEANIX_CRITICAL_OVERDUE_DAYS', 30),
 
+    'video_upload_expiry_minutes' => (int) env('OCEANIX_VIDEO_UPLOAD_EXPIRY_MINUTES', 120),
+
     // How often an overdue reminder repeats, in days. Daily nagging trains people to ignore it.
     'overdue_reminder_days' => (int) env('OCEANIX_OVERDUE_REMINDER_DAYS', 7),
 

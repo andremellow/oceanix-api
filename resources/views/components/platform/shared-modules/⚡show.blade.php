@@ -4,7 +4,9 @@ use App\Actions\Modules\CreateModuleDraft;
 use App\Actions\SharedContent\ArchiveSharedContent;
 use App\Enums\ModuleStatus;
 use App\Enums\ModuleVersionStatus;
+use App\Enums\PlatformPermission as Permission;
 use App\Models\Module;
+use App\Services\Modules\ModuleStatusPresentation;
 use App\Services\Platform\PlatformAccess;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -19,35 +21,36 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function mount(Module $module, PlatformAccess $access): void
     {
-        $access->authorize();
+        $access->authorizePermission(Permission::SharedModulesView);
         abort_unless($module->is_shared && $module->company_id === null, 404);
         $this->module = $module;
     }
 
     public function createDraft(CreateModuleDraft $action, PlatformAccess $access): void
     {
-        $access->authorize();
+        $access->authorizePermission(Permission::SharedModulesUpdate);
+        abort_if($this->module->lineage_archived_at !== null, 404);
         $source = $this->module->currentPublishedVersion()->firstOrFail();
-        $action->handle($source, $access->authorize());
+        $action->handle($source, $access->authorizePermission(Permission::SharedModulesUpdate));
         session()->flash('status', __('Module draft created.'));
     }
 
     public function archive(ArchiveSharedContent $action, PlatformAccess $access): void
     {
-        $account = $access->authorize();
+        $account = $access->authorizePermission(Permission::SharedModulesArchive);
         $this->validate(['archiveReason' => ['required', 'string', 'max:500']]);
         $this->module = $action->handle($this->module, $account, $this->archiveReason);
         $this->reset('confirmingArchive', 'archiveReason');
         session()->flash('status', __('Shared module archived.'));
     }
 
-    public function with(): array
+    public function with(ModuleStatusPresentation $statusPresentation): array
     {
-        $status = $this->module->status;
-
         return [
             'versions' => $this->module->versions()->get(),
-            'moduleStatus' => $status instanceof ModuleStatus ? $status : ModuleStatus::from((string) $status),
+            'moduleStatus' => $statusPresentation->for(
+                $this->module->lineage_archived_at !== null ? ModuleStatus::Archived : $this->module->status,
+            ),
         ];
     }
 };
@@ -55,15 +58,15 @@ new #[Layout('layouts::platform')] class extends Component
 
 <div class="space-y-7">
     <x-page-hero :kicker="__('Shared Module')" :title="$module->title" :description="__('Managed by platform and reusable across company courses.')">
-        <span class="status-pill {{ $moduleStatus->pillModifier() }}">{{ $moduleStatus->label() }}</span>
-        @if ($moduleStatus === ModuleStatus::Archived)
+        <span class="status-pill {{ $moduleStatus['modifier'] }}">{{ $moduleStatus['label'] }}</span>
+        @if ($moduleStatus['is_archived'])
             <span class="text-sm text-[#707a80]">{{ __('New course compositions are blocked.') }}</span>
         @elseif ($versions->contains(fn ($version) => $version->status === ModuleVersionStatus::Draft))
             <flux:button :href="route('platform.shared-modules.editor', ['module' => $module])" wire:navigate variant="primary">{{ __('Edit draft') }}</flux:button>
-        @elseif ($module->current_published_version_id)
+        @elseif ($module->currentPublishedVersion()->exists())
             <flux:button wire:click="createDraft" wire:loading.attr="disabled" variant="primary">{{ __('Create new version') }}</flux:button>
         @endif
-        @if ($moduleStatus !== ModuleStatus::Archived)
+        @if (! $moduleStatus['is_archived'])
             <flux:button wire:click="$set('confirmingArchive', true)" variant="danger">{{ __('Archive shared module') }}</flux:button>
         @endif
     </x-page-hero>

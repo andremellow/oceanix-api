@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\Permission;
+use App\Enums\PlatformPermission;
 use App\Models\Permission as PermissionModel;
 use App\Models\Role;
 use App\Models\User;
@@ -44,6 +45,14 @@ it('defines atomic shared library permissions with their exact prerequisites', f
 
     expect(Permission::SharedCoursesView->group())->toBe('shared-courses')
         ->and(Permission::SharedModulesView->group())->toBe('shared-modules');
+});
+
+it('keeps platform-only abilities out of the tenant permission catalog', function (): void {
+    $tenantKeys = Permission::values();
+    $platformKeys = array_column(PlatformPermission::cases(), 'value');
+
+    expect($platformKeys)->toContain('shared-modules.create', 'shared-modules.update', 'shared-modules.publish', 'shared-modules.archive')
+        ->and($tenantKeys)->not->toContain('shared-modules.create', 'shared-modules.update', 'shared-modules.publish', 'shared-modules.archive');
 });
 
 it('does not grant course or people modules just to create assignments', function (): void {

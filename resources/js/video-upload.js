@@ -30,12 +30,27 @@ document.addEventListener('alpine:init', () => {
             this.uploading = true
             this.progress = 0
 
+            let uploadToken = null
+
             try {
-                const uploadUrl = await this.$wire.requestUpload(lessonIndex)
+                const allocation = await this.$wire.requestUpload(lessonIndex)
+                const uploadUrl = typeof allocation === 'string' ? allocation : allocation.url
+                uploadToken = typeof allocation === 'string' ? null : allocation.token
 
                 await this.send(uploadUrl, file)
-                await this.$wire.uploadCompleted(lessonIndex)
+                if (uploadToken === null) {
+                    await this.$wire.uploadCompleted(lessonIndex)
+                } else {
+                    await this.$wire.uploadCompleted(lessonIndex, uploadToken)
+                }
             } catch (error) {
+                if (uploadToken !== null) {
+                    try {
+                        await this.$wire.uploadFailed(lessonIndex, uploadToken)
+                    } catch {
+                        // Keep the original provider error visible; Livewire will revalidate on the next action.
+                    }
+                }
                 this.error = error?.message ?? 'Upload failed. Please try again.'
             } finally {
                 this.uploading = false

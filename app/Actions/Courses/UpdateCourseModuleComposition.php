@@ -44,6 +44,7 @@ class UpdateCourseModuleComposition
                 || (! $moduleVersion->is_shared && (int) $moduleVersion->company_id === (int) $version->course->company_id);
 
             if (! $eligibleOwner
+                || $moduleVersion->lineage_archived_at !== null
                 || $moduleVersion->getRawOriginal('status') !== 'published') {
                 throw new \LogicException(__('One or more selected modules are unavailable.'));
             }

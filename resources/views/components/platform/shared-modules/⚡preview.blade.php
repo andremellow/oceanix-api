@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\ModuleVersionStatus;
+use App\Enums\PlatformPermission as Permission;
 use App\Models\Module;
 use App\Models\ModuleVersion;
 use App\Services\Platform\PlatformAccess;
@@ -14,7 +15,7 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function mount(Module $module, PlatformAccess $access): void
     {
-        $access->authorize();
+        $access->authorizePermission(Permission::SharedModulesView);
         abort_unless($module->is_shared && $module->company_id === null, 404);
         $this->module = $module;
         $this->version = $module->versions()->where('status', ModuleVersionStatus::Draft->value)->with('video')->firstOrFail();

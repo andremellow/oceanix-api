@@ -22,18 +22,31 @@ class SyncVideoAssets extends Command
 
     public function handle(SyncVideoAsset $action): int
     {
-        $this->forEachCompany(function () use ($action): void {
-            $pending = Video::query()
-                ->whereIn('status', [VideoStatus::Uploading->value, VideoStatus::Processing->value])
-                ->get();
-
-            foreach ($pending as $video) {
-                $action->handle($video);
-            }
-
-            $this->info("Videos reconciled: {$pending->count()}.");
+        $this->forEachCompany(function ($company) use ($action): void {
+            $this->sync(Video::query()->where('company_id', $company->id), $action);
         });
 
+        $this->sync(Video::query()->whereNull('company_id'), $action);
+
         return self::SUCCESS;
+    }
+
+    private function sync($query, SyncVideoAsset $action): void
+    {
+        $pending = $query->clone()
+            ->whereIn('status', [VideoStatus::Uploading->value, VideoStatus::Processing->value])
+            ->get();
+
+        foreach ($pending as $video) {
+            $action->handle($video);
+        }
+
+        $cutoff = now()->subMinutes((int) config('oceanix.video_upload_expiry_minutes', 120));
+        $query->clone()->where('status', VideoStatus::Uploading->value)->where(function ($query) use ($cutoff): void {
+            $query->where('created_at', '<=', $cutoff)
+                ->orWhereRaw('replacement_generation < (SELECT MAX(v2.replacement_generation) FROM videos v2 WHERE v2.lesson_id = videos.lesson_id)');
+        })->update(['status' => VideoStatus::Failed]);
+
+        $this->info("Videos reconciled: {$pending->count()}.");
     }
 }

@@ -55,6 +55,8 @@ class SharedContentCatalog
     {
         return Module::query()->withoutGlobalScopes()
             ->whereNull('company_id')->where('is_shared', true)
+            ->whereNull('lineage_archived_at')
+            ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('lessons as newer')->whereColumn('newer.lineage_uuid', 'lessons.lineage_uuid')->whereColumn('newer.version_number', '>', 'lessons.version_number'))
             ->when(filled($search), fn ($query) => $query->where(fn ($query) => $query
                 ->where('title', 'like', '%'.trim((string) $search).'%')
                 ->orWhere('code', 'like', '%'.trim((string) $search).'%')))
@@ -90,6 +92,7 @@ class SharedContentCatalog
     {
         return ModuleVersion::query()->withoutGlobalScopes()
             ->shared()
+            ->whereNull('lineage_archived_at')
             ->where('status', 'published')
             ->when(filled($search), fn ($query) => $query->where(fn ($query) => $query
                 ->where('title', 'like', '%'.trim((string) $search).'%')

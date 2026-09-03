@@ -94,7 +94,8 @@ it('excludes an archived shared module from catalogs and new compositions', func
     $course = Course::factory()->draft()->create();
     $draft = CourseVersion::factory()->create(['course_id' => $course->id]);
 
-    expect($version->fresh()->status)->toBe(ModuleVersionStatus::Archived)
+    expect($version->fresh()->status)->toBe(ModuleVersionStatus::Published)
+        ->and($version->fresh()->lineage_archived_at)->not->toBeNull()
         ->and(app(SharedContentCatalog::class)->availableModules()->modelKeys())->not->toContain($version->id)
         ->and(app(EligibleModuleCatalog::class)->forCourseEditor(currentCompany(), $tenantActor)['shared']->modelKeys())->not->toContain($version->id)
         ->and(fn () => app(UpdateCourseModuleComposition::class)->handle($draft, [$version->id], $tenantActor))->toThrow(LogicException::class);
