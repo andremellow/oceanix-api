@@ -1,7 +1,9 @@
 <?php
 
 use App\Enums\AssignmentStatus;
+use App\Enums\ComplianceEventType;
 use App\Enums\Permission;
+use App\Models\ComplianceEvent;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
@@ -9,6 +11,8 @@ use App\Models\Department;
 use App\Models\ModuleVersion;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 
 function assignableCourse(): Course
 {
@@ -147,6 +151,33 @@ it('lets the assignee open their own assignment', function (): void {
         ->get(route('my-training.show', ['assignment' => $assignment]))
         ->assertOk()
         ->assertSee($assignment->course->title);
+});
+
+it('does not expose the compliance activity trail on the learner assignment page', function (): void {
+    $user = employeeUser();
+    $assignment = UserTrainingAssignment::factory()->forCourse(assignableCourse())->create(['user_id' => $user->id]);
+    $event = ComplianceEvent::factory()->create([
+        'event_type' => ComplianceEventType::AssignmentOpened,
+        'user_id' => $user->id,
+        'assignment_id' => $assignment->id,
+        'course_version_id' => $assignment->course_version_id,
+    ]);
+    $learnerPageQueries = [];
+    DB::listen(function (QueryExecuted $query) use (&$learnerPageQueries): void {
+        $learnerPageQueries[] = strtolower($query->sql);
+    });
+
+    $this->actingAs($user)
+        ->get(route('my-training.show', ['assignment' => $assignment]))
+        ->assertOk()
+        ->assertDontSee(__('Activity'))
+        ->assertDontSee(__('ui.activity_help'))
+        ->assertDontSee($event->event_type->label());
+
+    expect(collect($learnerPageQueries)->contains(
+        fn (string $sql): bool => str_contains($sql, 'compliance_events'),
+    ))->toBeFalse()
+        ->and(ComplianceEvent::query()->whereKey($event->id)->exists())->toBeTrue();
 });
 
 it('shows and opens frozen module compositions in an employee assignment', function (): void {

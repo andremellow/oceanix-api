@@ -30,10 +30,6 @@ new class extends Component
         return [
             'lessons' => $lessons,
             'progress' => $this->assignment->lessonProgress()->get()->keyBy('lesson_id'),
-            'events' => $this->assignment->complianceEvents()
-                ->latest('occurred_at')
-                ->limit(20)
-                ->get(),
         ];
     }
 };
@@ -122,26 +118,4 @@ new class extends Component
         </div>
     </section>
 
-    <section class="detail-card">
-        <span class="detail-card-icon"><flux:icon.clock class="size-5" /></span>
-        <h2 class="detail-card-title">{{ __('Activity') }}</h2>
-        <p class="mt-1 text-sm text-[#6f797f]">{{ __('ui.activity_help') }}</p>
-
-        <div class="mt-5">
-            @forelse ($events as $event)
-                <div class="flex items-start gap-3 border-b border-[#eef1f4] py-3 last:border-0">
-                    <span class="mt-1.5 size-2 shrink-0 rounded-full bg-[#9fb3bc]"></span>
-                    <div class="min-w-0 flex-1">
-                        <p class="text-sm font-semibold text-[#262d33]">{{ $event->event_type->label() }}</p>
-                        <p class="text-xs text-[#8a9298]">{{ $event->occurred_at->locale(app()->getLocale())->translatedFormat('M j, Y · H:i') }}</p>
-                    </div>
-                </div>
-            @empty
-                <x-empty-state
-                    icon="clock"
-                    :title="__('ui.no_activity')"
-                    :description="__('ui.no_activity_help')" />
-            @endforelse
-        </div>
-    </section>
 </div>

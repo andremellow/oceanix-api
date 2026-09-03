@@ -24,6 +24,15 @@ function editableAssessmentModule(): array
     return [$module, $question, $first, $second];
 }
 
+function expectFullWidthAssessmentOptionFields(string $html, array $models): void
+{
+    foreach ($models as $model) {
+        $fieldPattern = '/<ui-field(?=[^>]*class="[^"]*\\bflex-1\\b)(?=[^>]*class="[^"]*\\bmin-w-0\\b)[^>]*>.*?wire:model.defer="'.preg_quote($model, '/').'".*?<\\/ui-field>/s';
+
+        expect(preg_match_all($fieldPattern, $html))->toBe(1);
+    }
+}
+
 it('saves and reloads the complete assessment from the shared course editor', function (): void {
     $account = Account::factory()->platformAdmin()->create();
     [$module, $question, $first, $second] = editableAssessmentModule();
@@ -50,6 +59,11 @@ it('saves and reloads the complete assessment from the shared course editor', fu
         ->and($question->fresh()->prompt)->toBe('Last typed character!')
         ->and($first->fresh()->is_correct)->toBeFalse()
         ->and($second->fresh()->is_correct)->toBeTrue();
+
+    expectFullWidthAssessmentOptionFields($editor->html(), [
+        'modules.0.questions.0.options.0.text',
+        'modules.0.questions.0.options.1.text',
+    ]);
 });
 
 it('provides assessment parity in the standalone shared module editor', function (): void {
@@ -84,6 +98,11 @@ it('provides assessment parity in the standalone shared module editor', function
         ->and($module->fresh()->content_markdown)->toBe('# Saved content')
         ->and($module->fresh()->minimum_watch_percentage)->toBe(85)
         ->and($module->fresh()->passing_score)->toBe(75);
+
+    expectFullWidthAssessmentOptionFields($editor->html(), [
+        'questions.0.options.0.text',
+        'questions.0.options.1.text',
+    ]);
 });
 
 it('rolls back every module when a later module in the course draft is invalid', function (): void {
@@ -341,9 +360,16 @@ it('round trips multiple-choice answers through the shared course editor', funct
         ->and($first->fresh()->is_correct)->toBeTrue()
         ->and($second->fresh()->is_correct)->toBeTrue();
 
-    Livewire::test('platform.shared-courses.editor', ['course' => $course])
+    $editor = Livewire::test('platform.shared-courses.editor', ['course' => $course])
         ->assertSet('modules.0.questions.0.type', 'multiple_choice')
-        ->assertSeeHtml('type="checkbox"');
+        ->assertSeeHtml('type="checkbox"')
+        ->assertSeeHtml('wire:model.defer="modules.0.questions.0.options.0.is_correct"')
+        ->assertSeeHtml('wire:model.defer="modules.0.questions.0.options.1.is_correct"');
+
+    expectFullWidthAssessmentOptionFields($editor->html(), [
+        'modules.0.questions.0.options.0.text',
+        'modules.0.questions.0.options.1.text',
+    ]);
 });
 
 it('rejects converting multiple choice with two correct answers to single choice atomically', function (): void {
@@ -403,9 +429,16 @@ it('round trips multiple-choice answers through the standalone module editor', f
         ->and($first->fresh()->is_correct)->toBeTrue()
         ->and($second->fresh()->is_correct)->toBeTrue();
 
-    Livewire::test('platform.shared-modules.editor', ['module' => $module])
+    $editor = Livewire::test('platform.shared-modules.editor', ['module' => $module])
         ->assertSet('questions.0.type', 'multiple_choice')
-        ->assertSeeHtml('type="checkbox"');
+        ->assertSeeHtml('type="checkbox"')
+        ->assertSeeHtml('wire:model.defer="questions.0.options.0.is_correct"')
+        ->assertSeeHtml('wire:model.defer="questions.0.options.1.is_correct"');
+
+    expectFullWidthAssessmentOptionFields($editor->html(), [
+        'questions.0.options.0.text',
+        'questions.0.options.1.text',
+    ]);
 });
 
 it('preserves canonical media directives during a standalone title-only save', function (): void {
