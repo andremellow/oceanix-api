@@ -64,7 +64,7 @@
       "sha256": "32f6f141f532e8c09624b6f5243dfeab4bc370e377a11d10b81d9d286a12e51c"
     },
     ".toscanini/bin/toscanini-event.py": {
-      "sha256": "ec9f8092240a057415fae0e22f75343dc2999c35a1cb7b1064f89dc074ef7fb5"
+      "sha256": "03166a07337ef48f47146b49b4401ca0ef9fbb4474ff37b272dc32413b6af7eb"
     },
     ".toscanini/bin/toscanini-gate.py": {
       "sha256": "94eb1b4b255f69f11872b445f9ca78759d64b1da24848532cb9d0f0c1aade1eb"

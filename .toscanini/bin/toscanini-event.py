@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import tempfile
@@ -36,25 +37,30 @@ def main() -> int:
         event["verdict"] = args.verdict
     if args.context_mode:
         event["contextMode"] = args.context_mode
-    with (root / "events.jsonl").open("a", encoding="utf-8") as stream:
-        stream.write(json.dumps(event, separators=(",", ":")) + "\n")
-    state_path = root / "state.json"
-    try:
-        state = json.loads(state_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        state = {"agents": {}}
-    state.setdefault("agents", {})[args.agent] = event
-    state.setdefault("runs", {}).setdefault(args.run_id, {})[args.agent] = event
-    state["updatedAt"] = event["timestamp"]
-    handle, temporary = tempfile.mkstemp(prefix="state-", suffix=".json", dir=root)
-    try:
-        with os.fdopen(handle, "w", encoding="utf-8") as output:
-            json.dump(state, output, indent=2)
-            output.write("\n")
-        os.replace(temporary, state_path)
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
+    lock_path = root / "state.lock"
+    with lock_path.open("a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+
+        with (root / "events.jsonl").open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(event, separators=(",", ":")) + "\n")
+
+        state_path = root / "state.json"
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            state = {"agents": {}}
+        state.setdefault("agents", {})[args.agent] = event
+        state.setdefault("runs", {}).setdefault(args.run_id, {})[args.agent] = event
+        state["updatedAt"] = event["timestamp"]
+        handle, temporary = tempfile.mkstemp(prefix="state-", suffix=".json", dir=root)
+        try:
+            with os.fdopen(handle, "w", encoding="utf-8") as output:
+                json.dump(state, output, indent=2)
+                output.write("\n")
+            os.replace(temporary, state_path)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
     return 0
 
 
