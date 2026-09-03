@@ -21,7 +21,29 @@ class LessonContentRenderer
             return $this->sanitizer->sanitize($content);
         }
 
-        return (string) $this->renderMarkdown($content);
+        $blocks = [];
+        $index = 0;
+        $content = preg_replace_callback('/^:::image\{([^}]*)\}\s*$/m', function (array $match) use (&$blocks, &$index): string {
+            $attributes = $this->attributes($match[1]);
+            $token = 'OCEANIXEDITORMEDIA'.($index++).'TOKEN';
+            $align = in_array($attributes['align'] ?? '', ['left', 'right', 'center'], true) ? $attributes['align'] : 'center';
+            $width = rtrim($attributes['width'] ?? '50%', '%');
+            $blocks[$token] = '<img src="'.e($attributes['src'] ?? '').'" alt="'.e($attributes['alt'] ?? '').'" data-align="'.$align.'" data-width="'.$width.'">';
+
+            return "\n{$token}\n";
+        }, $content) ?? $content;
+        $content = preg_replace_callback('/^:::video\s*$/m', function () use (&$blocks, &$index): string {
+            $token = 'OCEANIXEDITORMEDIA'.($index++).'TOKEN';
+            $blocks[$token] = '<div data-oceanix-video></div>';
+
+            return "\n{$token}\n";
+        }, $content) ?? $content;
+        $html = (string) Str::markdown($content, ['html_input' => 'strip', 'allow_unsafe_links' => false]);
+        foreach ($blocks as $token => $block) {
+            $html = str_replace(["<p>{$token}</p>", $token], $block, $html);
+        }
+
+        return $this->sanitizer->sanitize($html);
     }
 
     public function renderContent(string $content, ?string $videoDuration = null): HtmlString

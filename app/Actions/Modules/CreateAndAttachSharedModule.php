@@ -2,11 +2,13 @@
 
 namespace App\Actions\Modules;
 
+use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
 use App\Models\Account;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
 use App\Models\Module;
+use App\Services\Audit\AuditLogger;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -14,7 +16,7 @@ use LogicException;
 
 class CreateAndAttachSharedModule
 {
-    public function __construct(private readonly CreateModule $createModule) {}
+    public function __construct(private readonly CreateModule $createModule, private readonly AuditLogger $audit) {}
 
     public function handle(CourseVersion $version, Account $actor, string $code, string $title, ?string $description = null): Module
     {
@@ -32,13 +34,13 @@ class CreateAndAttachSharedModule
             }
 
             $lockedVersion = CourseVersion::query()->lockForUpdate()->findOrFail($version->id);
-            $course = $lockedVersion->course()->firstOrFail();
+            $course = $lockedVersion->course()->lockForUpdate()->firstOrFail();
 
             if ($lockedVersion->status !== CourseVersionStatus::Draft) {
                 throw new LogicException('Modules can only be added to a draft course version.');
             }
 
-            if (! $course->is_shared || $course->company_id !== null) {
+            if (! $course->is_shared || $course->company_id !== null || $course->status === CourseStatus::Archived) {
                 throw new LogicException('New shared modules can only be added to shared courses.');
             }
 
@@ -55,6 +57,7 @@ class CreateAndAttachSharedModule
                     'position' => ((int) $lockedVersion->moduleCompositions()->max('position')) + 1,
                     'is_required' => true,
                 ]);
+                $this->audit->log('shared_module.attached', $module, after: ['course_version_id' => $lockedVersion->id], platformActor: $authorizedActor);
             } catch (QueryException $exception) {
                 if (in_array((string) $exception->getCode(), ['23000', '23505'], true)) {
                     throw ValidationException::withMessages(['code' => __('A shared module with this code already exists.')]);

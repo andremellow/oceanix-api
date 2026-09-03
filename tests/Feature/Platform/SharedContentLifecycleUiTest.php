@@ -2,6 +2,7 @@
 
 use App\Enums\CourseStatus;
 use App\Enums\ModuleStatus;
+use App\Enums\ModuleVersionStatus;
 use App\Models\Account;
 use App\Models\Module;
 use App\Models\ModuleVersion;
@@ -25,7 +26,7 @@ it('confirms and archives a shared course while explaining preserved evidence', 
     expect($course->fresh()->status)->toBe(CourseStatus::Archived);
 });
 
-it('confirms and archives a shared module with an explicit status', function (): void {
+it('archives a shared module lineage without rewriting historical version statuses', function (): void {
     $account = Account::factory()->platformAdmin()->create();
     $module = Module::factory()->shared()->create(['status' => ModuleStatus::Active]);
     $version = ModuleVersion::factory()->published()->create(['module_id' => $module->id]);
@@ -42,5 +43,9 @@ it('confirms and archives a shared module with an explicit status', function ():
         ->assertSee(__('Shared module archived.'))
         ->assertSee(__('Archived'));
 
-    expect($module->fresh()->status)->toBe(ModuleStatus::Archived->value);
+    expect($module->fresh())
+        ->status->toBe(ModuleStatus::Active->value)
+        ->lineage_archived_at->not->toBeNull()
+        ->and($version->fresh()->status)->toBe(ModuleVersionStatus::Published)
+        ->and($version->fresh()->lineage_archived_at)->not->toBeNull();
 });

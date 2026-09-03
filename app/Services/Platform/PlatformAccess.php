@@ -2,6 +2,7 @@
 
 namespace App\Services\Platform;
 
+use App\Enums\PlatformPermission;
 use App\Models\Account;
 
 class PlatformAccess
@@ -24,5 +25,11 @@ class PlatformAccess
     public function authorize(): Account
     {
         return $this->account() ?? abort(403);
+    }
+
+    /** Platform accounts currently use the administrator role as an explicit all-permissions bypass. */
+    public function authorizePermission(PlatformPermission $permission): Account
+    {
+        return $this->authorize();
     }
 }

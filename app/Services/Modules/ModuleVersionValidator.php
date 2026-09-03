@@ -3,6 +3,7 @@
 namespace App\Services\Modules;
 
 use App\Enums\QuestionType;
+use App\Enums\VideoStatus;
 use App\Models\Lesson;
 use App\Models\ModuleVersion;
 use App\Models\Question;
@@ -32,6 +33,15 @@ class ModuleVersionValidator
             $problems[] = __(':lesson has no video.', ['lesson' => $label]);
         } elseif (! $lesson->video->isPlayable()) {
             $problems[] = __(':lesson has a video that is not ready yet (:status).', ['lesson' => $label, 'status' => $lesson->video->status->label()]);
+        }
+
+        $latestGeneration = (int) $lesson->videos()->max('replacement_generation');
+        $cutoff = now()->subMinutes((int) config('oceanix.video_upload_expiry_minutes', 120));
+        if ($lesson->videos()->where('replacement_generation', $latestGeneration)->where(function ($query) use ($cutoff): void {
+            $query->where('status', VideoStatus::Processing->value)
+                ->orWhere(fn ($query) => $query->where('status', VideoStatus::Uploading->value)->where('created_at', '>', $cutoff));
+        })->exists()) {
+            $problems[] = __(':lesson has a video replacement that is still processing.', ['lesson' => $label]);
         }
 
         if ($lesson->questions->isEmpty()) {

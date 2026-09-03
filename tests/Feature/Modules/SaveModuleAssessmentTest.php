@@ -22,6 +22,7 @@ function assessmentFixture(): array
         'questions' => [[
             'id' => $question->id,
             'prompt' => 'Updated question',
+            'type' => 'single_choice',
             'max_attempts' => 4,
             'options' => [
                 ['id' => $first->id, 'text' => 'Updated first', 'is_correct' => false],

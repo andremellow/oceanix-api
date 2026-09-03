@@ -124,6 +124,7 @@ class CourseVersion extends Model
     {
         $seconds = (int) Video::query()
             ->whereIn('lesson_id', $this->allLessonIds())
+            ->where('is_current', true)
             ->sum('duration_seconds');
 
         return (int) ceil($seconds / 60);

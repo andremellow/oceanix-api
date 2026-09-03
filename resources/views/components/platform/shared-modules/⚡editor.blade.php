@@ -5,6 +5,7 @@ use App\Actions\Modules\SaveSharedModuleEditorDraft;
 use App\Actions\Videos\LinkExistingVideo;
 use App\Actions\Videos\RequestVideoUpload;
 use App\Enums\ModuleVersionStatus;
+use App\Enums\PlatformPermission as Permission;
 use App\Enums\QuestionType;
 use App\Enums\VideoStatus;
 use App\Exceptions\VideoProviderException;
@@ -13,6 +14,7 @@ use App\Models\Module;
 use App\Models\ModuleVersion;
 use App\Models\Question;
 use App\Models\QuestionOption;
+use App\Models\Video;
 use App\Services\Courses\LessonContentRenderer;
 use App\Services\Modules\ModulePropagationImpact;
 use App\Services\Modules\ModuleVersionValidator;
@@ -50,6 +52,8 @@ new #[Layout('layouts::platform')] class extends Component
 
     public bool $assessmentDirty = false;
 
+    public bool $contentDirty = false;
+
     public string $assessmentStatus = '';
 
     public ?string $assessmentError = null;
@@ -76,14 +80,13 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function mount(Module $module, PlatformAccess $access): void
     {
-        $actor = $access->authorize();
-        abort_unless($module->is_shared && $module->company_id === null, 404);
+        $actor = $access->authorizePermission(Permission::SharedModulesUpdate);
+        abort_unless($module->is_shared && $module->company_id === null && $module->lineage_archived_at === null, 404);
         $this->module = $module;
         $this->version = $module->versions()->where('status', ModuleVersionStatus::Draft->value)->firstOrFail();
         $this->title = $this->version->title;
         $this->description = (string) $this->version->description;
-        $this->contentMarkdown = app(LessonContentRenderer::class)
-            ->editorContent((string) $this->version->content_markdown);
+        $this->contentMarkdown = app(LessonContentRenderer::class)->editorContent((string) $this->version->content_markdown);
         $this->minimumWatchPercentage = $this->version->minimum_watch_percentage;
         $this->passingScore = $this->version->passing_score;
         $this->loadAssessment();
@@ -91,16 +94,18 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function updated(string $property): void
     {
-        // Persistible editor fields are intentionally deferred to the global save action.
+        if ($property === 'contentMarkdown') {
+            $this->contentDirty = true;
+        }
     }
 
     public function requestUpload(int $lessonIndex, RequestVideoUpload $action, PlatformAccess $access): array
     {
-        $actor = $access->authorize();
+        $actor = $access->authorizePermission(Permission::SharedModulesUpdate);
         abort_unless($lessonIndex === 0, 404);
         $upload = $action->handle($this->version, platformActor: $actor);
         $token = (string) Str::uuid();
-        $this->activeUploads[$token] = $lessonIndex;
+        $this->activeUploads[$token] = ['index' => $lessonIndex, 'video_id' => $upload->videoId, 'provider' => $upload->provider, 'asset_id' => $upload->assetId];
         $this->syncUploadState();
         $this->version->load('video');
 
@@ -109,9 +114,13 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function uploadCompleted(int $lessonIndex, PlatformAccess $access, VideoLibrary $library, ?string $uploadToken = null): void
     {
-        $access->authorize();
+        $access->authorizePermission(Permission::SharedModulesUpdate);
         abort_unless($lessonIndex === 0, 404);
-        $this->version->video?->update(['status' => VideoStatus::Processing]);
+        $identity = $this->uploadIdentity($lessonIndex, $uploadToken);
+        DB::transaction(function () use ($identity): void {
+            $video = Video::query()->lockForUpdate()->whereKey($identity['video_id'])->where('lesson_id', $this->version->id)->where('provider', $identity['provider'])->where('provider_asset_id', $identity['asset_id'])->firstOrFail();
+            $video->update(['status' => VideoStatus::Processing]);
+        });
         $this->finishUpload($lessonIndex, $uploadToken);
         $this->version->load('video');
 
@@ -123,14 +132,16 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function uploadFailed(int $lessonIndex, PlatformAccess $access, ?string $uploadToken = null): void
     {
-        $access->authorize();
+        $access->authorizePermission(Permission::SharedModulesUpdate);
         abort_unless($lessonIndex === 0, 404);
+        $identity = $this->uploadIdentity($lessonIndex, $uploadToken);
+        Video::query()->whereKey($identity['video_id'])->where('lesson_id', $this->version->id)->where('provider', $identity['provider'])->where('provider_asset_id', $identity['asset_id'])->where('status', VideoStatus::Uploading->value)->update(['status' => VideoStatus::Failed]);
         $this->finishUpload($lessonIndex, $uploadToken);
     }
 
     public function openEditorVideoLibrary(string $model, VideoLibrary $library, PlatformAccess $access): void
     {
-        $access->authorize();
+        $access->authorizePermission(Permission::SharedModulesUpdate);
         abort_unless($model === 'contentMarkdown', 422);
         $this->videoLibrarySearch = '';
         $this->videoLibraryError = null;
@@ -140,14 +151,14 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function searchVideoLibrary(VideoLibrary $library, PlatformAccess $access): void
     {
-        $access->authorize();
+        $access->authorizePermission(Permission::SharedModulesUpdate);
         abort_unless($this->videoLibraryOpen, 404);
         $this->loadVideoLibrary($library);
     }
 
     public function selectLibraryVideo(string $assetId, LinkExistingVideo $action, PlatformAccess $access): void
     {
-        $actor = $access->authorize();
+        $actor = $access->authorizePermission(Permission::SharedModulesUpdate);
         abort_unless(collect($this->videoLibraryItems)->contains(fn (array $item): bool => hash_equals((string) $item['asset_id'], $assetId) && $item['status'] === VideoStatus::Ready->value), 404);
         $item = collect($this->videoLibraryItems)->first(fn (array $item): bool => hash_equals((string) $item['asset_id'], $assetId));
         $action->handle($this->version, $assetId, allowAnyOwner: true, platformActor: $actor);
@@ -158,14 +169,14 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function openImageLibrary(PlatformAccess $access): void
     {
-        $access->authorize();
+        $access->authorizePermission(Permission::SharedModulesUpdate);
         $this->imageLibraryOpen = true;
         $this->resetValidation('contentImageUpload');
     }
 
     public function uploadContentImage(PlatformAccess $access): void
     {
-        $access->authorize();
+        $access->authorizePermission(Permission::SharedModulesUpdate);
         $this->validate(['contentImageUpload' => ['required', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240']]);
         $upload = $this->contentImageUpload;
         $disk = (string) config('filesystems.content_images_disk', 'public');
@@ -181,7 +192,7 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function selectContentImage(int $imageId, PlatformAccess $access): void
     {
-        $access->authorize();
+        $access->authorizePermission(Permission::SharedModulesUpdate);
         $image = ContentImage::query()->where('is_shared', true)->findOrFail($imageId);
         $this->dispatch('oceanix:insert-image', model: 'contentMarkdown', url: $image->url(), alt: pathinfo($image->name, PATHINFO_FILENAME));
         $this->imageLibraryOpen = false;
@@ -194,7 +205,7 @@ new #[Layout('layouts::platform')] class extends Component
 
             return;
         }
-        $action->handle($this->version, $access->authorize(), $this->restartInProgress);
+        $action->handle($this->version, $access->authorizePermission(Permission::SharedModulesPublish), $this->restartInProgress);
         session()->flash('status', __('Shared module published.'));
         $this->redirectRoute('platform.shared-modules.show', ['module' => $this->module], navigate: true);
     }
@@ -224,7 +235,7 @@ new #[Layout('layouts::platform')] class extends Component
         $this->assessmentStatus = 'saving';
         $this->assessmentError = null;
         $this->saveError = null;
-        $actor = $access->authorize();
+        $actor = $access->authorizePermission(Permission::SharedModulesUpdate);
 
         try {
             $this->assessmentRevision = $action->handle(
@@ -233,7 +244,7 @@ new #[Layout('layouts::platform')] class extends Component
                 [
                     'id' => $this->version->id, 'title' => $this->title, 'description' => $this->description,
                     'content_markdown' => $this->contentMarkdown, 'minimum_watch_percentage' => $this->minimumWatchPercentage,
-                    'passing_score' => $this->passingScore, 'questions' => $this->questions,
+                    'passing_score' => $this->passingScore, 'content_dirty' => $this->contentDirty, 'questions' => $this->questions,
                 ],
                 $this->assessmentRevision,
             );
@@ -257,6 +268,7 @@ new #[Layout('layouts::platform')] class extends Component
         }
 
         $this->assessmentDirty = false;
+        $this->contentDirty = false;
         $this->assessmentStatus = 'saved';
         $this->dispatch('assessment-saved', moduleId: $this->version->id);
         $this->dispatch('editor-saved');
@@ -266,8 +278,9 @@ new #[Layout('layouts::platform')] class extends Component
         }
     }
 
-    public function addQuestion(): void
+    public function addQuestion(PlatformAccess $access): void
     {
+        $access->authorizePermission(Permission::SharedModulesUpdate);
         if ($this->assessmentDirty) {
             $this->assessmentError = __('Save the assessment before adding questions or answers.');
 
@@ -275,7 +288,8 @@ new #[Layout('layouts::platform')] class extends Component
         }
 
         DB::transaction(function (): void {
-            $question = Question::query()->create(['company_id' => null, 'lesson_id' => $this->version->id, 'type' => QuestionType::SingleChoice, 'prompt' => 'New question', 'position' => $this->version->questions()->count() + 1, 'max_attempts' => 3]);
+            $version = ModuleVersion::query()->lockForUpdate()->whereKey($this->version->id)->whereNull('company_id')->where('is_shared', true)->where('status', ModuleVersionStatus::Draft->value)->firstOrFail();
+            $question = Question::query()->create(['company_id' => null, 'lesson_id' => $version->id, 'type' => QuestionType::SingleChoice, 'prompt' => 'New question', 'position' => $version->questions()->count() + 1, 'max_attempts' => 3]);
             foreach ([1, 2] as $position) {
                 QuestionOption::query()->create(['company_id' => null, 'question_id' => $question->id, 'text' => "Option {$position}", 'is_correct' => $position === 1, 'position' => $position]);
             }
@@ -283,8 +297,9 @@ new #[Layout('layouts::platform')] class extends Component
         $this->loadAssessment();
     }
 
-    public function addOption(int $questionIndex): void
+    public function addOption(int $questionIndex, PlatformAccess $access): void
     {
+        $access->authorizePermission(Permission::SharedModulesUpdate);
         if ($this->assessmentDirty) {
             $this->assessmentError = __('Save the assessment before adding questions or answers.');
 
@@ -292,8 +307,11 @@ new #[Layout('layouts::platform')] class extends Component
         }
 
         abort_unless(isset($this->questions[$questionIndex]), 404);
-        $question = $this->version->questions()->whereKey($this->questions[$questionIndex]['id'])->firstOrFail();
-        QuestionOption::query()->create(['company_id' => null, 'question_id' => $question->id, 'text' => 'New option', 'is_correct' => false, 'position' => $question->options()->count() + 1]);
+        DB::transaction(function () use ($questionIndex): void {
+            $version = ModuleVersion::query()->lockForUpdate()->whereKey($this->version->id)->whereNull('company_id')->where('is_shared', true)->where('status', ModuleVersionStatus::Draft->value)->firstOrFail();
+            $question = $version->questions()->whereKey($this->questions[$questionIndex]['id'])->firstOrFail();
+            QuestionOption::query()->create(['company_id' => null, 'question_id' => $question->id, 'text' => 'New option', 'is_correct' => false, 'position' => $question->options()->count() + 1]);
+        });
         $this->loadAssessment();
     }
 
@@ -324,6 +342,7 @@ new #[Layout('layouts::platform')] class extends Component
         $this->questions = $this->version->questions()->with('options')->get()->map(fn (Question $question): array => [
             'id' => $question->id,
             'prompt' => $question->prompt,
+            'type' => $question->type->value,
             'max_attempts' => $question->max_attempts,
             'options' => $question->options->map(fn (QuestionOption $option): array => [
                 'id' => $option->id,
@@ -339,11 +358,11 @@ new #[Layout('layouts::platform')] class extends Component
     private function finishUpload(int $lessonIndex, ?string $uploadToken): void
     {
         if ($uploadToken !== null) {
-            if (($this->activeUploads[$uploadToken] ?? null) === $lessonIndex) {
+            if (($this->activeUploads[$uploadToken]['index'] ?? null) === $lessonIndex) {
                 unset($this->activeUploads[$uploadToken]);
             }
         } else {
-            $token = array_search($lessonIndex, $this->activeUploads, true);
+            $token = collect($this->activeUploads)->search(fn (array $upload): bool => $upload['index'] === $lessonIndex);
             if ($token !== false) {
                 unset($this->activeUploads[$token]);
             }
@@ -355,6 +374,15 @@ new #[Layout('layouts::platform')] class extends Component
     private function syncUploadState(): void
     {
         $this->uploadInProgress = $this->activeUploads !== [];
+    }
+
+    private function uploadIdentity(int $lessonIndex, ?string $uploadToken): array
+    {
+        abort_if($uploadToken === null, 422);
+        $identity = $this->activeUploads[$uploadToken] ?? null;
+        abort_unless(is_array($identity) && $identity['index'] === $lessonIndex, 404);
+
+        return $identity;
     }
 };
 ?>
@@ -370,7 +398,7 @@ new #[Layout('layouts::platform')] class extends Component
         <div class="grid gap-4 sm:grid-cols-2"><flux:input type="number" min="1" max="100" wire:model.defer="minimumWatchPercentage" x-on:input="markEditorDirty" class="admin-control" :label="__('Watch threshold (%)')" /><flux:input type="number" min="1" max="100" wire:model.defer="passingScore" x-on:input="markEditorDirty" class="admin-control" :label="__('Passing score (%)')" /></div>
         <flux:editor
             wire:model.defer="contentMarkdown"
-            x-on:input="markEditorDirty"
+            x-on:input="$wire.set('contentDirty', true, false); markEditorDirty()"
             data-oceanix-editor-model="contentMarkdown"
             data-oceanix-video-preview-url="{{ data_get($editorVideoPreview, 'preview_url') }}"
             data-oceanix-video-poster-url="{{ data_get($editorVideoPreview, 'poster_url') }}"
@@ -398,10 +426,10 @@ new #[Layout('layouts::platform')] class extends Component
             @foreach ($questions as $questionIndex => $question)
                 <div class="rounded-[18px] border border-[#e4e9ec] p-4" wire:key="standalone-question-{{ $question['id'] }}">
                     <p class="mb-3 text-sm font-bold text-[#4f5960]">{{ __('Question :number', ['number' => $questionIndex + 1]) }}</p>
-                    <div class="grid gap-3 sm:grid-cols-[1fr_140px]"><flux:input wire:model.defer="questions.{{ $questionIndex }}.prompt" x-on:input="markDirty" :label="__('Question')" /><flux:input type="number" wire:model.defer="questions.{{ $questionIndex }}.max_attempts" x-on:input="markDirty" :label="__('Attempts')" /></div>
+                    <div class="grid gap-3 sm:grid-cols-[1fr_180px_140px]"><flux:input wire:model.defer="questions.{{ $questionIndex }}.prompt" x-on:input="markDirty" :label="__('Question')" /><flux:select wire:model.live="questions.{{ $questionIndex }}.type" x-on:change="markDirty" :label="__('Question type')"><flux:select.option value="single_choice">{{ __('Single choice') }}</flux:select.option><flux:select.option value="multiple_choice">{{ __('Multiple choice') }}</flux:select.option></flux:select><flux:input type="number" wire:model.defer="questions.{{ $questionIndex }}.max_attempts" x-on:input="markDirty" :label="__('Attempts')" /></div>
                     <fieldset class="mt-3 space-y-2"><legend class="mb-2 text-sm font-semibold">{{ __('Correct answer') }}</legend>
                         @foreach ($question['options'] as $optionIndex => $option)
-                            <div class="flex items-center gap-2" wire:key="standalone-option-{{ $option['id'] }}"><input type="radio" x-on:change="@foreach ($question['options'] as $candidateIndex => $candidate) $wire.set('questions.{{ $questionIndex }}.options.{{ $candidateIndex }}.is_correct', {{ $candidateIndex === $optionIndex ? 'true' : 'false' }}, false); @endforeach markDirty()" @checked($option['is_correct']) name="standalone-correct-{{ $question['id'] }}" aria-label="{{ __('Mark answer :number as correct', ['number' => $optionIndex + 1]) }}"><flux:input wire:model.defer="questions.{{ $questionIndex }}.options.{{ $optionIndex }}.text" x-on:input="markDirty" :label="__('Answer :number', ['number' => $optionIndex + 1])" class="flex-1" /></div>
+                            <div class="flex items-center gap-2" wire:key="standalone-option-{{ $option['id'] }}">@if ($question['type'] === 'single_choice')<input type="radio" x-on:change="@foreach ($question['options'] as $candidateIndex => $candidate) $wire.set('questions.{{ $questionIndex }}.options.{{ $candidateIndex }}.is_correct', {{ $candidateIndex === $optionIndex ? 'true' : 'false' }}, false); @endforeach markDirty()" @checked($option['is_correct']) name="standalone-correct-{{ $question['id'] }}" aria-label="{{ __('Mark answer :number as correct', ['number' => $optionIndex + 1]) }}">@else<input type="checkbox" wire:model.defer="questions.{{ $questionIndex }}.options.{{ $optionIndex }}.is_correct" x-on:change="markDirty" aria-label="{{ __('Mark answer :number as correct', ['number' => $optionIndex + 1]) }}">@endif<flux:input wire:model.defer="questions.{{ $questionIndex }}.options.{{ $optionIndex }}.text" x-on:input="markDirty" :label="__('Answer :number', ['number' => $optionIndex + 1])" class="flex-1" /></div>
                         @endforeach
                     </fieldset>
                     <flux:button wire:click="addOption({{ $questionIndex }})" x-bind:disabled="dirty" variant="ghost" size="sm" class="mt-3">{{ __('Add option') }}</flux:button>

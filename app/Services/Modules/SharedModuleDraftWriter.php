@@ -38,17 +38,22 @@ class SharedModuleDraftWriter
             throw ValidationException::withMessages(['revision' => __('This module changed elsewhere. Reload the page before saving again.')]);
         }
 
-        $payload['content_markdown'] = $this->sanitizer->sanitize((string) ($payload['content_markdown'] ?? ''));
+        $payload['content_dirty'] ??= false;
+        if ($payload['content_dirty']) {
+            $payload['content_markdown'] = $this->sanitizer->sanitize((string) ($payload['content_markdown'] ?? ''));
+        }
         $data = Validator::make($payload, [
             'id' => ['required', 'integer'],
             'title' => ['required', 'string', 'max:200'],
             'description' => ['nullable', 'string', 'max:2000'],
             'content_markdown' => ['nullable', 'string', 'max:100000'],
+            'content_dirty' => ['required', 'boolean'],
             'minimum_watch_percentage' => ['required', 'integer', 'min:1', 'max:100'],
             'passing_score' => ['required', 'integer', 'min:1', 'max:100'],
             'questions' => ['present', 'array'],
             'questions.*.id' => ['required', 'integer'],
             'questions.*.prompt' => ['required', 'string', 'max:1000'],
+            'questions.*.type' => ['required', 'string', 'in:single_choice,multiple_choice'],
             'questions.*.max_attempts' => ['required', 'integer', 'min:1', 'max:10'],
             'questions.*.options' => ['required', 'array', 'min:2'],
             'questions.*.options.*.id' => ['required', 'integer'],
@@ -71,7 +76,7 @@ class SharedModuleDraftWriter
             if ($answers->pluck('id')->sort()->values()->all() !== $question->options->pluck('id')->sort()->values()->all()) {
                 throw ValidationException::withMessages(["questions.{$index}.options" => __('One or more assessment answers are unavailable.')]);
             }
-            if ($question->type === QuestionType::SingleChoice && $answers->where('is_correct', true)->count() !== 1) {
+            if (QuestionType::from($submitted[$index]['type']) === QuestionType::SingleChoice && $answers->where('is_correct', true)->count() !== 1) {
                 throw ValidationException::withMessages(["questions.{$index}.options" => __('Choose exactly one correct answer.')]);
             }
         }
@@ -83,12 +88,16 @@ class SharedModuleDraftWriter
     {
         $module = $prepared['module'];
         $data = $prepared['data'];
-        $module->update(collect($data)->only(['title', 'description', 'content_markdown', 'minimum_watch_percentage', 'passing_score'])->all());
+        $moduleFields = ['title', 'description', 'minimum_watch_percentage', 'passing_score'];
+        if ($data['content_dirty']) {
+            $moduleFields[] = 'content_markdown';
+        }
+        $module->update(collect($data)->only($moduleFields)->all());
         $submitted = collect($data['questions']);
 
         foreach ($prepared['questions'] as $question) {
             $questionData = $submitted->firstWhere('id', $question->id);
-            $question->update(['prompt' => trim($questionData['prompt']), 'max_attempts' => $questionData['max_attempts']]);
+            $question->update(['prompt' => trim($questionData['prompt']), 'type' => QuestionType::from($questionData['type']), 'max_attempts' => $questionData['max_attempts']]);
             foreach ($questionData['options'] as $answer) {
                 $question->options->firstWhere('id', $answer['id'])->update(['text' => trim($answer['text']), 'is_correct' => $answer['is_correct']]);
             }
@@ -100,7 +109,7 @@ class SharedModuleDraftWriter
         return hash('sha256', json_encode([
             'module' => collect($module->only(['id', 'title', 'description', 'content_markdown', 'minimum_watch_percentage', 'passing_score']))->all(),
             'questions' => $questions->sortBy('position')->values()->map(fn ($question): array => [
-                'id' => $question->id, 'prompt' => $question->prompt, 'max_attempts' => $question->max_attempts,
+                'id' => $question->id, 'prompt' => $question->prompt, 'type' => $question->type->value, 'max_attempts' => $question->max_attempts,
                 'options' => $question->options->sortBy('position')->values()->map(fn ($option): array => ['id' => $option->id, 'text' => $option->text, 'is_correct' => (bool) $option->is_correct])->all(),
             ])->all(),
         ], JSON_THROW_ON_ERROR));

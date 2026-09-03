@@ -2,7 +2,9 @@
 
 use App\Actions\Modules\CreateModuleDraft;
 use App\Actions\SharedContent\ArchiveSharedContent;
+use App\Enums\ModuleStatus;
 use App\Enums\ModuleVersionStatus;
+use App\Enums\PlatformPermission as Permission;
 use App\Models\Module;
 use App\Services\Modules\ModuleStatusPresentation;
 use App\Services\Platform\PlatformAccess;
@@ -19,22 +21,23 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function mount(Module $module, PlatformAccess $access): void
     {
-        $access->authorize();
+        $access->authorizePermission(Permission::SharedModulesView);
         abort_unless($module->is_shared && $module->company_id === null, 404);
         $this->module = $module;
     }
 
     public function createDraft(CreateModuleDraft $action, PlatformAccess $access): void
     {
-        $access->authorize();
+        $access->authorizePermission(Permission::SharedModulesUpdate);
+        abort_if($this->module->lineage_archived_at !== null, 404);
         $source = $this->module->currentPublishedVersion()->firstOrFail();
-        $action->handle($source, $access->authorize());
+        $action->handle($source, $access->authorizePermission(Permission::SharedModulesUpdate));
         session()->flash('status', __('Module draft created.'));
     }
 
     public function archive(ArchiveSharedContent $action, PlatformAccess $access): void
     {
-        $account = $access->authorize();
+        $account = $access->authorizePermission(Permission::SharedModulesArchive);
         $this->validate(['archiveReason' => ['required', 'string', 'max:500']]);
         $this->module = $action->handle($this->module, $account, $this->archiveReason);
         $this->reset('confirmingArchive', 'archiveReason');
@@ -45,7 +48,9 @@ new #[Layout('layouts::platform')] class extends Component
     {
         return [
             'versions' => $this->module->versions()->get(),
-            'moduleStatus' => $statusPresentation->for($this->module->status),
+            'moduleStatus' => $statusPresentation->for(
+                $this->module->lineage_archived_at !== null ? ModuleStatus::Archived : $this->module->status,
+            ),
         ];
     }
 };
@@ -58,7 +63,7 @@ new #[Layout('layouts::platform')] class extends Component
             <span class="text-sm text-[#707a80]">{{ __('New course compositions are blocked.') }}</span>
         @elseif ($versions->contains(fn ($version) => $version->status === ModuleVersionStatus::Draft))
             <flux:button :href="route('platform.shared-modules.editor', ['module' => $module])" wire:navigate variant="primary">{{ __('Edit draft') }}</flux:button>
-        @elseif ($module->current_published_version_id)
+        @elseif ($module->currentPublishedVersion()->exists())
             <flux:button wire:click="createDraft" wire:loading.attr="disabled" variant="primary">{{ __('Create new version') }}</flux:button>
         @endif
         @if (! $moduleStatus['is_archived'])

@@ -2,10 +2,15 @@
 
 use App\Actions\Videos\LinkExistingVideo;
 use App\Actions\Videos\RequestVideoUpload;
+use App\Actions\Videos\SyncVideoAsset;
 use App\Exceptions\VideoProviderException;
 use App\Models\Account;
 use App\Models\AuditLog;
+use App\Models\Company;
 use App\Models\Lesson;
+use App\Models\ModuleVersion;
+use App\Models\Video;
+use App\Services\Modules\ModuleVersionValidator;
 use App\Services\Video\CloudflareStreamProvider;
 use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Http;
@@ -101,6 +106,60 @@ it('records platform video upload requests without requiring a tenant', function
     expect($audit->company_id)->toBeNull()
         ->and($audit->actor_id)->toBeNull()
         ->and($audit->platform_account_id)->toBe($actor->id);
+});
+
+it('never lets an older ready candidate replace a newer requested video', function (): void {
+    $actor = Account::factory()->platformAdmin()->create();
+    $lesson = Lesson::factory()->create(['company_id' => null, 'is_shared' => true, 'status' => 'draft']);
+    app(TenantContext::class)->clear();
+    Http::fake(function ($request) {
+        if (str_contains($request->url(), 'direct_upload')) {
+            static $sequence = 0;
+            $asset = ++$sequence === 1 ? 'candidate-a' : 'candidate-b';
+
+            return Http::response(['result' => ['uid' => $asset, 'uploadURL' => "https://upload.example/{$asset}"]]);
+        }
+
+        $asset = str_contains($request->url(), 'candidate-a') ? 'candidate-a' : 'candidate-b';
+
+        return Http::response(['result' => ['uid' => $asset, 'status' => ['state' => 'ready'], 'requireSignedURLs' => true, 'playback' => ['hls' => "https://video.example/{$asset}.m3u8"], 'meta' => ['oceanix_owner' => 'platform']]]);
+    });
+
+    $first = app(RequestVideoUpload::class)->handle($lesson, platformActor: $actor);
+    $second = app(RequestVideoUpload::class)->handle($lesson, platformActor: $actor);
+    $a = Video::query()->findOrFail($first->videoId);
+    $b = Video::query()->findOrFail($second->videoId);
+
+    app(SyncVideoAsset::class)->handle($b);
+    app(SyncVideoAsset::class)->handle($a);
+
+    expect($lesson->fresh()->video?->id)->toBe($b->id)
+        ->and($a->fresh()->is_current)->toBeFalse()
+        ->and($b->fresh()->is_current)->toBeTrue();
+});
+
+it('blocks publication while a replacement candidate is processing', function (): void {
+    $module = ModuleVersion::factory()->create(['company_id' => null, 'is_shared' => true, 'status' => 'draft']);
+    Video::factory()->create(['lesson_id' => $module->id, 'company_id' => null, 'status' => 'ready', 'is_current' => true, 'replacement_generation' => 1]);
+    Video::factory()->create(['lesson_id' => $module->id, 'company_id' => null, 'status' => 'processing', 'is_current' => false, 'replacement_generation' => 2]);
+
+    expect(app(ModuleVersionValidator::class)->problems($module))
+        ->toContain(__('Lesson :position (:title) has a video replacement that is still processing.', ['position' => $module->position, 'title' => $module->title]));
+});
+
+it('synchronizes a platform video even when there are no companies', function (): void {
+    Company::query()->delete();
+    app(TenantContext::class)->clear();
+    $lesson = Lesson::query()->create(['company_id' => null, 'is_shared' => true, 'status' => 'draft', 'title' => 'Platform module', 'type' => 'video']);
+    $video = Video::factory()->create(['company_id' => null, 'lesson_id' => $lesson->id, 'status' => 'processing', 'is_current' => true, 'replacement_generation' => 1]);
+    Http::fake(['api.cloudflare.com/*' => Http::response(['result' => [
+        'uid' => $video->provider_asset_id, 'status' => ['state' => 'ready'], 'requireSignedURLs' => true,
+        'playback' => ['hls' => 'https://video.example/platform.m3u8'], 'meta' => ['oceanix_owner' => 'platform'],
+    ]])]);
+
+    $this->artisan('oceanix:sync-videos')->assertSuccessful();
+
+    expect($video->fresh()->status->value)->toBe('ready');
 });
 
 it('normalizes Cloudflare connection failures for the library UI', function (): void {

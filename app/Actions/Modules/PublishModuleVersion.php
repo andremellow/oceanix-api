@@ -18,16 +18,19 @@ class PublishModuleVersion
 
     public function handle(ModuleVersion $version, Account $actor, bool $restartInProgress = false): ModuleVersion
     {
-        if (! $actor->is_platform_admin || ! $version->is_shared || ! $version->isEditable()) {
-            throw new LogicException('Only a draft shared module version can be published.');
-        }
-
-        $problems = $this->validator->problems($version);
-        if ($problems !== []) {
-            throw new LogicException(implode(' ', $problems));
-        }
-
         return DB::transaction(function () use ($version, $actor, $restartInProgress): ModuleVersion {
+            $authorized = Account::query()->whereKey($actor->id)->where('is_platform_admin', true)->where('status', 'active')->first();
+            $version = ModuleVersion::query()->lockForUpdate()->findOrFail($version->id);
+            if ($authorized === null || ! $version->is_shared || $version->company_id !== null || ! $version->isEditable() || $version->lineage_archived_at !== null) {
+                throw new LogicException('Only a draft shared module version can be published.');
+            }
+            $version->questions()->lockForUpdate()->get();
+            $version->questions()->with('options')->get()->each(fn ($question) => $question->options()->lockForUpdate()->get());
+            $version->videos()->lockForUpdate()->get();
+            $problems = $this->validator->problems($version->fresh());
+            if ($problems !== []) {
+                throw new LogicException(implode(' ', $problems));
+            }
             $previous = ModuleVersion::query()
                 ->where('lineage_uuid', $version->lineage_uuid)
                 ->where('status', ModuleVersionStatus::Published->value)
@@ -37,15 +40,15 @@ class PublishModuleVersion
             $version->update([
                 'status' => ModuleVersionStatus::Published,
                 'published_at' => now(),
-                'published_by_account_id' => $actor->id,
+                'published_by_account_id' => $authorized->id,
             ]);
             $previous?->update(['status' => ModuleVersionStatus::Retired]);
 
             if ($previous !== null) {
-                $this->dispatchPropagation->handle($previous, $version, $actor, $restartInProgress);
+                $this->dispatchPropagation->handle($previous, $version, $authorized, $restartInProgress);
             }
 
             return $version->refresh();
-        });
+        }, 3);
     }
 }

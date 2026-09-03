@@ -40,6 +40,7 @@ class SaveModuleAssessment
                 'questions' => ['present', 'array'],
                 'questions.*.id' => ['required', 'integer'],
                 'questions.*.prompt' => ['required', 'string', 'max:1000'],
+                'questions.*.type' => ['required', 'string', 'in:single_choice,multiple_choice'],
                 'questions.*.max_attempts' => ['required', 'integer', 'min:1', 'max:10'],
                 'questions.*.options' => ['required', 'array', 'min:2'],
                 'questions.*.options.*.id' => ['required', 'integer'],
@@ -77,7 +78,7 @@ class SaveModuleAssessment
                     throw ValidationException::withMessages(["questions.{$questionIndex}.options" => __('One or more assessment answers are unavailable.')]);
                 }
 
-                if ($question->type === QuestionType::SingleChoice && $options->where('is_correct', true)->count() !== 1) {
+                if (QuestionType::from($submitted['type']) === QuestionType::SingleChoice && $options->where('is_correct', true)->count() !== 1) {
                     throw ValidationException::withMessages(["questions.{$questionIndex}.options" => __('Choose exactly one correct answer.')]);
                 }
             }
@@ -86,6 +87,7 @@ class SaveModuleAssessment
                 $submitted = $submittedQuestions->firstWhere('id', $question->id);
                 $question->update([
                     'prompt' => trim($submitted['prompt']),
+                    'type' => QuestionType::from($submitted['type']),
                     'max_attempts' => $submitted['max_attempts'],
                 ]);
 
@@ -111,6 +113,7 @@ class SaveModuleAssessment
         $content = $questions->sortBy('position')->values()->map(fn ($question): array => [
             'id' => $question->id,
             'prompt' => $question->prompt,
+            'type' => $question->type->value,
             'max_attempts' => $question->max_attempts,
             'options' => $question->options->sortBy('position')->values()->map(fn ($option): array => [
                 'id' => $option->id,

@@ -11,6 +11,7 @@ use App\Http\Controllers\CertificateVerificationController;
 use App\Http\Controllers\ComplianceExportController;
 use App\Http\Controllers\DevVideoController;
 use App\Http\Controllers\TrainingPlaybackController;
+use App\Http\Middleware\EnsurePlatformHasPermission;
 use App\Http\Middleware\EnsureUserCanAccessControlCenter;
 use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\EnsureUserIsAdmin;
@@ -121,11 +122,11 @@ Route::prefix('platform')
         Route::livewire('/users', 'platform.users')->name('platform.users');
         Route::livewire('/shared-courses', 'platform.shared-courses.index')->name('platform.shared-courses.index');
         Route::livewire('/shared-courses/{course}', 'platform.shared-courses.show')->name('platform.shared-courses.show');
-        Route::livewire('/shared-courses/{course}/editor', 'platform.shared-courses.editor')->name('platform.shared-courses.editor');
-        Route::livewire('/shared-modules', 'platform.shared-modules.index')->name('platform.shared-modules.index');
-        Route::livewire('/shared-modules/{module}', 'platform.shared-modules.show')->name('platform.shared-modules.show');
-        Route::livewire('/shared-modules/{module}/editor', 'platform.shared-modules.editor')->name('platform.shared-modules.editor');
-        Route::livewire('/shared-modules/{module}/preview', 'platform.shared-modules.preview')->name('platform.shared-modules.preview');
+        Route::livewire('/shared-courses/{course}/editor', 'platform.shared-courses.editor')->middleware(EnsurePlatformHasPermission::class.':shared-modules.update')->name('platform.shared-courses.editor');
+        Route::livewire('/shared-modules', 'platform.shared-modules.index')->middleware(EnsurePlatformHasPermission::class.':shared-modules.view')->name('platform.shared-modules.index');
+        Route::livewire('/shared-modules/{module}', 'platform.shared-modules.show')->middleware(EnsurePlatformHasPermission::class.':shared-modules.view')->name('platform.shared-modules.show');
+        Route::livewire('/shared-modules/{module}/editor', 'platform.shared-modules.editor')->middleware(EnsurePlatformHasPermission::class.':shared-modules.update')->name('platform.shared-modules.editor');
+        Route::livewire('/shared-modules/{module}/preview', 'platform.shared-modules.preview')->middleware(EnsurePlatformHasPermission::class.':shared-modules.view')->name('platform.shared-modules.preview');
         Route::livewire('/companies/{company}', 'platform.company')->name('platform.companies.show');
         Route::livewire('/companies/{company}/courses/{course}', 'platform.shared-courses.show')->name('platform.companies.courses.show');
         Route::post('/companies/{company}/enter', function (Company $company, EnterCompany $action) {

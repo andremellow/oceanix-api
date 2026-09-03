@@ -15,6 +15,7 @@ class EligibleModuleCatalog
     {
         $base = Module::query()
             ->where('status', 'published')
+            ->whereNull('lineage_archived_at')
             ->when(filled($search), fn ($query) => $query->where(fn ($query) => $query
                 ->where('title', 'like', '%'.trim((string) $search).'%')
                 ->orWhere('code', 'like', '%'.trim((string) $search).'%')))

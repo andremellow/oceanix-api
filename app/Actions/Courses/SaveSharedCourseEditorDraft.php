@@ -2,6 +2,7 @@
 
 namespace App\Actions\Courses;
 
+use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
 use App\Models\Account;
 use App\Models\Course;
@@ -27,7 +28,7 @@ class SaveSharedCourseEditorDraft
             }
             $lockedCourse = Course::query()->lockForUpdate()->findOrFail($course->id);
             $lockedVersion = CourseVersion::query()->lockForUpdate()->findOrFail($version->id);
-            if (! $lockedCourse->is_shared || $lockedCourse->company_id !== null || $lockedVersion->course_id !== $lockedCourse->id || $lockedVersion->status !== CourseVersionStatus::Draft) {
+            if (! $lockedCourse->is_shared || $lockedCourse->company_id !== null || $lockedCourse->status === CourseStatus::Archived || $lockedVersion->course_id !== $lockedCourse->id || $lockedVersion->status !== CourseVersionStatus::Draft) {
                 throw new LogicException('Only platform-owned shared course drafts can be saved.');
             }
             $compositions = CourseVersionModule::query()->where('course_version_id', $lockedVersion->id)->orderBy('position')->lockForUpdate()->get();
@@ -46,6 +47,9 @@ class SaveSharedCourseEditorDraft
                 throw ValidationException::withMessages(['modules' => __('One or more modules are unavailable.')]);
             }
             $lockedModules = ModuleVersion::query()->whereIn('id', $compositions->pluck('lesson_id'))->lockForUpdate()->get()->keyBy('id');
+            if ($lockedModules->count() !== $compositions->count() || $lockedModules->contains(fn (ModuleVersion $module): bool => $module->lineage_archived_at !== null)) {
+                throw ValidationException::withMessages(['modules' => __('One or more modules are unavailable.')]);
+            }
             $prepared = [];
             foreach ($modules as $modulePayload) {
                 $module = $lockedModules->get($modulePayload['id']);

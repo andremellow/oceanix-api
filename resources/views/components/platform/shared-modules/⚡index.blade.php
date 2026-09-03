@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Modules\CreateModule;
+use App\Enums\PlatformPermission as Permission;
 use App\Models\Module;
 use App\Services\Modules\ModuleStatusPresentation;
 use App\Services\Platform\PlatformAccess;
@@ -24,18 +25,18 @@ new #[Layout('layouts::platform')] class extends Component
     {
         $data = $this->validate([
             'code' => ['required', 'string', 'max:80'],
-            'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:5000'],
+            'title' => ['required', 'string', 'max:200'],
+            'description' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $action->handle($access->authorize(), $data['code'], $data['title'], $data['description'] ?: null);
+        $action->handle($access->authorizePermission(Permission::SharedModulesCreate), $data['code'], $data['title'], $data['description'] ?: null);
         $this->reset('code', 'title', 'description');
         session()->flash('status', __('Shared module created.'));
     }
 
     public function with(SharedContentCatalog $catalog, PlatformAccess $access, ModuleStatusPresentation $statusPresentation): array
     {
-        $access->authorize();
+        $access->authorizePermission(Permission::SharedModulesView);
 
         $modules = $catalog->platformModules($this->search);
 

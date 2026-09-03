@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Videos\LinkExistingVideo;
+use App\Enums\VideoStatus;
 use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
@@ -8,6 +9,7 @@ use App\Models\CourseVersionModule;
 use App\Models\Module;
 use App\Models\Question;
 use App\Models\QuestionOption;
+use App\Models\Video;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
@@ -280,7 +282,9 @@ it('keeps the shared course editor blocked until every concurrent upload settles
         ->assertSet('uploadInProgress', true);
 
     $tokens = array_keys($editor->get('activeUploads'));
+    $uploads = $editor->get('activeUploads');
     expect($tokens)->toHaveCount(2);
+    expect($uploads[$tokens[0]]['video_id'])->not->toBe($uploads[$tokens[1]]['video_id']);
 
     $editor->call('uploadFailed', 0, $tokens[0])
         ->assertSet('uploadInProgress', true);
@@ -288,7 +292,9 @@ it('keeps the shared course editor blocked until every concurrent upload settles
 
     $editor->call('uploadCompleted', 0, $tokens[1])
         ->assertSet('uploadInProgress', false);
-    expect($editor->get('activeUploads'))->toBe([]);
+    expect($editor->get('activeUploads'))->toBe([])
+        ->and(Video::query()->findOrFail($uploads[$tokens[1]]['video_id'])->status)->toBe(VideoStatus::Processing)
+        ->and(Video::query()->findOrFail($uploads[$tokens[0]]['video_id'])->status)->toBe(VideoStatus::Failed);
 });
 
 it('cleans up failed concurrent uploads in the standalone shared module editor', function (): void {
@@ -303,11 +309,136 @@ it('cleans up failed concurrent uploads in the standalone shared module editor',
         ->assertSet('uploadInProgress', true);
 
     $tokens = array_keys($editor->get('activeUploads'));
+    $uploads = $editor->get('activeUploads');
     expect($tokens)->toHaveCount(2);
 
     $editor->call('uploadCompleted', 0, $tokens[0])
         ->assertSet('uploadInProgress', true);
     $editor->call('uploadFailed', 0, $tokens[1])
         ->assertSet('uploadInProgress', false);
-    expect($editor->get('activeUploads'))->toBe([]);
+    expect($editor->get('activeUploads'))->toBe([])
+        ->and(Video::query()->findOrFail($uploads[$tokens[0]]['video_id'])->status)->toBe(VideoStatus::Processing)
+        ->and(Video::query()->findOrFail($uploads[$tokens[1]]['video_id'])->status)->toBe(VideoStatus::Failed);
+});
+
+it('round trips multiple-choice answers through the shared course editor', function (): void {
+    $account = Account::factory()->platformAdmin()->create();
+    [$module, $question, $first, $second] = editableAssessmentModule();
+    $course = Course::factory()->shared()->draft()->create();
+    $version = CourseVersion::factory()->create(['course_id' => $course]);
+    CourseVersionModule::query()->create(['course_version_id' => $version->id, 'lesson_id' => $module->id, 'position' => 1, 'is_required' => true]);
+    $this->withSession(['platform_account_id' => $account->id]);
+
+    Livewire::test('platform.shared-courses.editor', ['course' => $course])
+        ->set('modules.0.questions.0.type', 'multiple_choice')
+        ->set('modules.0.questions.0.options.0.is_correct', true)
+        ->set('modules.0.questions.0.options.1.is_correct', true)
+        ->call('markAssessmentDirty', $module->id)
+        ->call('saveDraft', false)
+        ->assertHasNoErrors();
+
+    expect($question->fresh()->type->value)->toBe('multiple_choice')
+        ->and($first->fresh()->is_correct)->toBeTrue()
+        ->and($second->fresh()->is_correct)->toBeTrue();
+
+    Livewire::test('platform.shared-courses.editor', ['course' => $course])
+        ->assertSet('modules.0.questions.0.type', 'multiple_choice')
+        ->assertSeeHtml('type="checkbox"');
+});
+
+it('rejects converting multiple choice with two correct answers to single choice atomically', function (): void {
+    $account = Account::factory()->platformAdmin()->create();
+    [$module, $question, $first, $second] = editableAssessmentModule();
+    $question->update(['type' => 'multiple_choice']);
+    $second->update(['is_correct' => true]);
+    $this->withSession(['platform_account_id' => $account->id]);
+
+    Livewire::test('platform.shared-modules.editor', ['module' => $module])
+        ->set('questions.0.type', 'single_choice')
+        ->call('markAssessmentDirty')
+        ->call('saveDraft', false)
+        ->assertSet('saveError', __('Choose exactly one correct answer.'));
+
+    expect($question->fresh()->type->value)->toBe('multiple_choice')
+        ->and($first->fresh()->is_correct)->toBeTrue()
+        ->and($second->fresh()->is_correct)->toBeTrue();
+});
+
+it('binds an upload callback to the original module even if its rendered index changes', function (): void {
+    Http::fake(['api.cloudflare.com/*' => Http::response(['result' => ['uid' => 'tampered-upload', 'uploadURL' => 'https://upload.example/tampered']])]);
+    $account = Account::factory()->platformAdmin()->create();
+    [$first] = editableAssessmentModule();
+    [$second] = editableAssessmentModule();
+    $course = Course::factory()->shared()->draft()->create();
+    $version = CourseVersion::factory()->create(['course_id' => $course]);
+    CourseVersionModule::query()->create(['course_version_id' => $version->id, 'lesson_id' => $first->id, 'position' => 1, 'is_required' => true]);
+    CourseVersionModule::query()->create(['course_version_id' => $version->id, 'lesson_id' => $second->id, 'position' => 2, 'is_required' => true]);
+    $this->withSession(['platform_account_id' => $account->id]);
+
+    $editor = Livewire::test('platform.shared-courses.editor', ['course' => $course])->call('requestUpload', 0);
+    $token = array_key_first($editor->get('activeUploads'));
+    $videoId = $editor->get("activeUploads.{$token}.video_id");
+
+    $editor->call('uploadFailed', 1, $token)->assertOk();
+
+    expect(Video::query()->findOrFail($videoId))
+        ->lesson_id->toBe($first->id)
+        ->status->toBe(VideoStatus::Failed);
+});
+
+it('round trips multiple-choice answers through the standalone module editor', function (): void {
+    $account = Account::factory()->platformAdmin()->create();
+    [$module, $question, $first, $second] = editableAssessmentModule();
+    $this->withSession(['platform_account_id' => $account->id]);
+
+    Livewire::test('platform.shared-modules.editor', ['module' => $module])
+        ->set('questions.0.type', 'multiple_choice')
+        ->set('questions.0.options.0.is_correct', true)
+        ->set('questions.0.options.1.is_correct', true)
+        ->call('markAssessmentDirty')
+        ->call('saveDraft', false)
+        ->assertHasNoErrors();
+
+    expect($question->fresh()->type->value)->toBe('multiple_choice')
+        ->and($first->fresh()->is_correct)->toBeTrue()
+        ->and($second->fresh()->is_correct)->toBeTrue();
+
+    Livewire::test('platform.shared-modules.editor', ['module' => $module])
+        ->assertSet('questions.0.type', 'multiple_choice')
+        ->assertSeeHtml('type="checkbox"');
+});
+
+it('preserves canonical media directives during a standalone title-only save', function (): void {
+    $account = Account::factory()->platformAdmin()->create();
+    [$module] = editableAssessmentModule();
+    $canonical = "# Intro\n\n:::image{src=\"https://cdn.example/safety.png\" alt=\"Safety\" align=\"right\" width=\"40%\"}\n\n:::video\n";
+    $module->update(['content_markdown' => $canonical]);
+    $this->withSession(['platform_account_id' => $account->id]);
+
+    Livewire::test('platform.shared-modules.editor', ['module' => $module])
+        ->set('title', 'Title only')
+        ->call('markAssessmentDirty')
+        ->call('saveDraft', false)
+        ->assertHasNoErrors();
+
+    expect($module->fresh()->content_markdown)->toBe($canonical);
+});
+
+it('preserves canonical media directives during a course question-only save', function (): void {
+    $account = Account::factory()->platformAdmin()->create();
+    [$module] = editableAssessmentModule();
+    $canonical = "Text\n\n:::image{src=\"https://cdn.example/diagram.png\" alt=\"Diagram\" align=\"left\" width=\"75%\"}\n\n:::video\n";
+    $module->update(['content_markdown' => $canonical]);
+    $course = Course::factory()->shared()->draft()->create();
+    $version = CourseVersion::factory()->create(['course_id' => $course]);
+    CourseVersionModule::query()->create(['course_version_id' => $version->id, 'lesson_id' => $module->id, 'position' => 1, 'is_required' => true]);
+    $this->withSession(['platform_account_id' => $account->id]);
+
+    Livewire::test('platform.shared-courses.editor', ['course' => $course])
+        ->set('modules.0.questions.0.prompt', 'Question only')
+        ->call('markAssessmentDirty', $module->id)
+        ->call('saveDraft', false)
+        ->assertHasNoErrors();
+
+    expect($module->fresh()->content_markdown)->toBe($canonical);
 });

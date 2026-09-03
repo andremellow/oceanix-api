@@ -45,7 +45,13 @@ class ModuleVersion extends Module
                 return true;
             }
 
-            return array_keys($version->getDirty()) === ['status']
+            $dirty = array_keys($version->getDirty());
+
+            if ($dirty === ['lineage_archived_at']) {
+                return true;
+            }
+
+            return $dirty === ['status']
                 && in_array($version->status, [ModuleVersionStatus::Retired, ModuleVersionStatus::Archived], true);
         });
 

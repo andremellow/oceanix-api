@@ -10,5 +10,6 @@ class VideoUpload
         public readonly string $assetId,
         public readonly string $uploadUrl,
         public readonly ?string $uploadId = null,
+        public readonly ?int $videoId = null,
     ) {}
 }
