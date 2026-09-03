@@ -35,6 +35,17 @@ it('adds a lesson and persists it immediately', function (): void {
     expect($course->versions()->first()->lessons()->count())->toBe(1);
 });
 
+it('keeps video management inside the lesson content editor', function (): void {
+    $course = draftCourse();
+    Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id]);
+
+    Livewire::actingAs(adminUser())
+        ->test('courses.editor', ['course' => $course])
+        ->assertSee('oceanix-open-video-library', false)
+        ->assertDontSee(__('Replace video'))
+        ->assertDontSee(__('Watch threshold (%)'));
+});
+
 it('autosaves a lesson field straight to the database', function (): void {
     $course = draftCourse();
     $version = $course->versions()->first();

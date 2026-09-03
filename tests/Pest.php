@@ -143,6 +143,7 @@ function trainableAssignment(array $lessonAttributes = [], int $maxAttempts = 2)
         'course_version_id' => $version->id,
         'minimum_watch_percentage' => 90,
         'passing_score' => 70,
+        'content_markdown' => '<div data-oceanix-video></div>',
         ...$lessonAttributes,
     ]);
     Video::factory()->create(['lesson_id' => $lesson->id, 'duration_seconds' => 100]);

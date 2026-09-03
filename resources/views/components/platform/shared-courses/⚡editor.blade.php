@@ -652,7 +652,7 @@ new #[Layout('layouts::platform')] class extends Component
                     <button type="button" wire:click="toggleModule({{ $module['id'] }})" class="flex min-w-0 flex-1 items-center justify-between gap-4 text-left" aria-expanded="{{ in_array($module['id'], $expanded, true) ? 'true' : 'false' }}" aria-controls="shared-course-module-panel-{{ $module['id'] }}">
                         <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2"><p class="font-bold">{{ $module['title'] }}</p><span class="status-pill status-pill--accent">{{ __('Shared') }}</span><span class="status-pill">{{ __('Managed by platform') }}</span></div>
-                            <p class="mt-1 text-xs text-[#8a9298]">{{ $module['video'] ? $module['video']['status_label'].' · '.$module['video']['duration'] : __('No video') }} · {{ trans_choice('ui.questions_count', count($module['questions']), ['count' => count($module['questions'])]) }}</p>
+                            <p class="mt-1 text-xs text-[#8a9298]">{{ trans_choice('ui.questions_count', count($module['questions']), ['count' => count($module['questions'])]) }}</p>
                         </div>
                         <flux:icon.chevron-down class="size-5 shrink-0" />
                     </button>
@@ -672,8 +672,7 @@ new #[Layout('layouts::platform')] class extends Component
                             class="oceanix-content-editor"
                             :label="__('Module content')"
                             toolbar="heading | bold italic underline strike | bullet ordered blockquote link | align | image image-left image-center image-right image-size video ~ fullscreen undo redo" />
-                        <div class="grid gap-4 sm:grid-cols-2"><flux:input type="number" wire:model.defer="modules.{{ $moduleIndex }}.minimum_watch_percentage" x-on:input="markDirty" :label="__('Watch threshold (%)')" /><flux:input type="number" wire:model.defer="modules.{{ $moduleIndex }}.passing_score" x-on:input="markDirty" :label="__('Passing score (%)')" /></div>
-                        <div class="flex items-center justify-between rounded-[18px] bg-[#f7f9fa] p-4" x-data="lessonVideoUpload({{ $moduleIndex }}, {{ Js::from(['fileTooLarge' => __('This video is larger than 200 MB. Select a smaller file.')]) }})"><div><p class="font-bold">{{ __('Video') }}</p><p class="text-xs text-[#8a9298]">{{ $module['video'] ? $module['video']['status_label'].' · '.$module['video']['duration'] : __('No video attached') }}</p><p x-show="uploading" x-text="`${progress}%`"></p></div><div><input type="file" accept="video/*" class="hidden" x-ref="file" @change="start($event)"><flux:button x-on:click="$refs.file.click()" variant="ghost">{{ $module['video'] ? __('Replace video') : __('Upload video') }}</flux:button></div></div>
+                        <flux:input type="number" wire:model.defer="modules.{{ $moduleIndex }}.passing_score" x-on:input="markDirty" :label="__('Passing score (%)')" />
                         <div>
                             <div class="flex flex-wrap items-center justify-between gap-3">
                                 <div><p class="font-bold">{{ __('Assessment') }}</p><p class="text-xs text-[#707a80]">{{ __('Assessment changes are saved explicitly.') }}</p></div>

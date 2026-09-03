@@ -16,12 +16,26 @@ it('shows authored lesson content between the video and assessment', function ()
     Livewire::actingAs($assignment->user)
         ->test('training.lesson', ['assignment' => $assignment, 'lesson' => $lesson])
         ->assertSee($question->prompt)
-        ->assertSee('TEMPORARILY-HIDDEN-RICH-CONTENT');
+        ->assertSee('TEMPORARILY-HIDDEN-RICH-CONTENT')
+        ->assertDontSee('x-data="lessonPlayer', false)
+        ->assertSet('playbackUrl', null);
 });
 
 it('places the tracked player at the authored video block', function (): void {
     [$assignment, $lesson] = trainableAssignment();
     $lesson->update(['content_markdown' => '<p>Before the video</p><div data-oceanix-video></div><p>After the video</p>']);
+
+    $html = Livewire::actingAs($assignment->user)
+        ->test('training.lesson', ['assignment' => $assignment, 'lesson' => $lesson])
+        ->html();
+
+    expect(strpos($html, 'Before the video'))->toBeLessThan(strpos($html, 'x-data="lessonPlayer'))
+        ->and(strpos($html, 'x-data="lessonPlayer'))->toBeLessThan(strpos($html, 'After the video'));
+});
+
+it('places the tracked player at a legacy markdown video block', function (): void {
+    [$assignment, $lesson] = trainableAssignment();
+    $lesson->update(['content_markdown' => "Before the video\n\n:::video\n\nAfter the video"]);
 
     $html = Livewire::actingAs($assignment->user)
         ->test('training.lesson', ['assignment' => $assignment, 'lesson' => $lesson])

@@ -8,6 +8,8 @@ use Illuminate\Support\Str;
 
 class LessonContentRenderer
 {
+    private const HTML_VIDEO_MARKER = '/<div\s+data-oceanix-video(?:="")?\s*>.*?<\/div>/s';
+
     public function __construct(private readonly LessonContentSanitizer $sanitizer) {}
 
     public function render(Lesson $lesson): HtmlString
@@ -46,6 +48,20 @@ class LessonContentRenderer
         return $this->sanitizer->sanitize($html);
     }
 
+    public function containsVideo(string $content): bool
+    {
+        return preg_match(self::HTML_VIDEO_MARKER, $content) === 1
+            || preg_match('/^:::video\s*$/m', $content) === 1;
+    }
+
+    /** @return array{0: string, 1: string}|null */
+    public function splitAtVideo(string $content): ?array
+    {
+        $parts = preg_split(self::HTML_VIDEO_MARKER, $this->editorContent($content), 2);
+
+        return is_array($parts) && count($parts) === 2 ? [$parts[0], $parts[1]] : null;
+    }
+
     public function renderContent(string $content, ?string $videoDuration = null): HtmlString
     {
         if (! $this->isHtml($content)) {
@@ -56,7 +72,7 @@ class LessonContentRenderer
         $placeholder = $videoDuration === null
             ? '<div class="lesson-video-placeholder">'.e(__('No video attached')).'</div>'
             : '<div class="lesson-video-placeholder">'.e(__('Video')).' · '.e($videoDuration).'</div>';
-        $html = preg_replace('/<div\s+data-oceanix-video(?:="")?\s*>.*?<\/div>/s', $placeholder, $html) ?? $html;
+        $html = preg_replace(self::HTML_VIDEO_MARKER, $placeholder, $html) ?? $html;
 
         return new HtmlString($html);
     }

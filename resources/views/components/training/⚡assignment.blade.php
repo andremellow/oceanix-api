@@ -92,9 +92,7 @@ new class extends Component
                     <div class="min-w-0 flex-1">
                         <p class="font-semibold text-[#262d33]">{{ $lesson->title }}</p>
                         <p class="mt-0.5 text-xs text-[#8a9298]">
-                            {{ $lesson->video?->formattedDuration() ?? '—' }}
-                            · {{ trans_choice('ui.questions_count', $lesson->questions->count(), ['count' => $lesson->questions->count()]) }}
-                            · {{ __('ui.watch_threshold', ['percentage' => $lesson->minimum_watch_percentage]) }}
+                            {{ trans_choice('ui.questions_count', $lesson->questions->count(), ['count' => $lesson->questions->count()]) }}
                         </p>
                     </div>
                     <div class="flex items-center gap-3">

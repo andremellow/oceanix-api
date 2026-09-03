@@ -24,7 +24,10 @@ function publishableDraft(): CourseVersion
     $course = Course::factory()->draft()->create();
     $version = CourseVersion::factory()->create(['course_id' => $course->id]);
 
-    $lesson = Lesson::factory()->create(['course_version_id' => $version->id]);
+    $lesson = Lesson::factory()->create([
+        'course_version_id' => $version->id,
+        'content_markdown' => '<div data-oceanix-video></div>',
+    ]);
     Video::factory()->create(['lesson_id' => $lesson->id]);
 
     $question = Question::factory()->create(['lesson_id' => $lesson->id]);
@@ -54,6 +57,15 @@ it('publishes a complete draft and makes it the current version', function (): v
         ->and($published->course->fresh()->current_published_version_id)->toBe($published->id)
         ->and($published->course->fresh()->status)->toBe(CourseStatus::Active)
         ->and(AuditLog::query()->where('action', 'course_version.published')->count())->toBe(1);
+});
+
+it('publishes text-only lesson content without a video asset', function (): void {
+    $version = publishableDraft();
+    $lesson = $version->lessons()->firstOrFail();
+    $lesson->update(['content_markdown' => '<p>Text-only safety instructions.</p>']);
+    $lesson->video()->delete();
+
+    expect(app(CourseVersionValidator::class)->problems($version->fresh()))->toBe([]);
 });
 
 it('renders a migrated course composition without nested lesson relationships', function (): void {

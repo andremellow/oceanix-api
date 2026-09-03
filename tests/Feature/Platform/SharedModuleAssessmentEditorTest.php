@@ -464,6 +464,17 @@ it('cleans up failed concurrent uploads in the standalone shared module editor',
         ->and(Video::query()->findOrFail($uploads[$tokens[1]]['video_id'])->status)->toBe(VideoStatus::Failed);
 });
 
+it('keeps video management inside the shared module content editor', function (): void {
+    $account = Account::factory()->platformAdmin()->create();
+    [$module] = editableAssessmentModule();
+    $this->withSession(['platform_account_id' => $account->id]);
+
+    Livewire::test('platform.shared-modules.editor', ['module' => $module])
+        ->assertSee('oceanix-open-video-library', false)
+        ->assertDontSee(__('Replace video'))
+        ->assertDontSee(__('Watch threshold (%)'));
+});
+
 it('round trips multiple-choice answers through the shared course editor', function (): void {
     $account = Account::factory()->platformAdmin()->create();
     [$module, $question, $first, $second] = editableAssessmentModule();

@@ -54,3 +54,15 @@ it('sanitizes visual editor html and preserves controlled media attributes', fun
         ->not->toContain('<script')
         ->not->toContain('alert(3)');
 });
+
+it('detects and splits html and legacy markdown video blocks', function (): void {
+    $renderer = app(LessonContentRenderer::class);
+
+    expect($renderer->containsVideo('<p>Before</p><div data-oceanix-video></div><p>After</p>'))->toBeTrue()
+        ->and($renderer->containsVideo("Before\n\n:::video\n\nAfter"))->toBeTrue()
+        ->and($renderer->containsVideo('<p>Text only</p>'))->toBeFalse()
+        ->and($renderer->splitAtVideo('<p>Before</p><div data-oceanix-video></div><p>After</p>'))
+        ->toBe(['<p>Before</p>', '<p>After</p>'])
+        ->and($renderer->splitAtVideo("Before\n\n:::video\n\nAfter"))
+        ->toBe(["<p>Before</p>\n", "\n<p>After</p>\n"]);
+});

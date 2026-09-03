@@ -853,16 +853,9 @@ new class extends Component
                     <button type="button" wire:click="toggleLesson({{ $lesson['id'] }})" class="min-w-0 flex-1 text-left">
                         <span class="block truncate font-bold text-[#262d33]">{{ $lesson['title'] ?: __('Untitled lesson') }}</span>
                         <span class="mt-0.5 block text-xs text-[#8a9298]">
-                            {{ $lesson['video']['duration'] ?? __('No video') }}
-                            · {{ trans_choice('ui.questions_count', count($lesson['questions']), ['count' => count($lesson['questions'])]) }}
+                            {{ trans_choice('ui.questions_count', count($lesson['questions']), ['count' => count($lesson['questions'])]) }}
                         </span>
                     </button>
-
-                    @if ($lesson['video'])
-                        <span class="status-pill {{ $lesson['video']['pill'] }}">{{ $lesson['video']['status_label'] }}</span>
-                    @else
-                        <span class="status-pill status-pill--warning">{{ __('No video') }}</span>
-                    @endif
 
                     <div class="flex items-center gap-1">
                         <flux:button wire:click="moveLesson({{ $lessonIndex }}, -1)" variant="ghost" size="sm" icon="chevron-up" :aria-label="__('Move up')" :disabled="$lessonIndex === 0" />
@@ -876,12 +869,7 @@ new class extends Component
                     <div class="border-t border-[#eef1f4] p-4 sm:p-5">
                         <div class="grid gap-4 lg:grid-cols-2">
                             <flux:input wire:model.blur="lessons.{{ $lessonIndex }}.title" class="admin-control" :label="__('Lesson title')" />
-                            <div class="grid grid-cols-2 gap-4">
-                                <flux:field>
-                                    <x-field-label :hint="__('ui.watch_threshold_help')">{{ __('Watch threshold (%)') }}</x-field-label>
-                                    <flux:input type="number" min="1" max="100" wire:model.blur="lessons.{{ $lessonIndex }}.minimum_watch_percentage" class="admin-control" />
-                                    <flux:error name="lessons.{{ $lessonIndex }}.minimum_watch_percentage" />
-                                </flux:field>
+                            <div>
                                 <flux:field>
                                     <x-field-label :hint="__('ui.passing_score_help')">{{ __('Passing score (%)') }}</x-field-label>
                                     <flux:input type="number" min="1" max="100" wire:model.blur="lessons.{{ $lessonIndex }}.passing_score" class="admin-control" />
@@ -902,43 +890,9 @@ new class extends Component
                                 data-oceanix-video-aspect-ratio="{{ data_get($lesson, 'video.preview.aspect_ratio', '16/9') }}"
                                 class="oceanix-content-editor"
                                 :label="__('Lesson content')"
-                                :description="__('Format the lesson visually and insert images or the attached video where they should appear.')"
+                                :description="__('Format the lesson visually and insert images or videos where they should appear.')"
                                 toolbar="heading | bold italic underline strike | bullet ordered blockquote link | align | image image-left image-center image-right image-size video ~ fullscreen undo redo" />
                             <flux:error name="lessons.{{ $lessonIndex }}.content_markdown" />
-                        </div>
-
-                        {{-- Video --}}
-                        <div class="mt-5 rounded-[18px] border border-[#e4e9ec] bg-[#f8fafb] p-4">
-                            <div class="flex flex-wrap items-center justify-between gap-3" x-data="lessonVideoUpload({{ $lessonIndex }}, {{ Js::from(['fileTooLarge' => __('This video is larger than 200 MB. Select a smaller file.')]) }})">
-                                <div class="min-w-0">
-                                    <p class="text-sm font-bold text-[#262d33]">{{ __('Video') }}</p>
-                                    <p class="mt-0.5 text-xs text-[#8a9298]">
-                                        @if ($lesson['video'])
-                                            {{ $lesson['video']['status_label'] }} · {{ $lesson['video']['duration'] }}
-                                        @else
-                                            {{ __('ui.video_upload_hint') }}
-                                        @endif
-                                    </p>
-                                    <template x-if="uploading">
-                                        <div class="mt-2 w-56">
-                                            <div class="h-2 overflow-hidden rounded-full bg-[#e2e8ec]">
-                                                <div class="h-full rounded-full bg-[#1c6b84]" :style="`width: ${progress}%`"></div>
-                                            </div>
-                                            <p class="mt-1 text-[11px] font-semibold text-[#1c6b84]" x-text="`${progress}%`"></p>
-                                        </div>
-                                    </template>
-                                    <p class="mt-2 text-[11px] font-semibold text-[#b23a3a]" x-show="error" x-text="error"></p>
-                                </div>
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <input type="file" accept="video/*" class="hidden" x-ref="file" @change="start($event)">
-                                    <flux:button wire:click="openVideoLibrary({{ $lessonIndex }})" variant="ghost" size="sm" icon="rectangle-stack">
-                                        {{ __('Video library') }}
-                                    </flux:button>
-                                    <flux:button variant="ghost" size="sm" x-on:click="$refs.file.click()" ::disabled="uploading">
-                                        {{ $lesson['video'] ? __('Replace video') : __('Upload video') }}
-                                    </flux:button>
-                                </div>
-                            </div>
                         </div>
 
                         {{-- Questions --}}

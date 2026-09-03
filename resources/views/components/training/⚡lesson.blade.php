@@ -12,6 +12,7 @@ use App\Models\Question;
 use App\Models\UserTrainingAssignment;
 use App\Services\Compliance\ComplianceEventRecorder;
 use App\Services\Training\TrainingCompletionService;
+use App\Services\Courses\LessonContentRenderer;
 use App\Services\Video\PlaybackAuthorizationService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Livewire\Component;
@@ -32,6 +33,8 @@ new class extends Component
 
     public ?string $playbackError = null;
 
+    public bool $hasEmbeddedVideo = false;
+
     /** @var array<int, list<int>> */
     public array $selected = [];
 
@@ -48,15 +51,18 @@ new class extends Component
 
         $this->assignment = $assignment;
         $this->lesson = $lesson->load(['video', 'questions.options']);
+        $this->hasEmbeddedVideo = app(LessonContentRenderer::class)->containsVideo((string) $this->lesson->content_markdown);
 
-        try {
-            $authorization = $playback->authorize($assignment, $this->lesson);
-            $this->playbackUrl = $authorization->playbackUrl;
-            $this->posterUrl = $authorization->posterUrl;
-        } catch (VideoProviderException) {
-            // A provider outage or a missing remote asset must not expose an exception page
-            // to the employee. The provider already logs the diagnostic details.
-            $this->playbackError = __('ui.video_playback_failed_help');
+        if ($this->hasEmbeddedVideo) {
+            try {
+                $authorization = $playback->authorize($assignment, $this->lesson);
+                $this->playbackUrl = $authorization->playbackUrl;
+                $this->posterUrl = $authorization->posterUrl;
+            } catch (VideoProviderException) {
+                // A provider outage or a missing remote asset must not expose an exception page
+                // to the employee. The provider already logs the diagnostic details.
+                $this->playbackError = __('ui.video_playback_failed_help');
+            }
         }
 
         // Seeded per question so Livewire binds a multiple-choice question to an array and
@@ -160,7 +166,7 @@ new class extends Component
 
         return [
             'percentage' => $percentage,
-            'unlocked' => $percentage >= $this->lesson->minimum_watch_percentage,
+            'unlocked' => ! $this->hasEmbeddedVideo || $percentage >= $this->lesson->minimum_watch_percentage,
             'answeredIds' => $this->answeredQuestionIds(),
         ];
     }
@@ -201,12 +207,12 @@ new class extends Component
     </x-page-hero>
 
     @php
-        $authoredContent = app(App\Services\Courses\LessonContentRenderer::class)->editorContent((string) $lesson->content_markdown);
-        $contentParts = preg_split('/<div\s+data-oceanix-video(?:="")?\s*>.*?<\/div>/s', $authoredContent, 2);
-        $placesVideoInContent = is_array($contentParts) && count($contentParts) === 2;
+        $renderer = app(App\Services\Courses\LessonContentRenderer::class);
+        $authoredContent = $renderer->editorContent((string) $lesson->content_markdown);
+        $contentParts = $renderer->splitAtVideo((string) $lesson->content_markdown);
     @endphp
 
-    @if ($placesVideoInContent)
+    @if ($contentParts !== null)
         @if (trim($contentParts[0]) !== '')
             <article class="detail-card"><div class="lesson-content flow-root text-[15px] leading-7 text-[#3d464c]">{!! $contentParts[0] !!}</div></article>
         @endif
@@ -215,7 +221,6 @@ new class extends Component
             <article class="detail-card"><div class="lesson-content flow-root text-[15px] leading-7 text-[#3d464c]">{!! $contentParts[1] !!}</div></article>
         @endif
     @else
-        <x-training.lesson-video-player :$assignment :$lesson :$playbackUrl :$posterUrl :$playbackError :$unlocked :$percentage />
         @if (trim($authoredContent) !== '')
             <article class="detail-card"><div class="lesson-content flow-root text-[15px] leading-7 text-[#3d464c]">{!! $authoredContent !!}</div></article>
         @endif

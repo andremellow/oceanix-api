@@ -395,14 +395,14 @@ new #[Layout('layouts::platform')] class extends Component
 ?>
 
 <div class="admin-page space-y-7" style="padding-bottom: calc(var(--editor-save-bar-height, 8rem) + 1rem);" x-data="{ pageDirty: false, saving: false, beforeUnloadHandler: null, saveBarObserver: null, markEditorDirty() { if (! this.pageDirty) { this.pageDirty = true; $wire.set('assessmentDirty', true, false); } }, hasOpenDialog() { return Boolean(document.querySelector('dialog[open], [role=dialog][aria-modal=true]:not([hidden])')); }, observeSaveBar(element) { this.saveBarObserver?.disconnect(); this.saveBarObserver = new ResizeObserver(entries => this.$root.style.setProperty('--editor-save-bar-height', `${entries[0].contentRect.height}px`)); this.saveBarObserver.observe(element); }, init() { this.beforeUnloadHandler = event => { if (this.pageDirty) { event.preventDefault(); event.returnValue = ''; } }; window.addEventListener('beforeunload', this.beforeUnloadHandler); this.keyHandler = event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') { event.preventDefault(); if (! this.pageDirty || this.saving || this.hasOpenDialog()) return; this.saving = true; $wire.saveDraft(false); } }; window.addEventListener('keydown', this.keyHandler); }, destroy() { window.removeEventListener('beforeunload', this.beforeUnloadHandler); window.removeEventListener('keydown', this.keyHandler); this.saveBarObserver?.disconnect(); } }" x-on:assessment-dirty="pageDirty = true" x-on:assessment-saved.window="pageDirty = false; saving = false" x-on:editor-saved.window="pageDirty = false; saving = false" x-on:editor-save-finished.window="saving = false" x-on:livewire:navigate.window="if (pageDirty && ! window.confirm({{ Js::from(__('You have unsaved changes. Leave without saving?')) }})) $event.preventDefault()" x-on:oceanix-open-image-library.window="$wire.openImageLibrary()" x-on:oceanix-open-video-library.window="$wire.openEditorVideoLibrary($event.detail.model)">
-    <x-page-hero :kicker="__('Shared Module draft')" :title="$title" :description="__('Edit the module content and replace its video before publishing the new immutable version.')">
+    <x-page-hero :kicker="__('Shared Module draft')" :title="$title" :description="__('Edit the module content before publishing the new immutable version.')">
         <flux:button :href="route('platform.shared-modules.show', ['module' => $module])" wire:navigate variant="ghost">{{ __('Cancel') }}</flux:button>
     </x-page-hero>
     <x-status-message />
 
     <section class="detail-card space-y-5">
         <div class="grid gap-4 lg:grid-cols-2"><flux:input wire:model.defer="title" x-on:input="markEditorDirty" class="admin-control" :label="__('Module title')" /><flux:textarea wire:model.defer="description" x-on:input="markEditorDirty" class="admin-control" :label="__('Description')" rows="2" /></div>
-        <div class="grid gap-4 sm:grid-cols-2"><flux:input type="number" min="1" max="100" wire:model.defer="minimumWatchPercentage" x-on:input="markEditorDirty" class="admin-control" :label="__('Watch threshold (%)')" /><flux:input type="number" min="1" max="100" wire:model.defer="passingScore" x-on:input="markEditorDirty" class="admin-control" :label="__('Passing score (%)')" /></div>
+        <flux:input type="number" min="1" max="100" wire:model.defer="passingScore" x-on:input="markEditorDirty" class="admin-control" :label="__('Passing score (%)')" />
         <flux:editor
             wire:model.defer="contentMarkdown"
             x-on:input="$wire.set('contentDirty', true, false); markEditorDirty()"
@@ -414,13 +414,6 @@ new #[Layout('layouts::platform')] class extends Component
             class="oceanix-content-editor"
             :label="__('Module content')"
             toolbar="heading | bold italic underline strike | bullet ordered blockquote link | align | image image-left image-center image-right image-size video ~ fullscreen undo redo" />
-    </section>
-
-    <section class="detail-card">
-        <div class="flex flex-wrap items-center justify-between gap-4" x-data="lessonVideoUpload(0, {{ Js::from(['fileTooLarge' => __('This video is larger than 200 MB. Select a smaller file.')]) }})">
-            <div><h2 class="detail-card-title">{{ __('Video') }}</h2><p class="mt-1 text-sm text-[#707a80]">{{ $version->video ? $version->video->status->label().' · '.$version->video->formattedDuration() : __('No video attached') }}</p><template x-if="uploading"><p class="mt-2 text-sm font-semibold text-[#1c6b84]" x-text="`${progress}%`"></p></template><p class="mt-2 text-sm text-[#b23a3a]" x-show="error" x-text="error"></p></div>
-            <div><input type="file" accept="video/*" class="hidden" x-ref="file" @change="start($event)"><flux:button variant="primary" x-on:click="$refs.file.click()" ::disabled="uploading" icon="arrow-up-tray">{{ $version->video ? __('Replace video') : __('Upload video') }}</flux:button></div>
-        </div>
     </section>
 
     <section class="detail-card space-y-4" x-data="{ dirty: {{ Js::from($assessmentDirty) }}, markDirty() { if (! this.dirty) { this.dirty = true; $dispatch('assessment-dirty'); $wire.set('assessmentDirty', true, false); } } }" x-on:assessment-saved.window="dirty = false">

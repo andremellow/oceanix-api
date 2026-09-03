@@ -205,14 +205,9 @@ new class extends Component
                                     <div class="min-w-0 flex-1">
                                         <p class="font-semibold text-[#262d33]">{{ $lesson->title }}</p>
                                         <p class="mt-0.5 text-xs text-[#8a9298]">
-                                            {{ $lesson->video?->formattedDuration() ?? __('No video') }}
-                                            · {{ __('ui.watch_threshold', ['percentage' => $lesson->minimum_watch_percentage]) }}
-                                            · {{ __('ui.passing_score', ['score' => $lesson->passing_score]) }}
+                                            {{ __('ui.passing_score', ['score' => $lesson->passing_score]) }}
                                         </p>
                                     </div>
-                                    @if ($lesson->video)
-                                        <span class="status-pill {{ $lesson->video->status->pillModifier() }}">{{ $lesson->video->status->label() }}</span>
-                                    @endif
                                     @unless ($lesson->is_required)
                                         <span class="status-pill status-pill--neutral">{{ __('Optional') }}</span>
                                     @endunless
