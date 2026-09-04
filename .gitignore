@@ -10,6 +10,7 @@
 .phpunit.result.cache
 /.codex
 /.cursor/
+/.power-dev-workflow/runtime/
 /.idea
 /.nova
 /.phpunit.cache

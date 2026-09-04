@@ -7,6 +7,7 @@ use App\Enums\QuestionType;
 use App\Models\Account;
 use App\Models\ModuleVersion;
 use App\Models\QuestionOption;
+use App\Services\Modules\ModuleLineageLock;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -14,6 +15,8 @@ use LogicException;
 
 class SaveModuleAssessment
 {
+    public function __construct(private readonly ModuleLineageLock $lineageLock) {}
+
     /**
      * @param  array{questions: list<array{id: int, prompt: string, max_attempts: int, options: list<array{id: int, text: string, is_correct: bool}>}>}  $payload
      */
@@ -30,9 +33,10 @@ class SaveModuleAssessment
                 throw new LogicException('Only an active platform administrator can edit shared content.');
             }
 
-            $lockedVersion = ModuleVersion::query()->lockForUpdate()->findOrFail($version->id);
+            $lockedVersion = $this->lineageLock->versions([$version->id])->firstWhere('id', $version->id)
+                ?? throw new LogicException('The module is unavailable.');
 
-            if ($lockedVersion->status !== ModuleVersionStatus::Draft || ! $lockedVersion->is_shared || $lockedVersion->company_id !== null) {
+            if ($lockedVersion->status !== ModuleVersionStatus::Draft || ! $lockedVersion->is_shared || $lockedVersion->company_id !== null || $lockedVersion->lineage_archived_at !== null) {
                 throw new LogicException('Assessments can only be edited on platform-owned shared module drafts.');
             }
 

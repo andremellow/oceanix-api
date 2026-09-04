@@ -1,6 +1,8 @@
 <?php
 
 use App\Actions\Courses\CreateDraftFromVersion;
+use App\Actions\Courses\DiscardSharedCourseDraft;
+use App\Actions\Courses\PrepareSharedCourseEditor;
 use App\Actions\SharedContent\ArchiveSharedContent;
 use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
@@ -24,6 +26,12 @@ new #[Layout('layouts::platform')] class extends Component
 
     public string $archiveReason = '';
 
+    public bool $confirmingDiscard = false;
+
+    public string $discardReason = '';
+
+    public string $discardRevision = '';
+
     public function mount(Course $course, PlatformAccess $access, ?Company $company = null): void
     {
         $access->authorize();
@@ -42,6 +50,8 @@ new #[Layout('layouts::platform')] class extends Component
         $this->course = $course;
         $this->company = $company;
         $this->selectedVersionId = $course->current_published_version_id ?? $course->versions()->first()?->id;
+        $draft = $course->versions()->where('status', CourseVersionStatus::Draft->value)->where('publication_kind', 'manual')->first();
+        $this->discardRevision = $draft === null ? '' : app(DiscardSharedCourseDraft::class)->revision($draft);
     }
 
     public function selectVersion(int $versionId, PlatformAccess $access): void
@@ -53,11 +63,13 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function createDraft(CreateDraftFromVersion $action, PlatformAccess $access): void
     {
-        $access->authorize();
+        $account = $access->authorize();
         $source = $this->course->currentPublishedVersion ?? $this->course->versions()->firstOrFail();
 
         try {
-            $action->handle($source);
+            $draft = $action->handle($source, $account);
+            $prepare = app(PrepareSharedCourseEditor::class);
+            $prepare->handle($this->course, $account, $prepare->revision($this->course, $draft));
         } catch (CoursePublicationException $exception) {
             $this->addError('draft', $exception->problems[0] ?? __('A draft could not be created.'));
 
@@ -65,6 +77,25 @@ new #[Layout('layouts::platform')] class extends Component
         }
 
         $this->redirect(route('platform.shared-courses.editor', ['course' => $this->course]), navigate: true);
+    }
+
+    public function editDraft(PrepareSharedCourseEditor $action, PlatformAccess $access): void
+    {
+        $account = $access->authorize();
+        $draft = $this->course->manualDraftVersion() ?? abort(404);
+        $action->handle($this->course, $account, $action->revision($this->course, $draft));
+        $this->redirect(route('platform.shared-courses.editor', ['course' => $this->course]), navigate: true);
+    }
+
+    public function discardDraft(DiscardSharedCourseDraft $action, PlatformAccess $access): void
+    {
+        $account = $access->authorize();
+        $this->validate(['discardReason' => ['required', 'string', 'max:500']]);
+        $draft = $this->course->versions()->where('status', CourseVersionStatus::Draft->value)->where('publication_kind', 'manual')->firstOrFail();
+        $discarded = $action->handle($draft, $account, $this->discardReason, $this->discardRevision);
+        $this->selectedVersionId = $this->course->fresh()->current_published_version_id ?? $discarded->id;
+        $this->reset('confirmingDiscard', 'discardReason', 'discardRevision');
+        session()->flash('status', __('Draft discarded. Draft-only edits and associations were abandoned; shared modules and published versions remain available.'));
     }
 
     public function archive(ArchiveSharedContent $action, PlatformAccess $access): void
@@ -86,6 +117,8 @@ new #[Layout('layouts::platform')] class extends Component
                 ->with(['moduleCompositions.moduleVersion.video', 'moduleCompositions.moduleVersion.questions.options'])
                 ->find($this->selectedVersionId),
             'associationCount' => $this->course->companyAssociations()->whereNull('removed_at')->count(),
+            'canDiscardDraft' => $access->account() !== null,
+            'manualDraft' => $this->course->manualDraftVersion(),
         ];
     }
 };
@@ -100,8 +133,9 @@ new #[Layout('layouts::platform')] class extends Component
             <span class="text-sm text-[#707a80]">{{ __('This course is managed by the company.') }}</span>
         @elseif ($course->status === CourseStatus::Archived)
             <span class="text-sm text-[#707a80]">{{ __('New associations and assignments are blocked.') }}</span>
-        @elseif ($course->versions()->where('status', CourseVersionStatus::Draft->value)->exists())
-            <flux:button :href="route('platform.shared-courses.editor', ['course' => $course])" wire:navigate variant="primary">{{ __('Edit draft') }}</flux:button>
+        @elseif ($course->versions()->where('status', CourseVersionStatus::Draft->value)->where('publication_kind', 'manual')->exists())
+            <flux:button wire:click="editDraft" wire:loading.attr="disabled" variant="primary">{{ __('Edit draft') }}</flux:button>
+            @if ($canDiscardDraft)<flux:button wire:click="$set('confirmingDiscard', true)" variant="danger">{{ __('Discard draft') }}</flux:button>@endif
         @else
             <flux:button wire:click="createDraft" wire:loading.attr="disabled" variant="primary">{{ __('New draft version') }}</flux:button>
         @endif
@@ -156,6 +190,22 @@ new #[Layout('layouts::platform')] class extends Component
             <div><flux:heading size="lg">{{ __('Archive shared course?') }}</flux:heading><flux:text class="mt-2">{{ __('Companies cannot add this course or create new assignments. Existing assignments and evidence remain available.') }}</flux:text></div>
             <flux:textarea wire:model="archiveReason" :label="__('Reason')" required />
             <div class="flex justify-end gap-2"><flux:button type="button" wire:click="$set('confirmingArchive', false)" variant="ghost">{{ __('Cancel') }}</flux:button><flux:button type="submit" wire:loading.attr="disabled" variant="danger">{{ __('Archive shared course') }}</flux:button></div>
+        </form>
+    </flux:modal>
+
+    <flux:modal wire:model.self="confirmingDiscard" :dismissible="false" class="max-w-lg">
+        <form wire:submit="discardDraft" class="space-y-5">
+            <div><flux:heading size="lg">{{ __('Discard this draft?') }}</flux:heading><flux:text class="mt-2">{{ __('Draft-only edits and associations will be abandoned. Shared modules and published versions remain available, and the discarded composition is preserved in the audit trail.') }}</flux:text></div>
+            @if ($manualDraft)
+                <div class="rounded-[18px] border border-[#dde3e7] bg-[#f7f9fa] p-4">
+                    <p class="font-bold break-words">{{ $course->code }} · {{ $course->title }}</p>
+                    <p class="mt-1 text-sm text-[#6f797f]">{{ __('Version :number', ['number' => $manualDraft->version_number]) }} · {{ $manualDraft->status->label() }}</p>
+                </div>
+            @endif
+            <flux:textarea wire:model="discardReason" :label="__('Reason')" required />
+            @error('discard') <flux:callout variant="danger" :heading="$message" /> @enderror
+            <p wire:loading wire:target="discardDraft" class="text-sm text-[#59656b]" role="status" aria-live="polite">{{ __('Discarding draft…') }}</p>
+            <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><flux:button class="w-full whitespace-normal sm:w-auto" type="button" wire:click="$set('confirmingDiscard', false)" wire:loading.attr="disabled" wire:target="discardDraft" variant="ghost">{{ __('Cancel') }}</flux:button><flux:button class="w-full whitespace-normal sm:w-auto" type="submit" wire:loading.attr="disabled" wire:target="discardDraft" variant="danger"><span wire:loading.remove wire:target="discardDraft">{{ __('Discard draft') }}</span><span wire:loading wire:target="discardDraft">{{ __('Discarding draft…') }}</span></flux:button></div>
         </form>
     </flux:modal>
 </div>

@@ -4,13 +4,24 @@ use App\Enums\CourseStatus;
 use App\Enums\ModuleStatus;
 use App\Enums\ModuleVersionStatus;
 use App\Models\Account;
+use App\Models\Course;
+use App\Models\CourseVersion;
 use App\Models\Module;
 use App\Models\ModuleVersion;
 use Livewire\Livewire;
 
+function platformUiArchivableSharedCourse(): Course
+{
+    $course = Course::factory()->shared()->create(['status' => CourseStatus::Active]);
+    $version = CourseVersion::factory()->published()->create(['course_id' => $course]);
+    $course->update(['current_published_version_id' => $version->id]);
+
+    return $course->fresh();
+}
+
 it('confirms and archives a shared course while explaining preserved evidence', function (): void {
     $account = Account::factory()->platformAdmin()->create();
-    $course = archivableSharedCourse();
+    $course = platformUiArchivableSharedCourse();
     $this->withSession(['platform_account_id' => $account->id]);
 
     Livewire::test('platform.shared-courses.show', ['course' => $course])

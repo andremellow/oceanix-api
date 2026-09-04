@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Courses\PrepareSharedCourseEditor;
 use App\Actions\Modules\CreateAndAttachSharedModule;
 use App\Models\Account;
 use App\Models\ContentImage;
@@ -13,6 +14,12 @@ use App\Models\QuestionOption;
 use App\Models\Video;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+
+function explicitlyPrepareSharedCourseEditor(Course $course, CourseVersion $version, Account $account): void
+{
+    $action = app(PrepareSharedCourseEditor::class);
+    $action->handle($course, $account, $action->revision($course->fresh(), $version->fresh()));
+}
 
 it('protects every shared course administration route with platform access', function (): void {
     $course = Course::factory()->shared()->create();
@@ -111,7 +118,7 @@ it('creates shared courses with platform ownership from the directory', function
     $course = Course::query()->where('code', 'GLOBAL-101')->firstOrFail();
     expect($course->is_shared)->toBeTrue()
         ->and($course->company_id)->toBeNull()
-        ->and($course->draftVersion())->not->toBeNull();
+        ->and($course->manualDraftVersion())->not->toBeNull();
 });
 
 it('opens the complete course and module editor on one continuous screen', function (): void {
@@ -127,6 +134,7 @@ it('opens the complete course and module editor on one continuous screen', funct
         'position' => 1,
         'is_required' => true,
     ]);
+    explicitlyPrepareSharedCourseEditor($course, $courseVersion, $account);
     $this->withSession(['platform_account_id' => $account->id]);
 
     Livewire\Livewire::test('platform.shared-courses.editor', ['course' => $course])
@@ -327,6 +335,7 @@ it('validates shared module fields before writing them', function (): void {
     $courseVersion = CourseVersion::factory()->create(['course_id' => $course]);
     $module = Module::factory()->shared()->create(['status' => 'published', 'published_at' => now()]);
     CourseVersionModule::query()->create(['course_version_id' => $courseVersion->id, 'lesson_id' => $module->id, 'position' => 1, 'is_required' => true]);
+    explicitlyPrepareSharedCourseEditor($course, $courseVersion, $account);
     $this->withSession(['platform_account_id' => $account->id]);
 
     Livewire\Livewire::test('platform.shared-courses.editor', ['course' => $course])
@@ -352,6 +361,7 @@ it('does not partially publish modules when a later module is invalid', function
     foreach ([$first, $second] as $position => $module) {
         CourseVersionModule::query()->create(['course_version_id' => $courseVersion->id, 'lesson_id' => $module->id, 'position' => $position + 1, 'is_required' => true]);
     }
+    explicitlyPrepareSharedCourseEditor($course, $courseVersion, $account);
     $this->withSession(['platform_account_id' => $account->id]);
 
     Livewire\Livewire::test('platform.shared-courses.editor', ['course' => $course])
@@ -375,6 +385,7 @@ it('uploads and reuses images from the shared visual editor library', function (
         'position' => 1,
         'is_required' => true,
     ]);
+    explicitlyPrepareSharedCourseEditor($course, $courseVersion, $account);
     $this->withSession(['platform_account_id' => $account->id]);
 
     Livewire\Livewire::test('platform.shared-courses.editor', ['course' => $course])

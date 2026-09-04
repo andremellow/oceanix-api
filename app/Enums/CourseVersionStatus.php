@@ -7,6 +7,7 @@ enum CourseVersionStatus: string
     case Draft = 'draft';
     case Published = 'published';
     case Retired = 'retired';
+    case Discarded = 'discarded';
 
     public function label(): string
     {
@@ -14,6 +15,7 @@ enum CourseVersionStatus: string
             self::Draft => 'Draft',
             self::Published => 'Published',
             self::Retired => 'Retired',
+            self::Discarded => 'Discarded',
         });
     }
 
@@ -32,6 +34,7 @@ enum CourseVersionStatus: string
             self::Published => 'status-pill--positive',
             self::Draft => 'status-pill--neutral',
             self::Retired => 'status-pill--warning',
+            self::Discarded => 'status-pill--neutral',
         };
     }
 }
