@@ -3,7 +3,15 @@
 use App\Actions\Courses\CreateDraftFromVersion;
 use App\Actions\Courses\PrepareSharedCourseEditor;
 use App\Actions\Modules\CreateModuleDraft;
+use App\Actions\Videos\RequestVideoUpload;
+use App\Actions\Videos\SyncVideoAsset;
+use App\Contracts\VideoProvider;
+use App\Data\Video\VideoAssetStatus;
+use App\Data\Video\VideoUpload;
+use App\Enums\CourseVersionStatus;
+use App\Enums\VideoStatus;
 use App\Models\Account;
+use App\Models\AuditLog;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
@@ -325,3 +333,148 @@ it('rejects archived legacy lineages without writes', function (): void {
         ->and($module->fresh()->getAttributes())->toBe($before)
         ->and($source->moduleCompositions()->count())->toBe(0);
 });
+
+it('preserves immutable composition through requested replacement conflict and later promotion', function (string $status, bool $expired, bool $tied): void {
+    $this->freezeTime();
+    [$course, $source, $module, $actor] = exactCopyFixture();
+    $existing = app(CreateModuleDraft::class)->handle($module, $actor);
+    $provider = Mockery::mock(VideoProvider::class);
+    $provider->shouldReceive('createUpload')->once()->andReturn(new VideoUpload('cloudflare_stream', 'replacement-asset', 'https://upload.example/replacement'));
+    $provider->shouldReceive('getAssetStatus')->once()->with('replacement-asset')->andReturn(new VideoAssetStatus(VideoStatus::Ready, 'replacement-playback', 300));
+    app()->instance(VideoProvider::class, $provider);
+    $upload = app(RequestVideoUpload::class)->handle($existing, platformActor: $actor);
+    $candidate = Video::findOrFail($upload->videoId);
+    $candidate->update(['status' => $status]);
+    if ($expired) {
+        DB::table('videos')->where('id', $candidate->id)->update(['created_at' => now()->subDays(2)]);
+    }
+    if ($tied) {
+        $current = $existing->video;
+        $newerCurrent = $current->replicate();
+        $current->update(['is_current' => false]);
+        $newerCurrent->fill(['is_current' => true, 'replacement_generation' => $candidate->replacement_generation])->save();
+    }
+    $draft = app(CreateDraftFromVersion::class)->handle($source, $actor);
+    $composition = $draft->moduleCompositions()->get()->toArray();
+    $sourceBefore = exactCopyContent($module);
+    $existingBefore = exactCopyContent($existing);
+    $videosBefore = $existing->videos()->orderBy('id')->get()->toArray();
+
+    expect(fn () => exactCopyPrepare($course, $actor))->toThrow(ValidationException::class)
+        ->and($draft->moduleCompositions()->get()->toArray())->toBe($composition)
+        ->and(exactCopyContent($module))->toBe($sourceBefore)
+        ->and(exactCopyContent($existing))->toBe($existingBefore)
+        ->and($existing->videos()->orderBy('id')->get()->toArray())->toBe($videosBefore);
+
+    app(SyncVideoAsset::class)->handle($candidate);
+
+    expect($existing->fresh()->video->id)->toBe($candidate->id)
+        ->and($draft->moduleCompositions()->sole()->lesson_id)->toBe($module->id)
+        ->and(exactCopyContent($module))->toBe($sourceBefore);
+})->with([
+    'uploading' => ['uploading', false, false],
+    'processing' => ['processing', false, false],
+    'expired upload' => ['uploading', true, false],
+    'failed' => ['failed', false, false],
+    'ready' => ['ready', false, false],
+    'tied current generation' => ['processing', false, true],
+]);
+
+it('reuses identical drafts with obsolete replacement history that cannot promote', function (string $status): void {
+    [$course, $source, $module, $actor] = exactCopyFixture();
+    $existing = app(CreateModuleDraft::class)->handle($module, $actor);
+    $existing->video->update(['replacement_generation' => 3]);
+    $obsolete = Video::factory()->create(['company_id' => null, 'lesson_id' => $existing->id, 'is_current' => false, 'replacement_generation' => 2, 'status' => $status]);
+    $provider = Mockery::mock(VideoProvider::class);
+    $provider->shouldReceive('getAssetStatus')->once()->with($obsolete->provider_asset_id)->andReturn(new VideoAssetStatus(VideoStatus::Ready));
+    app()->instance(VideoProvider::class, $provider);
+    app(CreateDraftFromVersion::class)->handle($source, $actor);
+
+    $draft = exactCopyPrepare($course, $actor);
+    app(SyncVideoAsset::class)->handle($obsolete);
+
+    expect($draft->moduleCompositions()->sole()->lesson_id)->toBe($existing->id)
+        ->and($existing->fresh()->video->id)->not->toBe($obsolete->id)
+        ->and(exactCopyContent($existing))->toBe(exactCopyContent($module));
+})->with(['uploading', 'processing', 'failed', 'ready']);
+
+it('reopens an attached edited draft with a pending replacement', function (): void {
+    [$course, $source, $module, $actor] = exactCopyFixture();
+    app(CreateDraftFromVersion::class)->handle($source, $actor);
+    $draft = exactCopyPrepare($course, $actor);
+    $existing = $draft->moduleCompositions()->sole()->moduleVersion;
+    $existing->update(['content_markdown' => 'Keep these draft edits']);
+    $candidate = Video::factory()->processing()->create(['company_id' => null, 'lesson_id' => $existing->id, 'is_current' => false, 'replacement_generation' => 1]);
+
+    exactCopyPrepare($course, $actor);
+
+    expect($draft->moduleCompositions()->sole()->lesson_id)->toBe($existing->id)
+        ->and($existing->fresh()->content_markdown)->toBe('Keep these draft edits')
+        ->and($candidate->fresh()->is_current)->toBeFalse();
+});
+
+it('rolls back earlier module preparation when a later pending replacement conflicts', function (): void {
+    [$course, $source, $module, $actor] = exactCopyFixture();
+    Lesson::factory()->create(['is_shared' => true, 'company_id' => null, 'course_version_id' => $source->id, 'position' => 2, 'status' => 'published']);
+    $existing = app(CreateModuleDraft::class)->handle($module, $actor);
+    Video::factory()->processing()->create(['company_id' => null, 'lesson_id' => $existing->id, 'is_current' => false, 'replacement_generation' => 1]);
+    $draft = app(CreateDraftFromVersion::class)->handle($source, $actor);
+    $before = $draft->moduleCompositions()->get()->toArray();
+    $counts = [Lesson::count(), Video::count(), Question::count(), QuestionOption::count(), AuditLog::withoutGlobalScopes()->count()];
+
+    expect(fn () => exactCopyPrepare($course, $actor))->toThrow(ValidationException::class)
+        ->and($draft->moduleCompositions()->get()->toArray())->toBe($before)
+        ->and([Lesson::count(), Video::count(), Question::count(), QuestionOption::count(), AuditLog::withoutGlobalScopes()->count()])->toBe($counts);
+});
+
+it('discards a retained creation conflict in the same session with a required reason', function (): void {
+    [$course, $source, $module, $actor] = exactCopyFixture();
+    $existing = app(CreateModuleDraft::class)->handle($module, $actor);
+    $existing->update(['content_markdown' => 'Independent authoring work']);
+    $before = exactCopyContent($existing);
+    $sourceBefore = exactCopyContent($module);
+    $videosBefore = $existing->videos()->get()->toArray();
+    $this->withSession(['platform_account_id' => $actor->id]);
+    $show = Livewire::test('platform.shared-courses.show', ['course' => $course])
+        ->assertSet('discardRevision', '')
+        ->call('createDraft')->assertHasErrors('draft')->assertNoRedirect()
+        ->set('confirmingDiscard', true)
+        ->call('discardDraft')->assertHasErrors(['discardReason' => 'required']);
+    $draft = $course->manualDraftVersion();
+    expect($draft->status)->toBe(CourseVersionStatus::Draft);
+    $show->set('discardReason', 'Restart this course composition')
+        ->call('discardDraft')->assertHasNoErrors()
+        ->assertSet('confirmingDiscard', false)->assertSet('discardReason', '')->assertSet('discardRevision', '')
+        ->assertSet('selectedVersionId', $source->id);
+
+    expect($draft->fresh()->status)->toBe(CourseVersionStatus::Discarded)
+        ->and(exactCopyContent($existing))->toBe($before)
+        ->and($existing->videos()->get()->toArray())->toBe($videosBefore)
+        ->and(exactCopyContent($module))->toBe($sourceBefore)
+        ->and($draft->moduleCompositions()->sole()->lesson_id)->toBe($module->id)
+        ->and(AuditLog::withoutGlobalScopes()->where('action', 'shared_course.draft_discarded')->sole()->after['reason'])->toBe('Restart this course composition');
+});
+
+it('rejects stale or revoked discard after a retained creation conflict', function (string $change): void {
+    [$course, $source, $module, $actor] = exactCopyFixture();
+    app(CreateModuleDraft::class)->handle($module, $actor)->update(['content_markdown' => 'Independent authoring work']);
+    $this->withSession(['platform_account_id' => $actor->id]);
+    $show = Livewire::test('platform.shared-courses.show', ['course' => $course])
+        ->call('createDraft')->assertHasErrors('draft')->assertNoRedirect();
+    $draft = $course->manualDraftVersion();
+    if ($change === 'composition') {
+        $draft->moduleCompositions()->sole()->update(['position' => 99]);
+    } elseif ($change === 'draft') {
+        DB::table('course_versions')->where('id', $draft->id)->update(['updated_at' => now()->addMinute()]);
+    } else {
+        $actor->update(['is_platform_admin' => false]);
+    }
+    if ($change === 'revocation') {
+        $show->call('discardDraft')->assertForbidden();
+    } else {
+        $show->set('discardReason', 'Stale discard attempt')->call('discardDraft')->assertHasErrors('discard')
+            ->assertSee(__('This draft changed elsewhere. Reload the page before trying again.'));
+    }
+    expect($draft->fresh()->status)->toBe(CourseVersionStatus::Draft)
+        ->and(AuditLog::withoutGlobalScopes()->where('action', 'shared_course.draft_discarded')->exists())->toBeFalse();
+})->with(['composition', 'draft', 'revocation']);

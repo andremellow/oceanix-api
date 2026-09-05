@@ -69,6 +69,7 @@ new #[Layout('layouts::platform')] class extends Component
 
         try {
             $draft = $action->handle($source, $account);
+            $this->discardRevision = app(DiscardSharedCourseDraft::class)->revision($draft);
             $prepare = app(PrepareSharedCourseEditor::class);
             $prepare->handle($this->course, $account, $prepare->revision($this->course, $draft));
         } catch (ValidationException $exception) {

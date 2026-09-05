@@ -5,12 +5,19 @@ namespace App\Services\Modules;
 use App\Models\Lesson;
 use App\Models\Question;
 use App\Models\QuestionOption;
+use App\Models\Video;
 
 /** Compare persisted authoring content, excluding identity and publication state. */
 class ModuleContentSnapshot
 {
     public function matches(Lesson $source, Lesson $draft): bool
     {
+        $draft->loadMissing('videos');
+        $latestGeneration = $draft->videos->max('replacement_generation');
+        if ($draft->videos->contains(fn (Video $video): bool => ! $video->is_current && $video->replacement_generation === $latestGeneration)) {
+            return false;
+        }
+
         return $this->capture($source) === $this->capture($draft);
     }
 

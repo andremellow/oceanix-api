@@ -36,7 +36,7 @@ class PrepareSharedCourseEditor
             }
             $modules = ($this->lineageLock ?? app(ModuleLineageLock::class))->versions($compositions->pluck('lesson_id'));
             if ($modules->isNotEmpty()) {
-                $modules->load(['video', 'questions.options']);
+                $modules->load(['video', 'videos:id,lesson_id,is_current,replacement_generation', 'questions.options']);
             }
             $byId = $modules->keyBy('id');
 
