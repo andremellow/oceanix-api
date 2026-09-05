@@ -82,9 +82,14 @@ class Course extends Model
         return $this->hasMany(CompanyCourse::class);
     }
 
-    public function draftVersion(): ?CourseVersion
+    public function manualDraftVersion(): ?CourseVersion
     {
-        return $this->versions()->where('status', CourseVersionStatus::Draft->value)->first();
+        return $this->versions()->where('status', CourseVersionStatus::Draft->value)->where('publication_kind', 'manual')->first();
+    }
+
+    public function propagationDraftVersion(): ?CourseVersion
+    {
+        return $this->versions()->where('status', CourseVersionStatus::Draft->value)->where('publication_kind', 'shared_propagation')->first();
     }
 
     public function scopeAssignable(Builder $query): void

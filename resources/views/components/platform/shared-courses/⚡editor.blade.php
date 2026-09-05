@@ -1,15 +1,15 @@
 <?php
 
 use App\Actions\Courses\PublishSharedCourseDraft;
+use App\Actions\Courses\PrepareSharedCourseEditor;
+use App\Actions\Courses\RemoveSharedCourseModule;
 use App\Actions\Courses\SaveSharedCourseEditorDraft;
 use App\Actions\Modules\CreateAndAttachSharedModule;
-use App\Actions\Modules\CreateModuleDraft;
 use App\Actions\Videos\LinkExistingVideo;
 use App\Actions\Videos\RequestVideoUpload;
 use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
 use App\Enums\ModuleVersionStatus;
-use App\Enums\PlatformPermission as Permission;
 use App\Enums\QuestionType;
 use App\Enums\VideoStatus;
 use App\Exceptions\CoursePublicationException;
@@ -83,6 +83,14 @@ new #[Layout('layouts::platform')] class extends Component
 
     public bool $confirmingPublish = false;
 
+    public bool $confirmingModuleRemoval = false;
+
+    public ?int $moduleRemovalIndex = null;
+
+    public string $moduleRemovalReason = '';
+
+    public string $moduleRemovalRevision = '';
+
     public bool $restartInProgress = false;
 
     public bool $imageLibraryOpen = false;
@@ -101,13 +109,13 @@ new #[Layout('layouts::platform')] class extends Component
 
     public ?string $videoLibraryError = null;
 
-    public function mount(Course $course, PlatformAccess $access, CreateModuleDraft $createModuleDraft): void
+    public function mount(Course $course, PlatformAccess $access): void
     {
-        $actor = $access->authorizePermission(Permission::SharedModulesUpdate);
+        $access->authorize();
         abort_unless($course->is_shared && $course->company_id === null, 404);
         $this->course = $course;
-        $this->version = $course->versions()->where('status', CourseVersionStatus::Draft->value)->firstOrFail();
-        $this->prepareModuleDrafts($createModuleDraft, $actor);
+        $this->version = $course->versions()->where('status', CourseVersionStatus::Draft->value)->where('publication_kind', 'manual')->firstOrFail();
+        abort_if($this->version->moduleCompositions()->whereHas('moduleVersion', fn ($query) => $query->where('status', '!=', ModuleVersionStatus::Draft->value))->exists(), 409, __('Open this editor from the course page so its module drafts can be prepared safely.'));
         $this->courseForm = ['code' => $course->code, 'title' => $course->title, 'description' => $course->description];
         $this->versionForm = ['description' => $this->version->description];
         $this->loadModules();
@@ -128,29 +136,30 @@ new #[Layout('layouts::platform')] class extends Component
         $this->expanded = in_array($id, $this->expanded, true) ? array_values(array_diff($this->expanded, [$id])) : [...$this->expanded, $id];
     }
 
-    public function addModule(int $moduleVersionId, SharedContentCatalog $catalog, CreateModuleDraft $createModuleDraft, PlatformAccess $access): void
+    public function addModule(int $moduleVersionId, SharedContentCatalog $catalog, PrepareSharedCourseEditor $prepareEditor, PlatformAccess $access): void
     {
-        $access->authorizePermission(Permission::SharedModulesUpdate);
+        $access->authorize();
         if ($this->blockStructuralChange()) {
             return;
         }
-        $actor = $access->authorizePermission(Permission::SharedModulesUpdate);
-        DB::transaction(function () use ($moduleVersionId, $catalog, $createModuleDraft, $actor): void {
-            $version = CourseVersion::query()->lockForUpdate()->whereKey($this->version->id)->where('status', CourseVersionStatus::Draft->value)->whereHas('course', fn ($query) => $query->whereNull('company_id')->where('is_shared', true)->where('status', '!=', CourseStatus::Archived->value))->firstOrFail();
+        $actor = $access->authorize();
+        DB::transaction(function () use ($moduleVersionId, $catalog, $prepareEditor, $actor): void {
+            $course = Course::query()->lockForUpdate()->whereKey($this->course->id)->whereNull('company_id')->where('is_shared', true)->where('status', '!=', CourseStatus::Archived->value)->firstOrFail();
+            $version = CourseVersion::query()->lockForUpdate()->whereKey($this->version->id)->where('course_id', $course->id)->where('status', CourseVersionStatus::Draft->value)->where('publication_kind', 'manual')->firstOrFail();
             $source = $catalog->availableModules()->firstWhere('id', $moduleVersionId);
             abort_unless($source instanceof ModuleVersion, 404);
             abort_if($version->moduleCompositions()->where('lesson_id', $moduleVersionId)->exists(), 422);
             CourseVersionModule::query()->create(['course_version_id' => $version->id, 'module_version_id' => $source->id, 'position' => $version->moduleCompositions()->count() + 1, 'is_required' => true]);
-            $this->prepareModuleDrafts($createModuleDraft, $actor);
+            $prepareEditor->handle($course, $actor, $prepareEditor->revision($course, $version));
         });
         $this->loadModules();
         $this->expanded = collect($this->modules)->pluck('id')->all();
     }
 
-    public function addSelectedModule(SharedContentCatalog $catalog, CreateModuleDraft $createModuleDraft, PlatformAccess $access): void
+    public function addSelectedModule(SharedContentCatalog $catalog, PrepareSharedCourseEditor $prepareEditor, PlatformAccess $access): void
     {
         abort_if($this->selectedModuleId === null, 422);
-        $this->addModule($this->selectedModuleId, $catalog, $createModuleDraft, $access);
+        $this->addModule($this->selectedModuleId, $catalog, $prepareEditor, $access);
         $this->selectedModuleId = null;
     }
 
@@ -175,7 +184,7 @@ new #[Layout('layouts::platform')] class extends Component
             'newModuleForm.description' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $actor = $access->authorizePermission(Permission::SharedModulesCreate);
+        $actor = $access->authorize();
 
         try {
             $module = $action->handle(
@@ -204,26 +213,34 @@ new #[Layout('layouts::platform')] class extends Component
         $this->dispatch('shared-module-created', moduleId: $module->id);
     }
 
-    public function removeModule(int $moduleIndex, PlatformAccess $access): void
+    public function confirmModuleRemoval(int $moduleIndex, RemoveSharedCourseModule $action, PlatformAccess $access): void
     {
-        $access->authorizePermission(Permission::SharedModulesUpdate);
+        $access->authorize();
         if ($this->blockStructuralChange()) {
             return;
         }
         abort_unless(isset($this->modules[$moduleIndex]), 404);
-        DB::transaction(function () use ($moduleIndex): void {
-            $version = CourseVersion::query()->lockForUpdate()->whereKey($this->version->id)->where('status', CourseVersionStatus::Draft->value)->whereHas('course', fn ($query) => $query->whereNull('company_id')->where('is_shared', true)->where('status', '!=', CourseStatus::Archived->value))->firstOrFail();
-            $version->moduleCompositions()->whereKey($this->modules[$moduleIndex]['composition_id'])->firstOrFail()->delete();
-            foreach ($version->moduleCompositions()->lockForUpdate()->get()->values() as $index => $composition) {
-                $composition->update(['position' => $index + 1]);
-            }
-        });
+        $this->moduleRemovalIndex = $moduleIndex;
+        $this->moduleRemovalReason = '';
+        $this->moduleRemovalRevision = $action->revision($this->version->fresh());
+        $this->confirmingModuleRemoval = true;
+    }
+
+    public function removeModule(RemoveSharedCourseModule $action, PlatformAccess $access): void
+    {
+        $actor = $access->authorize();
+        $this->validate(['moduleRemovalReason' => ['required', 'string', 'max:500']]);
+        abort_unless($this->moduleRemovalIndex !== null && isset($this->modules[$this->moduleRemovalIndex]), 404);
+        $module = $this->modules[$this->moduleRemovalIndex];
+        $this->version = $action->handle($this->version, $module['composition_id'], $actor, $this->moduleRemovalReason, $this->moduleRemovalRevision);
         $this->loadModules();
+        $this->reset('confirmingModuleRemoval', 'moduleRemovalIndex', 'moduleRemovalReason', 'moduleRemovalRevision');
+        session()->flash('status', __('Module removed from the draft. Its content was not deleted.'));
     }
 
     public function addQuestion(int $moduleIndex, PlatformAccess $access): void
     {
-        $access->authorizePermission(Permission::SharedModulesUpdate);
+        $access->authorize();
         $module = $this->moduleAt($moduleIndex);
         $this->modules[$moduleIndex]['questions'][] = $this->newQuestion();
         $this->markAssessmentDirty($module->id);
@@ -231,7 +248,7 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function addOption(int $moduleIndex, int $questionIndex, PlatformAccess $access): void
     {
-        $access->authorizePermission(Permission::SharedModulesUpdate);
+        $access->authorize();
         $module = $this->moduleAt($moduleIndex);
         abort_unless(isset($this->modules[$moduleIndex]['questions'][$questionIndex]), 404);
         $this->modules[$moduleIndex]['questions'][$questionIndex]['options'][] = $this->newOption(count($this->modules[$moduleIndex]['questions'][$questionIndex]['options']) + 1, false);
@@ -240,7 +257,7 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function removeQuestion(int $moduleIndex, int $questionIndex, PlatformAccess $access): void
     {
-        $access->authorizePermission(Permission::SharedModulesUpdate);
+        $access->authorize();
         $module = $this->moduleAt($moduleIndex);
         abort_unless(isset($this->modules[$moduleIndex]['questions'][$questionIndex]), 404);
         array_splice($this->modules[$moduleIndex]['questions'], $questionIndex, 1);
@@ -249,7 +266,7 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function removeOption(int $moduleIndex, int $questionIndex, int $optionIndex, PlatformAccess $access): void
     {
-        $access->authorizePermission(Permission::SharedModulesUpdate);
+        $access->authorize();
         $module = $this->moduleAt($moduleIndex);
         abort_unless(isset($this->modules[$moduleIndex]['questions'][$questionIndex]['options'][$optionIndex]), 404);
         array_splice($this->modules[$moduleIndex]['questions'][$questionIndex]['options'], $optionIndex, 1);
@@ -281,7 +298,7 @@ new #[Layout('layouts::platform')] class extends Component
             return;
         }
         $this->saveError = null;
-        $actor = $access->authorizePermission(Permission::SharedModulesUpdate);
+        $actor = $access->authorize();
         try {
             $modules = collect($this->modules)->map(fn (array $module): array => [...$module, 'content_dirty' => $this->contentDirty[$module['id']] ?? false])->all();
             $revisions = $action->handle($this->course, $this->version, $actor, $this->courseForm, $this->versionForm, $modules, $this->courseRevision, $this->moduleRevisions);
@@ -318,7 +335,7 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function requestUpload(int $moduleIndex, RequestVideoUpload $action, PlatformAccess $access): array
     {
-        $actor = $access->authorizePermission(Permission::SharedModulesUpdate);
+        $actor = $access->authorize();
         $module = $this->moduleAt($moduleIndex);
         $upload = $action->handle($module, platformActor: $actor);
         $token = (string) Str::uuid();
@@ -331,7 +348,7 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function uploadCompleted(int $moduleIndex, PlatformAccess $access, VideoLibrary $library, ?string $uploadToken = null): void
     {
-        $access->authorizePermission(Permission::SharedModulesUpdate);
+        $access->authorize();
         $identity = $this->uploadIdentity($moduleIndex, $uploadToken);
         $module = $this->moduleById($identity['module_id']);
         DB::transaction(function () use ($module, $identity): void {
@@ -349,7 +366,7 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function uploadFailed(int $moduleIndex, PlatformAccess $access, ?string $uploadToken = null): void
     {
-        $access->authorizePermission(Permission::SharedModulesUpdate);
+        $access->authorize();
         $identity = $this->uploadIdentity($moduleIndex, $uploadToken);
         $module = $this->moduleById($identity['module_id']);
         Video::query()->whereKey($identity['video_id'])->where('lesson_id', $module->id)->where('provider', $identity['provider'])->where('provider_asset_id', $identity['asset_id'])->where('status', VideoStatus::Uploading->value)->update(['status' => VideoStatus::Failed]);
@@ -358,7 +375,7 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function openEditorVideoLibrary(string $model, VideoLibrary $library, PlatformAccess $access): void
     {
-        $access->authorizePermission(Permission::SharedModulesUpdate);
+        $access->authorize();
         abort_unless(preg_match('/^modules\.(\d+)\.content_markdown$/', $model, $matches) === 1, 422);
         $this->moduleAt((int) $matches[1]);
         $this->videoEditorModel = $model;
@@ -370,14 +387,14 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function searchVideoLibrary(VideoLibrary $library, PlatformAccess $access): void
     {
-        $access->authorizePermission(Permission::SharedModulesUpdate);
+        $access->authorize();
         abort_unless($this->videoLibraryOpen, 404);
         $this->loadVideoLibrary($library);
     }
 
     public function selectLibraryVideo(string $assetId, LinkExistingVideo $action, PlatformAccess $access): void
     {
-        $actor = $access->authorizePermission(Permission::SharedModulesUpdate);
+        $actor = $access->authorize();
         abort_unless(preg_match('/^modules\.(\d+)\.content_markdown$/', $this->videoEditorModel, $matches) === 1, 422);
         abort_unless(collect($this->videoLibraryItems)->contains(fn (array $item): bool => hash_equals((string) $item['asset_id'], $assetId) && $item['status'] === VideoStatus::Ready->value), 404);
 
@@ -390,7 +407,7 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function openImageLibrary(string $model, PlatformAccess $access): void
     {
-        $access->authorizePermission(Permission::SharedModulesUpdate);
+        $access->authorize();
         abort_unless(preg_match('/^modules\.\d+\.content_markdown$/', $model) === 1, 422);
         $this->imageEditorModel = $model;
         $this->imageLibraryOpen = true;
@@ -399,7 +416,7 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function uploadContentImage(PlatformAccess $access): void
     {
-        $access->authorizePermission(Permission::SharedModulesUpdate);
+        $access->authorize();
         $this->validate(['contentImageUpload' => ['required', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240']]);
 
         $upload = $this->contentImageUpload;
@@ -423,7 +440,7 @@ new #[Layout('layouts::platform')] class extends Component
 
     public function selectContentImage(int $imageId, PlatformAccess $access): void
     {
-        $access->authorizePermission(Permission::SharedModulesUpdate);
+        $access->authorize();
         $image = ContentImage::query()->where('is_shared', true)->findOrFail($imageId);
         abort_unless(preg_match('/^modules\.(\d+)\.content_markdown$/', $this->imageEditorModel, $matches) === 1, 422);
 
@@ -439,7 +456,7 @@ new #[Layout('layouts::platform')] class extends Component
 
             return;
         }
-        $actor = $access->authorizePermission(Permission::SharedModulesPublish);
+        $actor = $access->authorize();
         try {
             $action->handle($this->version, $actor, $this->restartInProgress);
         } catch (CoursePublicationException|LogicException $exception) {
@@ -461,26 +478,17 @@ new #[Layout('layouts::platform')] class extends Component
             'impact' => $catalog->coursePublicationImpact($this->course),
             'availableModuleOptions' => new HtmlString($options),
             'contentImages' => ContentImage::query()->where('is_shared', true)->latest()->limit(40)->get(),
+            'canRemoveModule' => app(PlatformAccess::class)->account() !== null,
         ];
-    }
-
-    private function prepareModuleDrafts(CreateModuleDraft $action, $actor): void
-    {
-        foreach ($this->version->moduleCompositions()->with('moduleVersion')->get() as $composition) {
-            $source = $composition->moduleVersion;
-            if ($source->status === ModuleVersionStatus::Draft) {
-                continue;
-            }
-            $draft = ModuleVersion::query()->where('lineage_uuid', $source->lineage_uuid)->where('status', ModuleVersionStatus::Draft->value)->first() ?? $action->handle($source, $actor);
-            $composition->update(['module_version_id' => $draft->id]);
-        }
     }
 
     private function loadModules(): void
     {
         $renderer = app(LessonContentRenderer::class);
         $this->modules = $this->version->moduleCompositions()->with(['moduleVersion.video', 'moduleVersion.questions.options'])->get()->map(fn ($composition) => [
-            'composition_id' => $composition->id, 'id' => $composition->moduleVersion->id, 'title' => $composition->moduleVersion->title,
+            'composition_id' => $composition->id, 'id' => $composition->moduleVersion->id, 'code' => $composition->moduleVersion->code,
+            'title' => $composition->moduleVersion->title, 'version_number' => $composition->moduleVersion->version_number,
+            'status' => $composition->moduleVersion->status->value,
             'description' => $composition->moduleVersion->description, 'content_markdown' => $renderer->editorContent((string) $composition->moduleVersion->content_markdown),
             'minimum_watch_percentage' => $composition->moduleVersion->minimum_watch_percentage, 'passing_score' => $composition->moduleVersion->passing_score,
             'video' => $composition->moduleVersion->video ? ['status_label' => $composition->moduleVersion->video->status->label(), 'duration' => $composition->moduleVersion->video->formattedDuration(), 'preview' => rescue(fn (): ?array => app(VideoLibrary::class)->preview($composition->moduleVersion->video), null, report: false)] : null,
@@ -515,7 +523,7 @@ new #[Layout('layouts::platform')] class extends Component
     {
         abort_unless(isset($this->modules[$index]), 404);
 
-        $version = CourseVersion::query()->whereKey($this->version->id)->where('status', CourseVersionStatus::Draft->value)->whereHas('course', fn ($query) => $query->whereNull('company_id')->where('is_shared', true)->where('status', '!=', CourseStatus::Archived->value))->firstOrFail();
+        $version = CourseVersion::query()->whereKey($this->version->id)->where('status', CourseVersionStatus::Draft->value)->where('publication_kind', 'manual')->whereHas('course', fn ($query) => $query->whereNull('company_id')->where('is_shared', true)->where('status', '!=', CourseStatus::Archived->value))->firstOrFail();
         $composition = $version->moduleCompositions()->whereKey($this->modules[$index]['composition_id'])->firstOrFail();
 
         return ModuleVersion::query()->whereKey($composition->module_version_id)->whereNull('company_id')->where('is_shared', true)->where('status', ModuleVersionStatus::Draft->value)->whereNull('lineage_archived_at')->firstOrFail();
@@ -523,7 +531,7 @@ new #[Layout('layouts::platform')] class extends Component
 
     private function moduleById(int $moduleId): ModuleVersion
     {
-        $version = CourseVersion::query()->whereKey($this->version->id)->where('status', CourseVersionStatus::Draft->value)
+        $version = CourseVersion::query()->whereKey($this->version->id)->where('status', CourseVersionStatus::Draft->value)->where('publication_kind', 'manual')
             ->whereHas('course', fn ($query) => $query->whereNull('company_id')->where('is_shared', true)->where('status', '!=', CourseStatus::Archived->value))
             ->firstOrFail();
         abort_unless($version->moduleCompositions()->where('lesson_id', $moduleId)->exists(), 404);
@@ -625,6 +633,7 @@ new #[Layout('layouts::platform')] class extends Component
         <span class="status-pill status-pill--accent">{{ __('Shared') }}</span><flux:button :href="route('platform.shared-courses.show', ['course' => $course])" wire:navigate variant="ghost">{{ __('Cancel') }}</flux:button>
     </x-page-hero>
     @error('publish') <flux:callout variant="danger" :heading="$message" /> @enderror
+    <x-status-message />
 
     <section class="detail-card space-y-4">
         <h2 class="detail-card-title">{{ __('Course details') }}</h2>
@@ -656,7 +665,7 @@ new #[Layout('layouts::platform')] class extends Component
                         </div>
                         <flux:icon.chevron-down class="size-5 shrink-0" />
                     </button>
-                    <flux:button wire:click="removeModule({{ $moduleIndex }})" variant="ghost" icon="trash" :aria-label="__('Remove from course')" />
+                    @if ($canRemoveModule)<flux:button wire:click="confirmModuleRemoval({{ $moduleIndex }})" variant="ghost" icon="trash" :aria-label="__('Remove from course')" />@endif
                 </div>
                 @if (in_array($module['id'], $expanded, true))
                     <div id="shared-course-module-panel-{{ $module['id'] }}" class="mt-5 space-y-5 border-t border-[#e5eaed] pt-5">
@@ -736,6 +745,28 @@ new #[Layout('layouts::platform')] class extends Component
                     <span wire:loading wire:target="createNewModule">{{ __('Creating module…') }}</span>
                 </flux:button>
             </div>
+        </form>
+    </flux:modal>
+
+    <flux:modal wire:model.self="confirmingModuleRemoval" :dismissible="false" class="max-w-lg">
+        <form wire:submit="removeModule" class="space-y-5">
+            <div><flux:heading size="lg">{{ __('Remove module from this draft?') }}</flux:heading><flux:text class="mt-2">{{ __('The shared module, its questions, and its answers will not be deleted. Only its association with this draft will be removed.') }}</flux:text></div>
+            @if ($moduleRemovalIndex !== null && isset($modules[$moduleRemovalIndex]))
+                <div class="min-w-0 space-y-3 rounded-[18px] border border-[#dde3e7] bg-[#f7f9fa] p-4">
+                    <div class="min-w-0">
+                        <p class="break-words font-bold">{{ $modules[$moduleRemovalIndex]['code'] }} · {{ $modules[$moduleRemovalIndex]['title'] }}</p>
+                        <p class="mt-1 break-words text-sm text-[#6f797f]">{{ __('Module version :number · :status', ['number' => $modules[$moduleRemovalIndex]['version_number'], 'status' => __(Str::headline($modules[$moduleRemovalIndex]['status']))]) }}</p>
+                    </div>
+                    <div class="min-w-0 border-t border-[#dde3e7] pt-3">
+                        <p class="break-words font-semibold">{{ $courseForm['code'] }} · {{ $courseForm['title'] }}</p>
+                        <p class="mt-1 break-words text-sm text-[#6f797f]">{{ __('Course draft version :number · :status', ['number' => $version->version_number, 'status' => __(Str::headline($version->status->value))]) }}</p>
+                    </div>
+                </div>
+            @endif
+            <flux:textarea wire:model="moduleRemovalReason" :label="__('Reason')" required />
+            @error('removal') <flux:callout variant="danger" :heading="$message" /> @enderror
+            <p wire:loading wire:target="removeModule" class="text-sm text-[#59656b]" role="status" aria-live="polite">{{ __('Removing module…') }}</p>
+            <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><flux:button class="w-full whitespace-normal sm:w-auto" type="button" wire:click="$set('confirmingModuleRemoval', false)" wire:loading.attr="disabled" wire:target="removeModule" variant="ghost">{{ __('Cancel') }}</flux:button><flux:button class="w-full whitespace-normal sm:w-auto" type="submit" wire:loading.attr="disabled" wire:target="removeModule" variant="danger"><span wire:loading.remove wire:target="removeModule">{{ __('Remove module') }}</span><span wire:loading wire:target="removeModule">{{ __('Removing module…') }}</span></flux:button></div>
         </form>
     </flux:modal>
 

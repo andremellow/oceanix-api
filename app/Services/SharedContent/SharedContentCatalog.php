@@ -17,7 +17,7 @@ class SharedContentCatalog
     /** @return array{not_started: int, in_progress: int} */
     public function coursePublicationImpact(Course $course): array
     {
-        $versionId = $course->current_published_version_id ?? $course->draftVersion()?->id;
+        $versionId = $course->current_published_version_id ?? $course->manualDraftVersion()?->id;
 
         if ($versionId === null) {
             return ['not_started' => 0, 'in_progress' => 0];

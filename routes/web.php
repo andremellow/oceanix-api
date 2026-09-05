@@ -122,7 +122,7 @@ Route::prefix('platform')
         Route::livewire('/users', 'platform.users')->name('platform.users');
         Route::livewire('/shared-courses', 'platform.shared-courses.index')->name('platform.shared-courses.index');
         Route::livewire('/shared-courses/{course}', 'platform.shared-courses.show')->name('platform.shared-courses.show');
-        Route::livewire('/shared-courses/{course}/editor', 'platform.shared-courses.editor')->middleware(EnsurePlatformHasPermission::class.':shared-modules.update')->name('platform.shared-courses.editor');
+        Route::livewire('/shared-courses/{course}/editor', 'platform.shared-courses.editor')->name('platform.shared-courses.editor');
         Route::livewire('/shared-modules', 'platform.shared-modules.index')->middleware(EnsurePlatformHasPermission::class.':shared-modules.view')->name('platform.shared-modules.index');
         Route::livewire('/shared-modules/{module}', 'platform.shared-modules.show')->middleware(EnsurePlatformHasPermission::class.':shared-modules.view')->name('platform.shared-modules.show');
         Route::livewire('/shared-modules/{module}/editor', 'platform.shared-modules.editor')->middleware(EnsurePlatformHasPermission::class.':shared-modules.update')->name('platform.shared-modules.editor');

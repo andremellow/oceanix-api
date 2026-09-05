@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Courses\CreateCourse;
+use App\Actions\Courses\PrepareSharedCourseEditor;
 use App\Models\Course;
 use App\Services\Platform\PlatformAccess;
 use App\Services\SharedContent\SharedContentCatalog;
@@ -28,7 +29,7 @@ new #[Layout('layouts::platform')] class extends Component
         $this->resetPage();
     }
 
-    public function create(CreateCourse $action, PlatformAccess $access): void
+    public function create(CreateCourse $action, PrepareSharedCourseEditor $prepareEditor, PlatformAccess $access): void
     {
         $actor = $access->authorize();
         $data = $this->validate([
@@ -43,6 +44,8 @@ new #[Layout('layouts::platform')] class extends Component
             $data['description'] ?: null,
             platformActor: $actor,
         );
+        $draft = $course->manualDraftVersion() ?? abort(500);
+        $prepareEditor->handle($course, $actor, $prepareEditor->revision($course, $draft));
 
         $this->redirect(route('platform.shared-courses.editor', ['course' => $course]), navigate: true);
     }

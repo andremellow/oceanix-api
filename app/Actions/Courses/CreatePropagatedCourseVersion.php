@@ -9,6 +9,7 @@ use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
 use App\Models\SharedContentPropagationItem;
 use App\Services\Courses\CourseVersionValidator;
+use App\Services\Modules\ModuleLineageLock;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -17,6 +18,7 @@ class CreatePropagatedCourseVersion
     public function __construct(
         private readonly CourseVersionValidator $validator,
         private readonly ReplaceAssignmentsForPublication $replaceAssignments,
+        private readonly ModuleLineageLock $lineageLock,
     ) {}
 
     public function handle(SharedContentPropagationItem $item): CourseVersion
@@ -26,20 +28,28 @@ class CreatePropagatedCourseVersion
         }
 
         return DB::transaction(function () use ($item): CourseVersion {
+            $courseId = SharedContentPropagationItem::query()->whereKey($item->id)->firstOrFail(['course_id'])->course_id;
+            $course = Course::query()->lockForUpdate()->findOrFail($courseId);
             $item = SharedContentPropagationItem::query()->lockForUpdate()->findOrFail($item->id);
             if ($item->result_course_version_id !== null) {
                 return CourseVersion::query()->findOrFail($item->result_course_version_id);
             }
+            if ((int) $item->course_id !== (int) $course->id) {
+                throw new LogicException('The propagation item changed courses while it was being locked.');
+            }
 
-            $course = Course::query()->lockForUpdate()->findOrFail($item->course_id);
-            $source = $course->currentPublishedVersion;
+            $source = CourseVersion::query()->lockForUpdate()->find($course->current_published_version_id);
             if ($source === null) {
                 throw new LogicException('The course has no current published version.');
             }
 
-            $targetModuleVersion = $item->propagation->moduleVersion;
+            $propagation = $item->propagation()->lockForUpdate()->firstOrFail();
+            $compositions = $source->moduleCompositions()->orderBy('position')->orderBy('id')->lockForUpdate()->get();
+            $requestedModuleIds = $compositions->pluck('lesson_id')->push($propagation->module_version_id)->unique()->sort()->values();
+            $modules = $this->lineageLock->versions($requestedModuleIds)->whereIn('id', $requestedModuleIds)->keyBy('id');
+            $targetModuleVersion = $modules->get($propagation->module_version_id) ?? throw new LogicException('The propagated module version is unavailable.');
             $targetLineage = $targetModuleVersion->lineage_uuid;
-            $compositions = $source->moduleCompositions()->with('moduleVersion')->get();
+            $compositions->each(fn ($composition) => $composition->setRelation('moduleVersion', $modules->get($composition->lesson_id)));
             $matchingComposition = $compositions->first(
                 fn (CourseVersionModule $composition) => $composition->moduleVersion->lineage_uuid === $targetLineage
             );
@@ -80,7 +90,7 @@ class CreatePropagatedCourseVersion
             $version->update([
                 'status' => CourseVersionStatus::Published,
                 'published_at' => now(),
-                'published_by_account_id' => $item->propagation->initiated_by_account_id,
+                'published_by_account_id' => $propagation->initiated_by_account_id,
             ]);
             $source->update(['status' => CourseVersionStatus::Retired]);
             $course->update(['current_published_version_id' => $version->id]);
@@ -89,9 +99,9 @@ class CreatePropagatedCourseVersion
             $this->replaceAssignments->handle(
                 $source,
                 $version,
-                $item->propagation->initiator,
-                $item->propagation->restart_in_progress,
-                $item->propagation,
+                $propagation->initiator,
+                $propagation->restart_in_progress,
+                $propagation,
             );
 
             return $version->refresh();

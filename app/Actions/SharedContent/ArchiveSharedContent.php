@@ -10,13 +10,14 @@ use App\Models\Course;
 use App\Models\Module;
 use App\Models\ModuleVersion;
 use App\Services\Audit\AuditLogger;
+use App\Services\Modules\ModuleLineageLock;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
 class ArchiveSharedContent
 {
-    public function __construct(private readonly AuditLogger $audit) {}
+    public function __construct(private readonly AuditLogger $audit, private readonly ModuleLineageLock $lineageLock) {}
 
     /** @return Course|Module */
     public function handle(Course|Module $content, Account $actor, string $reason): Model
@@ -45,10 +46,11 @@ class ArchiveSharedContent
             }
 
             if ($content instanceof Module) {
-                $lineageRootId = $content instanceof ModuleVersion ? ($content->module_id ?? $content->id) : $content->id;
-                Module::query()->withoutGlobalScopes()->lockForUpdate()->findOrFail($lineageRootId);
+                $lineageVersions = $this->lineageLock->versions([$content->id]);
+                $locked = $lineageVersions->firstWhere('id', $content->id) ?? throw new LogicException('The module is unavailable.');
+            } else {
+                $locked = $content->newQuery()->withoutGlobalScopes()->lockForUpdate()->findOrFail($content->id);
             }
-            $locked = $content->newQuery()->withoutGlobalScopes()->lockForUpdate()->findOrFail($content->id);
             $before = $locked instanceof Module
                 ? ['lineage_archived_at' => $locked->lineage_archived_at?->toISOString()]
                 : ['status' => $locked->status instanceof \BackedEnum ? $locked->status->value : (string) $locked->status];
@@ -56,7 +58,7 @@ class ArchiveSharedContent
                 if ($locked->lineage_archived_at !== null) {
                     return $locked;
                 }
-                ModuleVersion::query()->withoutGlobalScopes()->where('lineage_uuid', $locked->lineage_uuid)->lockForUpdate()->get()
+                $lineageVersions
                     ->each->update(['lineage_archived_at' => now()]);
                 $locked->refresh();
             } else {

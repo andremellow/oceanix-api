@@ -41,13 +41,15 @@ class CourseVersionValidator
         $compositions = $version->moduleCompositions()->with('moduleVersion')->get();
         foreach ($compositions as $composition) {
             $moduleVersion = $composition->moduleVersion;
-            $eligibleOwner = $moduleVersion !== null && (
-                ($moduleVersion->is_shared && $moduleVersion->company_id === null && (
-                    $moduleVersion->getRawOriginal('status') === 'published'
-                    || ($allowSharedDraftModules && $moduleVersion->getRawOriginal('status') === 'draft')
-                ))
-                || (! $moduleVersion->is_shared && (int) $moduleVersion->company_id === (int) $version->course->company_id)
-            );
+            $eligibleOwner = $moduleVersion !== null
+                && $moduleVersion->lineage_archived_at === null
+                && $moduleVersion->getRawOriginal('status') !== 'archived' && (
+                    ($moduleVersion->is_shared && $moduleVersion->company_id === null && (
+                        $moduleVersion->getRawOriginal('status') === 'published'
+                        || ($allowSharedDraftModules && $moduleVersion->getRawOriginal('status') === 'draft')
+                    ))
+                    || (! $moduleVersion->is_shared && (int) $moduleVersion->company_id === (int) $version->course->company_id)
+                );
 
             if (! $eligibleOwner) {
                 $problems[] = __('Module at position :position is unavailable or not published.', ['position' => $composition->position]);

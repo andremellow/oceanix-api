@@ -5,6 +5,7 @@ namespace App\Actions\Modules;
 use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
 use App\Models\Account;
+use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
 use App\Models\Module;
@@ -33,10 +34,15 @@ class CreateAndAttachSharedModule
                 throw new LogicException('Only an active platform administrator can create shared content.');
             }
 
+            $courseId = CourseVersion::query()->whereKey($version->id)->firstOrFail(['course_id'])->course_id;
+            $course = Course::query()->lockForUpdate()->findOrFail($courseId);
             $lockedVersion = CourseVersion::query()->lockForUpdate()->findOrFail($version->id);
-            $course = $lockedVersion->course()->lockForUpdate()->firstOrFail();
 
-            if ($lockedVersion->status !== CourseVersionStatus::Draft) {
+            if ((int) $lockedVersion->course_id !== (int) $course->id) {
+                throw new LogicException('The draft changed courses while it was being locked.');
+            }
+
+            if ($lockedVersion->status !== CourseVersionStatus::Draft || $lockedVersion->publication_kind !== 'manual') {
                 throw new LogicException('Modules can only be added to a draft course version.');
             }
 

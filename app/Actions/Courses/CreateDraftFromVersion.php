@@ -5,6 +5,8 @@ namespace App\Actions\Courses;
 use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
 use App\Exceptions\CoursePublicationException;
+use App\Models\Account;
+use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
 use App\Models\Lesson;
@@ -12,6 +14,7 @@ use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Video;
 use App\Services\Audit\AuditLogger;
+use App\Services\Modules\ModuleLineageLock;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -21,40 +24,64 @@ use Illuminate\Support\Facades\DB;
  */
 class CreateDraftFromVersion
 {
-    public function __construct(private readonly AuditLogger $audit) {}
+    public function __construct(private readonly AuditLogger $audit, private readonly ?ModuleLineageLock $lineageLock = null) {}
 
-    public function handle(CourseVersion $source): CourseVersion
+    public function handle(CourseVersion $source, ?Account $platformActor = null): CourseVersion
     {
-        $course = $source->course;
+        return DB::transaction(function () use ($source, $platformActor): CourseVersion {
+            $sourceCourseId = CourseVersion::query()->whereKey($source->id)->firstOrFail(['course_id'])->course_id;
+            $course = Course::query()->lockForUpdate()->findOrFail($sourceCourseId);
+            $lockedSource = CourseVersion::query()->lockForUpdate()->findOrFail($source->id);
 
-        if ($course->status === CourseStatus::Archived) {
-            throw new \LogicException('Archived courses cannot create new draft versions.');
-        }
+            if ($course->status === CourseStatus::Archived) {
+                throw new \LogicException('Archived courses cannot create new draft versions.');
+            }
 
-        if ($course->versions()->where('status', CourseVersionStatus::Draft->value)->exists()) {
-            throw CoursePublicationException::draftAlreadyExists();
-        }
+            if ((int) $lockedSource->course_id !== (int) $course->id) {
+                throw new \LogicException('The source version does not belong to this course.');
+            }
 
-        return DB::transaction(function () use ($source, $course): CourseVersion {
+            if ($course->is_shared && $course->company_id === null) {
+                $platformActor = Account::query()->whereKey($platformActor?->id)
+                    ->where('is_platform_admin', true)->where('status', 'active')->first();
+                if ($platformActor === null) {
+                    throw new \LogicException('An active platform administrator is required.');
+                }
+            }
+
+            if ($course->versions()->where('status', CourseVersionStatus::Draft->value)
+                ->where('publication_kind', 'manual')->exists()) {
+                throw CoursePublicationException::draftAlreadyExists();
+            }
+
+            $compositions = $lockedSource->moduleCompositions()->orderBy('position')->orderBy('id')->lockForUpdate()->get();
+            if ($compositions->isNotEmpty()) {
+                $requestedIds = $compositions->pluck('lesson_id')->map(fn ($id): int => (int) $id)->unique()->sort()->values();
+                $modules = ($this->lineageLock ?? app(ModuleLineageLock::class))->versions($requestedIds)
+                    ->whereIn('id', $requestedIds)->keyBy('id');
+                $compositions->each(fn (CourseVersionModule $composition) => $composition->setRelation('moduleVersion', $modules->get($composition->lesson_id)));
+            }
+
+            if ($course->is_shared && $compositions->contains(fn (CourseVersionModule $composition): bool => $composition->moduleVersion === null
+                || ! $composition->moduleVersion->is_shared
+                || $composition->moduleVersion->company_id !== null
+                || $composition->moduleVersion->lineage_archived_at !== null)) {
+                throw new \LogicException('A shared course contains an ineligible module reference.');
+            }
+
             $draft = CourseVersion::query()->create([
                 'course_id' => $course->id,
                 'version_number' => ((int) $course->versions()->max('version_number')) + 1,
                 'status' => CourseVersionStatus::Draft,
-                'title' => $source->title,
-                'description' => $source->description,
-                'completion_rule' => $source->completion_rule,
+                'title' => $lockedSource->title,
+                'description' => $lockedSource->description,
+                'completion_rule' => $lockedSource->completion_rule,
+                'publication_kind' => 'manual',
+                'source_course_version_id' => $lockedSource->id,
             ]);
 
-            $compositions = method_exists($source, 'moduleCompositions')
-                ? $source->moduleCompositions()->get()
-                : collect();
-
             if ($compositions->isNotEmpty()) {
-                foreach ($compositions->load('moduleVersion') as $composition) {
-                    if (! $composition->moduleVersion?->is_shared) {
-                        continue;
-                    }
-
+                foreach ($compositions as $composition) {
                     CourseVersionModule::query()->create([
                         'course_version_id' => $draft->id,
                         'module_version_id' => $composition->module_version_id,
@@ -64,11 +91,7 @@ class CreateDraftFromVersion
                 }
             }
 
-            $reusedSharedLessonIds = $compositions
-                ->filter(fn (CourseVersionModule $composition): bool => (bool) $composition->moduleVersion?->is_shared)
-                ->pluck('lesson_id');
-
-            foreach ($source->lessons()->with(['video', 'questions.options'])->whereNotIn('id', $reusedSharedLessonIds)->get() as $lesson) {
+            foreach ($compositions->isEmpty() ? $lockedSource->lessons()->with(['video', 'questions.options'])->get() : [] as $lesson) {
                 $copy = Lesson::query()->create([
                     'course_version_id' => $draft->id,
                     'title' => $lesson->title,
@@ -114,17 +137,17 @@ class CreateDraftFromVersion
                 }
             }
 
-            $this->auditDraft($source, $draft);
+            $this->auditDraft($lockedSource, $draft, $platformActor);
 
             return $draft->refresh();
         });
     }
 
-    private function auditDraft(CourseVersion $source, CourseVersion $draft): void
+    private function auditDraft(CourseVersion $source, CourseVersion $draft, ?Account $platformActor): void
     {
         $this->audit->log('course_version.draft_created', $draft, after: [
             'from_version' => $source->version_number,
             'version_number' => $draft->version_number,
-        ]);
+        ], platformActor: $platformActor);
     }
 }

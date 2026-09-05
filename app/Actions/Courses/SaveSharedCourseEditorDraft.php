@@ -9,6 +9,7 @@ use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
 use App\Models\ModuleVersion;
+use App\Services\Modules\ModuleLineageLock;
 use App\Services\Modules\SharedModuleDraftWriter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -17,7 +18,7 @@ use LogicException;
 
 class SaveSharedCourseEditorDraft
 {
-    public function __construct(private readonly SharedModuleDraftWriter $writer) {}
+    public function __construct(private readonly SharedModuleDraftWriter $writer, private readonly ?ModuleLineageLock $lineageLock = null) {}
 
     public function handle(Course $course, CourseVersion $version, Account $actor, array $courseData, array $versionData, array $modules, string $expectedRevision, array $moduleRevisions): array
     {
@@ -28,10 +29,10 @@ class SaveSharedCourseEditorDraft
             }
             $lockedCourse = Course::query()->lockForUpdate()->findOrFail($course->id);
             $lockedVersion = CourseVersion::query()->lockForUpdate()->findOrFail($version->id);
-            if (! $lockedCourse->is_shared || $lockedCourse->company_id !== null || $lockedCourse->status === CourseStatus::Archived || $lockedVersion->course_id !== $lockedCourse->id || $lockedVersion->status !== CourseVersionStatus::Draft) {
+            if (! $lockedCourse->is_shared || $lockedCourse->company_id !== null || $lockedCourse->status === CourseStatus::Archived || $lockedVersion->course_id !== $lockedCourse->id || $lockedVersion->status !== CourseVersionStatus::Draft || $lockedVersion->publication_kind !== 'manual') {
                 throw new LogicException('Only platform-owned shared course drafts can be saved.');
             }
-            $compositions = CourseVersionModule::query()->where('course_version_id', $lockedVersion->id)->orderBy('position')->lockForUpdate()->get();
+            $compositions = CourseVersionModule::query()->where('course_version_id', $lockedVersion->id)->orderBy('position')->orderBy('id')->lockForUpdate()->get();
             if (! hash_equals($this->revision($lockedCourse, $lockedVersion, $compositions), $expectedRevision)) {
                 throw ValidationException::withMessages(['revision' => __('This course changed elsewhere. Reload the page before saving again.')]);
             }
@@ -46,7 +47,7 @@ class SaveSharedCourseEditorDraft
             if (collect($modules)->pluck('id')->all() !== $compositions->pluck('lesson_id')->all()) {
                 throw ValidationException::withMessages(['modules' => __('One or more modules are unavailable.')]);
             }
-            $lockedModules = ModuleVersion::query()->whereIn('id', $compositions->pluck('lesson_id'))->lockForUpdate()->get()->keyBy('id');
+            $lockedModules = ($this->lineageLock ?? app(ModuleLineageLock::class))->versions($compositions->pluck('lesson_id'))->whereIn('id', $compositions->pluck('lesson_id'))->keyBy('id');
             if ($lockedModules->count() !== $compositions->count() || $lockedModules->contains(fn (ModuleVersion $module): bool => $module->lineage_archived_at !== null)) {
                 throw ValidationException::withMessages(['modules' => __('One or more modules are unavailable.')]);
             }

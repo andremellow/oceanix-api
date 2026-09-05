@@ -9,6 +9,7 @@ use App\Enums\Permission;
 use App\Enums\QuestionType;
 use App\Enums\VideoStatus;
 use App\Exceptions\CoursePublicationException;
+use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Course;
 use App\Models\CourseVersion;
@@ -144,7 +145,7 @@ it('retires the previous version when a newer one is published', function (): vo
         ->and($first->course->fresh()->current_published_version_id)->toBe($second->id);
 });
 
-it('clones a published version into a new draft without touching the original', function (): void {
+it('copies a canonical published composition without cloning its module records', function (): void {
     $version = publishableDraft();
     app(PublishCourseVersion::class)->handle($version, adminUser()->id);
 
@@ -152,17 +153,30 @@ it('clones a published version into a new draft without touching the original', 
 
     expect($draft->version_number)->toBe(2)
         ->and($draft->status)->toBe(CourseVersionStatus::Draft)
-        ->and($draft->lessons()->count())->toBe($version->lessons()->count())
-        ->and($draft->lessons->first()->video)->not->toBeNull()
-        ->and($draft->lessons->first()->questions->first()->options()->count())->toBe(2);
+        ->and($draft->moduleCompositions()->pluck('lesson_id')->all())->toBe($version->moduleCompositions()->pluck('lesson_id')->all())
+        ->and($draft->lessons()->count())->toBe(0)
+        ->and($version->lessons->first()->video)->not->toBeNull()
+        ->and($version->lessons->first()->questions->first()->options()->count())->toBe(2);
+});
 
-    // Editing the clone must not reach the published edition.
-    $draft->lessons->first()->update(['title' => 'Changed in the draft']);
+it('deep copies a genuinely legacy version only when no canonical composition exists', function (): void {
+    $version = publishableDraft();
+    app(PublishCourseVersion::class)->handle($version, adminUser()->id);
+    $sourceLesson = $version->lessons()->firstOrFail();
+    $version->moduleCompositions()->delete();
 
-    expect($version->fresh()->lessons->first()->title)->not->toBe('Changed in the draft');
+    $draft = app(CreateDraftFromVersion::class)->handle($version->fresh());
+    $copy = $draft->lessons()->firstOrFail();
+
+    expect($copy->id)->not->toBe($sourceLesson->id)
+        ->and($copy->questions()->count())->toBe($sourceLesson->questions()->count())
+        ->and($copy->questions()->first()->options()->count())->toBe(2);
+    $copy->update(['title' => 'Legacy copy changed']);
+    expect($sourceLesson->fresh()->title)->not->toBe('Legacy copy changed');
 });
 
 it('clones a shared module composition once without colliding on its position', function (): void {
+    $platformActor = Account::factory()->platformAdmin()->create();
     $course = Course::factory()->shared()->create();
     $version = CourseVersion::factory()->published()->create(['course_id' => $course]);
     $module = Lesson::factory()->create([
@@ -174,7 +188,7 @@ it('clones a shared module composition once without colliding on its position', 
     ]);
     $course->update(['current_published_version_id' => $version->id]);
 
-    $draft = app(CreateDraftFromVersion::class)->handle($version->fresh());
+    $draft = app(CreateDraftFromVersion::class)->handle($version->fresh(), $platformActor);
 
     expect($draft->moduleCompositions()->count())->toBe(1)
         ->and($draft->moduleCompositions()->first()->lesson_id)->toBe($module->id)

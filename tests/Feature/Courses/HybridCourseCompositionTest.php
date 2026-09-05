@@ -9,6 +9,7 @@ use App\Models\CourseVersion;
 use App\Models\Module;
 use App\Models\ModuleVersion;
 use App\Tenancy\TenantContext;
+use Illuminate\Support\Facades\DB;
 
 function activeModuleVersion(array $moduleAttributes): ModuleVersion
 {
@@ -44,7 +45,12 @@ it('rejects cross-tenant module injection and published-course mutation', functi
     expect(fn () => app(UpdateCourseModuleComposition::class)->handle($draft, [$foreign->id], $actor))
         ->toThrow(LogicException::class);
 
+    $existing = activeModuleVersion(['company_id' => $course->company_id, 'is_shared' => false]);
+    app(UpdateCourseModuleComposition::class)->handle($draft, [$existing->id], $actor);
+    $pivotId = $draft->moduleCompositions()->sole()->id;
+    $pivotBefore = (array) DB::table('course_version_lessons')->whereKey($pivotId)->first();
     $draft->update(['status' => CourseVersionStatus::Published]);
     expect(fn () => app(UpdateCourseModuleComposition::class)->handle($draft->fresh(), [], $actor))
-        ->toThrow(LogicException::class);
+        ->toThrow(LogicException::class)
+        ->and((array) DB::table('course_version_lessons')->whereKey($pivotId)->first())->toBe($pivotBefore);
 });

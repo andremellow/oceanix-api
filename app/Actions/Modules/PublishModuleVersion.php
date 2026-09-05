@@ -5,6 +5,7 @@ namespace App\Actions\Modules;
 use App\Enums\ModuleVersionStatus;
 use App\Models\Account;
 use App\Models\ModuleVersion;
+use App\Services\Modules\ModuleLineageLock;
 use App\Services\Modules\ModuleVersionValidator;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -14,13 +15,14 @@ class PublishModuleVersion
     public function __construct(
         private readonly ModuleVersionValidator $validator,
         private readonly DispatchModulePropagation $dispatchPropagation,
+        private readonly ModuleLineageLock $lineageLock,
     ) {}
 
     public function handle(ModuleVersion $version, Account $actor, bool $restartInProgress = false): ModuleVersion
     {
         return DB::transaction(function () use ($version, $actor, $restartInProgress): ModuleVersion {
             $authorized = Account::query()->whereKey($actor->id)->where('is_platform_admin', true)->where('status', 'active')->first();
-            $version = ModuleVersion::query()->lockForUpdate()->findOrFail($version->id);
+            $version = $this->lineageLock->versions([$version->id])->firstWhere('id', $version->id) ?? throw new LogicException('The module is unavailable.');
             if ($authorized === null || ! $version->is_shared || $version->company_id !== null || ! $version->isEditable() || $version->lineage_archived_at !== null) {
                 throw new LogicException('Only a draft shared module version can be published.');
             }
@@ -31,11 +33,8 @@ class PublishModuleVersion
             if ($problems !== []) {
                 throw new LogicException(implode(' ', $problems));
             }
-            $previous = ModuleVersion::query()
-                ->where('lineage_uuid', $version->lineage_uuid)
-                ->where('status', ModuleVersionStatus::Published->value)
-                ->lockForUpdate()
-                ->first();
+            $previous = ModuleVersion::query()->where('lineage_uuid', $version->lineage_uuid)
+                ->where('status', ModuleVersionStatus::Published->value)->first();
 
             $version->update([
                 'status' => ModuleVersionStatus::Published,

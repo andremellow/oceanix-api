@@ -8,10 +8,12 @@ use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
 use App\Exceptions\CoursePublicationException;
 use App\Models\Account;
+use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Courses\CourseVersionValidator;
+use App\Services\Modules\ModuleLineageLock;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -26,34 +28,44 @@ class PublishCourseVersion
         private readonly AuditLogger $audit,
         private readonly ReplaceOpenAssignmentsForCourseVersion $replaceAssignments,
         private readonly ReplaceAssignmentsForPublication $replacePublicationAssignments,
+        private readonly ModuleLineageLock $lineageLock,
     ) {}
 
-    public function handle(CourseVersion $version, int|User|Account $publishedBy, bool $replaceOpenAssignments = false): CourseVersion
+    public function handle(CourseVersion $version, int|User|Account $publishedBy, bool $replaceOpenAssignments = false, string $expectedPublicationKind = 'manual'): CourseVersion
     {
         $account = $publishedBy instanceof Account ? $publishedBy : null;
         $userId = $publishedBy instanceof User ? $publishedBy->id : (is_int($publishedBy) ? $publishedBy : null);
 
-        if ($version->course->is_shared && ($account === null || ! $account->is_platform_admin)) {
-            throw new \LogicException('A platform administrator account is required to publish shared content.');
-        }
+        return DB::transaction(function () use ($version, $userId, $account, $replaceOpenAssignments, $expectedPublicationKind): CourseVersion {
+            $courseId = CourseVersion::query()->whereKey($version->id)->firstOrFail(['course_id'])->course_id;
+            $course = Course::query()->lockForUpdate()->findOrFail($courseId);
+            $version = CourseVersion::query()->lockForUpdate()->findOrFail($version->id);
+            if ((int) $version->course_id !== (int) $course->id) {
+                throw new \LogicException('The version changed courses while it was being locked.');
+            }
+            if ($course->is_shared && ($account === null || ! $account->is_platform_admin || $account->status !== 'active')) {
+                throw new \LogicException('An active platform administrator account is required to publish shared content.');
+            }
+            if ($course->status === CourseStatus::Archived) {
+                throw new \LogicException('Archived courses cannot publish new versions.');
+            }
+            if (! $version->isEditable()) {
+                throw CoursePublicationException::notEditable();
+            }
+            if ($version->publication_kind !== $expectedPublicationKind) {
+                throw new \LogicException('This course version cannot be published through this lifecycle.');
+            }
 
-        if ($version->course->status === CourseStatus::Archived) {
-            throw new \LogicException('Archived courses cannot publish new versions.');
-        }
-
-        if (! $version->isEditable()) {
-            throw CoursePublicationException::notEditable();
-        }
-
-        $problems = $this->validator->problems($version);
-
-        if ($problems !== []) {
-            throw new CoursePublicationException($problems);
-        }
-
-        return DB::transaction(function () use ($version, $userId, $account, $replaceOpenAssignments): CourseVersion {
-            $course = $version->course;
-            $previous = $course->currentPublishedVersion;
+            $previous = $course->currentPublishedVersion()->lockForUpdate()->first();
+            $compositions = $version->moduleCompositions()->orderBy('position')->orderBy('id')->lockForUpdate()->get();
+            $modules = $this->lineageLock->versions($compositions->pluck('lesson_id'))->whereIn('id', $compositions->pluck('lesson_id'));
+            if ($modules->count() !== $compositions->count() || $modules->contains(fn ($module): bool => $module->lineage_archived_at !== null || $module->getRawOriginal('status') === 'archived')) {
+                throw new CoursePublicationException([__('One or more modules are unavailable.')]);
+            }
+            $problems = $this->validator->problems($version->fresh());
+            if ($problems !== []) {
+                throw new CoursePublicationException($problems);
+            }
 
             $version->update([
                 'status' => CourseVersionStatus::Published,
@@ -90,6 +102,6 @@ class PublishCourseVersion
             }
 
             return $version->refresh();
-        });
+        }, 3);
     }
 }

@@ -4,23 +4,24 @@ namespace App\Actions\Modules;
 
 use App\Enums\ModuleVersionStatus;
 use App\Models\Account;
-use App\Models\Module;
 use App\Models\ModuleVersion;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Video;
+use App\Services\Modules\ModuleLineageLock;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
 class CreateModuleDraft
 {
+    public function __construct(private readonly ?ModuleLineageLock $lineageLock = null) {}
+
     public function handle(ModuleVersion $source, Account $actor): ModuleVersion
     {
         return DB::transaction(function () use ($source, $actor): ModuleVersion {
             $authorized = Account::query()->whereKey($actor->id)->where('is_platform_admin', true)->where('status', 'active')->first();
-            $lineageRootId = $source->module_id ?? $source->id;
-            Module::query()->withoutGlobalScopes()->lockForUpdate()->findOrFail($lineageRootId);
-            $source = ModuleVersion::query()->withoutGlobalScopes()->lockForUpdate()->findOrFail($source->id);
+            $source = ($this->lineageLock ?? app(ModuleLineageLock::class))->versions([$source->id])->firstWhere('id', $source->id)
+                ?? throw new LogicException('The module is unavailable.');
 
             if ($authorized === null || ! $source->is_shared || $source->company_id !== null || $source->status === ModuleVersionStatus::Archived || $source->lineage_archived_at !== null) {
                 throw new LogicException('Only a platform administrator can edit shared content.');
