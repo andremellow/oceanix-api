@@ -10,6 +10,7 @@ use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\ModuleVersion;
+use App\Services\Modules\ModuleContentSnapshot;
 use App\Services\Modules\ModuleLineageLock;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -34,6 +35,9 @@ class PrepareSharedCourseEditor
                 throw ValidationException::withMessages(['editor' => __('This draft changed elsewhere. Reload the page before trying again.')]);
             }
             $modules = ($this->lineageLock ?? app(ModuleLineageLock::class))->versions($compositions->pluck('lesson_id'));
+            if ($modules->isNotEmpty()) {
+                $modules->load(['video', 'videos:id,lesson_id,is_current,replacement_generation', 'questions.options']);
+            }
             $byId = $modules->keyBy('id');
 
             foreach ($compositions as $composition) {
@@ -44,8 +48,11 @@ class PrepareSharedCourseEditor
                 if ($source->status === ModuleVersionStatus::Draft) {
                     continue;
                 }
-                $draft = $modules->first(fn (ModuleVersion $candidate): bool => $candidate->lineage_uuid === $source->lineage_uuid && $candidate->status === ModuleVersionStatus::Draft)
-                    ?? $this->createModuleDraft->handle($source, $authorized);
+                $draft = $modules->first(fn (ModuleVersion $candidate): bool => $candidate->lineage_uuid === $source->lineage_uuid && $candidate->status === ModuleVersionStatus::Draft);
+                if ($draft !== null && ! app(ModuleContentSnapshot::class)->matches($source, $draft)) {
+                    throw ValidationException::withMessages(['editor' => __('A module already has a draft with different content. Resolve that module draft before opening this course draft. Existing work has been preserved.')]);
+                }
+                $draft ??= $this->createModuleDraft->handle($source, $authorized);
                 $composition->update(['lesson_id' => $draft->id]);
             }
 
