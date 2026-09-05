@@ -976,8 +976,8 @@ PHP, $name, $barrier, $sourceId, $actorId);
         ->and(AuditLog::query()->withoutGlobalScopes()->where('action', 'course_version.draft_created')->where('auditable_id', $draft->id)->count())->toBe(1);
 
     DB::table('audit_logs')->where('action', 'course_version.draft_created')->delete();
-    DB::table('courses')->whereKey($course->id)->delete();
-    DB::table('lessons')->whereKey($module->id)->delete();
+    DB::table('courses')->where('id', $course->id)->delete();
+    DB::table('lessons')->where('id', $module->id)->delete();
     DB::table('accounts')->whereIn('id', [$firstActor->id, $secondActor->id])->delete();
     DB::beginTransaction(); // Restore RefreshDatabase's expected transaction boundary.
 })->skip(fn (): bool => DB::getDriverName() !== 'pgsql' || getenv('RUN_POSTGRES_CONCURRENCY_TESTS') !== '1', 'Opt-in real PostgreSQL two-process action gate.');
@@ -1043,9 +1043,9 @@ PHP,
         ->and(AuditLog::query()->withoutGlobalScopes()->where('action', 'shared_course.draft_discarded')->count())->toBe($terminal->status === CourseVersionStatus::Discarded ? 1 : 0);
 
     DB::table('audit_logs')->delete();
-    DB::table('courses')->whereKey($course->id)->delete();
+    DB::table('courses')->where('id', $course->id)->delete();
     DB::table('lessons')->where('lineage_uuid', $module->lineage_uuid)->delete();
-    DB::table('accounts')->whereKey($actor->id)->delete();
+    DB::table('accounts')->where('id', $actor->id)->delete();
     DB::beginTransaction();
 })->skip(fn (): bool => DB::getDriverName() !== 'pgsql' || getenv('RUN_POSTGRES_CONCURRENCY_TESTS') !== '1', 'Opt-in real PostgreSQL competing-action gate.');
 
@@ -1112,9 +1112,12 @@ PHP,
         ->and(ModuleVersion::query()->where('lineage_uuid', $module->lineage_uuid)->where('status', 'draft')->exists())->toBeFalse();
 
     DB::table('audit_logs')->delete();
-    DB::table('courses')->whereKey($course->id)->delete();
+    $propagationIds = DB::table('shared_content_propagation_items')->where('course_id', $course->id)->pluck('propagation_id');
+    DB::table('shared_content_propagation_items')->where('course_id', $course->id)->delete();
+    DB::table('shared_content_propagations')->whereIn('id', $propagationIds)->delete();
+    DB::table('courses')->where('id', $course->id)->delete();
     DB::table('lessons')->where('lineage_uuid', $module->lineage_uuid)->delete();
-    DB::table('accounts')->whereKey($actor->id)->delete();
+    DB::table('accounts')->where('id', $actor->id)->delete();
     DB::beginTransaction();
 })->skip(fn (): bool => DB::getDriverName() !== 'pgsql' || getenv('RUN_POSTGRES_CONCURRENCY_TESTS') !== '1', 'Opt-in real PostgreSQL prepare/publish gate.');
 
@@ -1129,7 +1132,11 @@ it('serializes two PostgreSQL propagation actions to one idempotent result', fun
     $old = Module::factory()->shared()->create(['status' => 'published', 'version_number' => 1]);
     $new = ModuleVersion::factory()->shared()->published()->create([
         'module_id' => $old->id, 'lineage_uuid' => $old->lineage_uuid, 'version_number' => 2,
+        'content_markdown' => '<p>Safe propagated content</p>',
     ]);
+    $question = Question::factory()->create(['company_id' => null, 'lesson_id' => $new->id]);
+    QuestionOption::factory()->correct()->create(['company_id' => null, 'question_id' => $question->id, 'position' => 1]);
+    QuestionOption::factory()->create(['company_id' => null, 'question_id' => $question->id, 'position' => 2]);
     CourseVersionModule::query()->create(['course_version_id' => $source->id, 'lesson_id' => $old->id, 'position' => 1, 'is_required' => true]);
     $course->update(['current_published_version_id' => $source->id]);
     $propagation = SharedContentPropagation::query()->create([
@@ -1155,7 +1162,7 @@ try {
     $result = app(App\Actions\Courses\CreatePropagatedCourseVersion::class)->handle($item);
     echo 'RESULT:'.$result->id;
 } catch (Throwable $e) {
-    echo 'RESULT:rejected:'.$e::class;
+    echo 'RESULT:rejected:'.$e::class.':'.preg_replace('/\s+/', ' ', trim($e->getMessage()));
 }
 PHP, $name, $barrier, $item->id);
     $first = new Process([PHP_BINARY, '-r', $script('first')], base_path(), timeout: 30);
@@ -1182,9 +1189,11 @@ PHP, $name, $barrier, $item->id);
         ->and(CourseVersion::query()->findOrFail($resultId)->moduleCompositions()->sole()->lesson_id)->toBe($new->id);
 
     DB::table('audit_logs')->delete();
-    DB::table('courses')->whereKey($course->id)->delete();
+    DB::table('shared_content_propagation_items')->where('propagation_id', $propagation->id)->delete();
+    DB::table('shared_content_propagations')->where('id', $propagation->id)->delete();
+    DB::table('courses')->where('id', $course->id)->delete();
     DB::table('lessons')->where('lineage_uuid', $old->lineage_uuid)->delete();
-    DB::table('accounts')->whereKey($actor->id)->delete();
+    DB::table('accounts')->where('id', $actor->id)->delete();
     DB::beginTransaction();
 })->skip(fn (): bool => DB::getDriverName() !== 'pgsql' || getenv('RUN_POSTGRES_CONCURRENCY_TESTS') !== '1', 'Opt-in real PostgreSQL propagation idempotence gate.');
 
@@ -1197,10 +1206,11 @@ it('serializes PostgreSQL course composition updates against publication', funct
     $draft = CourseVersion::factory()->create(['course_id' => $course]);
     $actor = adminUser();
     $modules = collect([1, 2])->map(function (int $position) use ($course): ModuleVersion {
-        $module = Module::factory()->create([
+        $moduleId = Module::factory()->create([
             'company_id' => $course->company_id, 'is_shared' => false, 'status' => 'published',
             'content_markdown' => '<p>Safe content</p>', 'position' => $position,
-        ]);
+        ])->id;
+        $module = ModuleVersion::query()->findOrFail($moduleId);
         $question = Question::factory()->create(['company_id' => $course->company_id, 'lesson_id' => $module->id]);
         QuestionOption::factory()->correct()->create(['company_id' => $course->company_id, 'question_id' => $question->id, 'position' => 1]);
         QuestionOption::factory()->create(['company_id' => $course->company_id, 'question_id' => $question->id, 'position' => 2]);
@@ -1258,7 +1268,7 @@ PHP,
         ->and($pivotIds[0])->toBeIn([$modules[0]->id, $modules[1]->id]);
 
     DB::table('audit_logs')->delete();
-    DB::table('courses')->whereKey($course->id)->delete();
+    DB::table('courses')->where('id', $course->id)->delete();
     DB::table('lessons')->whereIn('id', $modules->pluck('id'))->delete();
     DB::beginTransaction();
 })->skip(fn (): bool => DB::getDriverName() !== 'pgsql' || getenv('RUN_POSTGRES_CONCURRENCY_TESTS') !== '1', 'Opt-in real PostgreSQL composition/publication gate.');
@@ -1322,7 +1332,7 @@ PHP,
 
     DB::table('audit_logs')->delete();
     DB::table('lessons')->where('lineage_uuid', $v1->lineage_uuid)->delete();
-    DB::table('accounts')->whereKey($actor->id)->delete();
+    DB::table('accounts')->where('id', $actor->id)->delete();
     DB::beginTransaction();
 })->skip(fn (): bool => DB::getDriverName() !== 'pgsql' || getenv('RUN_POSTGRES_CONCURRENCY_TESTS') !== '1', 'Opt-in real PostgreSQL stable-lineage gate.');
 
@@ -1447,9 +1457,9 @@ PHP, $operation, $saveKind, $barrier, $moduleId, $actorId, $body, $operation);
         ->and(AuditLog::query()->withoutGlobalScopes()->where('action', 'shared_module.archived')->count())->toBe(1);
 
     DB::table('audit_logs')->delete();
-    DB::table('courses')->whereKey($course->id)->delete();
+    DB::table('courses')->where('id', $course->id)->delete();
     DB::table('lessons')->where('lineage_uuid', $source->lineage_uuid)->delete();
-    DB::table('accounts')->whereKey($actor->id)->delete();
+    DB::table('accounts')->where('id', $actor->id)->delete();
     DB::beginTransaction();
 })->with(['course', 'assessment', 'module'])
     ->skip(fn (): bool => DB::getDriverName() !== 'pgsql' || getenv('RUN_POSTGRES_CONCURRENCY_TESTS') !== '1', 'Opt-in real PostgreSQL save/archive matrix.');
@@ -1460,7 +1470,8 @@ it('serializes PostgreSQL module publication against lineage archive with exact 
         throw new RuntimeException('PostgreSQL concurrency tests require an isolated test database.');
     }
     $actor = Account::factory()->platformAdmin()->create();
-    $source = Module::factory()->shared()->create(['status' => 'published', 'version_number' => 1]);
+    $sourceId = Module::factory()->shared()->create(['status' => 'published', 'version_number' => 1])->id;
+    $source = ModuleVersion::query()->withoutGlobalScopes()->findOrFail($sourceId);
     $draft = app(CreateModuleDraft::class)->handle($source, $actor);
     $question = Question::factory()->create(['company_id' => null, 'lesson_id' => $draft->id]);
     QuestionOption::factory()->correct()->create(['company_id' => null, 'question_id' => $question->id, 'position' => 1]);
@@ -1526,7 +1537,11 @@ PHP,
         ->and(AuditLog::query()->withoutGlobalScopes()->where('action', 'shared_module.archived')->count())->toBe(1);
 
     DB::table('audit_logs')->delete();
+    $lineageIds = DB::table('lessons')->where('lineage_uuid', $draft->lineage_uuid)->pluck('id');
+    $propagationIds = DB::table('shared_content_propagations')->whereIn('lesson_id', $lineageIds)->pluck('id');
+    DB::table('shared_content_propagation_items')->whereIn('propagation_id', $propagationIds)->delete();
+    DB::table('shared_content_propagations')->whereIn('id', $propagationIds)->delete();
     DB::table('lessons')->where('lineage_uuid', $draft->lineage_uuid)->delete();
-    DB::table('accounts')->whereKey($actor->id)->delete();
+    DB::table('accounts')->where('id', $actor->id)->delete();
     DB::beginTransaction();
 })->skip(fn (): bool => DB::getDriverName() !== 'pgsql' || getenv('RUN_POSTGRES_CONCURRENCY_TESTS') !== '1', 'Opt-in real PostgreSQL module publish/archive gate.');
