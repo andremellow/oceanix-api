@@ -649,5 +649,7 @@
     "Discarding draft…": "Descartando rascunho…",
     "Removing module…": "Removendo módulo…",
     "Module version :number · :status": "Versão :number do módulo · :status",
-    "Course draft version :number · :status": "Versão :number do rascunho do curso · :status"
+    "Course draft version :number · :status": "Versão :number do rascunho do curso · :status",
+    "A module already has a draft with different content. Resolve that module draft before opening this course draft. Existing work has been preserved.": "Um módulo já possui um rascunho com conteúdo diferente. Resolva o rascunho desse módulo antes de abrir o rascunho deste curso. O trabalho existente foi preservado.",
+    "A module is archived or already has an open draft version. Resolve that module before creating this course draft. Existing work has been preserved.": "Um módulo está arquivado ou já possui uma versão em rascunho. Resolva esse módulo antes de criar o rascunho deste curso. O trabalho existente foi preservado."
 }

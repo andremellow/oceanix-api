@@ -11,6 +11,7 @@ use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Services\Platform\PlatformAccess;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -70,6 +71,10 @@ new #[Layout('layouts::platform')] class extends Component
             $draft = $action->handle($source, $account);
             $prepare = app(PrepareSharedCourseEditor::class);
             $prepare->handle($this->course, $account, $prepare->revision($this->course, $draft));
+        } catch (ValidationException $exception) {
+            $this->addError('draft', $exception->validator->errors()->first());
+
+            return;
         } catch (CoursePublicationException $exception) {
             $this->addError('draft', $exception->problems[0] ?? __('A draft could not be created.'));
 
@@ -83,7 +88,13 @@ new #[Layout('layouts::platform')] class extends Component
     {
         $account = $access->authorize();
         $draft = $this->course->manualDraftVersion() ?? abort(404);
-        $action->handle($this->course, $account, $action->revision($this->course, $draft));
+        try {
+            $action->handle($this->course, $account, $action->revision($this->course, $draft));
+        } catch (ValidationException $exception) {
+            $this->addError('draft', $exception->validator->errors()->first());
+
+            return;
+        }
         $this->redirect(route('platform.shared-courses.editor', ['course' => $this->course]), navigate: true);
     }
 
@@ -144,7 +155,13 @@ new #[Layout('layouts::platform')] class extends Component
         @endif
     </x-page-hero>
 
-    @error('draft') <flux:callout variant="danger" :heading="$message" /> @enderror
+    @error('draft')
+        <flux:callout
+            variant="danger"
+            :heading="$message"
+            style="--callout-heading: var(--ds-text-primary); --callout-background: var(--ds-surface-card); --callout-border: var(--ds-status-negative);"
+        />
+    @enderror
     <x-status-message />
 
     <div class="grid gap-4 sm:grid-cols-3">
