@@ -6,6 +6,7 @@ use App\Enums\LessonType;
 use App\Models\Concerns\HasContentOwnership;
 use Database\Factories\LessonFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -71,7 +72,10 @@ class Lesson extends Model
      */
     public function video(): HasOne
     {
-        return $this->hasOne(Video::class, 'lesson_id')->where('is_current', true)->latestOfMany('id');
+        return $this->hasOne(Video::class, 'lesson_id')->ofMany(
+            ['id' => 'max'],
+            fn (Builder $query) => $query->where('is_current', true),
+        );
     }
 
     /** @return HasMany<Video, $this> */

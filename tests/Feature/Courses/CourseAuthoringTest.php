@@ -163,6 +163,7 @@ it('deep copies a genuinely legacy version only when no canonical composition ex
     $version = publishableDraft();
     app(PublishCourseVersion::class)->handle($version, adminUser()->id);
     $sourceLesson = $version->lessons()->firstOrFail();
+    $sourceLesson->update(['status' => 'published']);
     $version->moduleCompositions()->delete();
 
     $draft = app(CreateDraftFromVersion::class)->handle($version->fresh());

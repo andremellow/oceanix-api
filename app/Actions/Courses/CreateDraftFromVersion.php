@@ -4,6 +4,7 @@ namespace App\Actions\Courses;
 
 use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
+use App\Enums\ModuleVersionStatus;
 use App\Exceptions\CoursePublicationException;
 use App\Models\Account;
 use App\Models\Course;
@@ -16,6 +17,7 @@ use App\Models\Video;
 use App\Services\Audit\AuditLogger;
 use App\Services\Modules\ModuleLineageLock;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Editing a published version means cloning it into a new draft: the published edition is
@@ -69,6 +71,23 @@ class CreateDraftFromVersion
                 throw new \LogicException('A shared course contains an ineligible module reference.');
             }
 
+            $legacyLessons = collect();
+            $legacyLineage = collect();
+            if ($compositions->isEmpty()) {
+                $legacyIds = $lockedSource->lessons()->pluck('id');
+                $legacyLineage = ($this->lineageLock ?? app(ModuleLineageLock::class))->versions($legacyIds);
+                $legacyLessons = $legacyLineage->whereIn('id', $legacyIds);
+                if ($legacyLessons->isNotEmpty()) {
+                    $legacyLessons->load(['video', 'questions.options']);
+                }
+                foreach ($legacyLessons as $lesson) {
+                    if ($legacyLineage->contains(fn ($candidate): bool => $candidate->lineage_uuid === $lesson->lineage_uuid
+                        && ($candidate->lineage_archived_at !== null || $candidate->status === ModuleVersionStatus::Draft))) {
+                        throw ValidationException::withMessages(['editor' => __('A module is archived or already has an open draft version. Resolve that module before creating this course draft. Existing work has been preserved.')]);
+                    }
+                }
+            }
+
             $draft = CourseVersion::query()->create([
                 'course_id' => $course->id,
                 'version_number' => ((int) $course->versions()->max('version_number')) + 1,
@@ -91,9 +110,16 @@ class CreateDraftFromVersion
                 }
             }
 
-            foreach ($compositions->isEmpty() ? $lockedSource->lessons()->with(['video', 'questions.options'])->get() : [] as $lesson) {
+            foreach ($legacyLessons as $lesson) {
                 $copy = Lesson::query()->create([
                     'course_version_id' => $draft->id,
+                    'company_id' => $lesson->company_id,
+                    'is_shared' => $lesson->is_shared,
+                    'code' => $lesson->code,
+                    'lineage_uuid' => $lesson->lineage_uuid,
+                    'version_number' => ((int) $legacyLineage->where('lineage_uuid', $lesson->lineage_uuid)->max('version_number')) + 1,
+                    'source_lesson_id' => $lesson->id,
+                    'status' => ModuleVersionStatus::Draft->value,
                     'title' => $lesson->title,
                     'description' => $lesson->description,
                     'content_markdown' => $lesson->content_markdown,
@@ -106,6 +132,7 @@ class CreateDraftFromVersion
 
                 if ($lesson->video !== null) {
                     Video::query()->create([
+                        'company_id' => $lesson->company_id,
                         'lesson_id' => $copy->id,
                         'provider' => $lesson->video->provider,
                         'provider_asset_id' => $lesson->video->provider_asset_id,
@@ -118,6 +145,7 @@ class CreateDraftFromVersion
 
                 foreach ($lesson->questions as $question) {
                     $questionCopy = Question::query()->create([
+                        'company_id' => $lesson->company_id,
                         'lesson_id' => $copy->id,
                         'type' => $question->type,
                         'prompt' => $question->prompt,
@@ -128,6 +156,7 @@ class CreateDraftFromVersion
 
                     foreach ($question->options as $option) {
                         QuestionOption::query()->create([
+                            'company_id' => $lesson->company_id,
                             'question_id' => $questionCopy->id,
                             'text' => $option->text,
                             'is_correct' => $option->is_correct,
