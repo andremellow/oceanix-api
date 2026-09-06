@@ -11,6 +11,7 @@ use App\Http\Controllers\CertificateVerificationController;
 use App\Http\Controllers\ComplianceExportController;
 use App\Http\Controllers\CoursePreviewController;
 use App\Http\Controllers\DevVideoController;
+use App\Http\Controllers\PlatformCoursePreviewController;
 use App\Http\Controllers\TrainingPlaybackController;
 use App\Http\Middleware\EnsurePlatformHasPermission;
 use App\Http\Middleware\EnsureUserCanAccessControlCenter;
@@ -126,6 +127,11 @@ Route::prefix('platform')
         Route::livewire('/shared-courses', 'platform.shared-courses.index')->name('platform.shared-courses.index');
         Route::livewire('/shared-courses/{course}', 'platform.shared-courses.show')->name('platform.shared-courses.show');
         Route::livewire('/shared-courses/{course}/editor', 'platform.shared-courses.editor')->name('platform.shared-courses.editor');
+        Route::prefix('/shared-courses/{course}/versions/{version}/preview')->middleware(EnsurePlatformHasPermission::class.':shared-courses.view')->group(function (): void {
+            Route::get('/', [PlatformCoursePreviewController::class, 'show'])->name('platform.shared-courses.preview');
+            Route::post('/items/{kind}/{item}/playback', [PlatformCoursePreviewController::class, 'playback'])->middleware('throttle:playback')->name('platform.shared-courses.preview-playback');
+            Route::get('/items/{kind}/{item}/media/{asset}', [PlatformCoursePreviewController::class, 'media'])->name('platform.shared-courses.preview-media');
+        });
         Route::livewire('/shared-modules', 'platform.shared-modules.index')->middleware(EnsurePlatformHasPermission::class.':shared-modules.view')->name('platform.shared-modules.index');
         Route::livewire('/shared-modules/{module}', 'platform.shared-modules.show')->middleware(EnsurePlatformHasPermission::class.':shared-modules.view')->name('platform.shared-modules.show');
         Route::livewire('/shared-modules/{module}/editor', 'platform.shared-modules.editor')->middleware(EnsurePlatformHasPermission::class.':shared-modules.update')->name('platform.shared-modules.editor');

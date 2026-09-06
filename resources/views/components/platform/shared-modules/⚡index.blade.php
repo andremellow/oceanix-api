@@ -70,8 +70,18 @@ new #[Layout('layouts::platform')] class extends Component
                         <a href="{{ route('platform.shared-modules.show', ['module' => $module]) }}" wire:navigate wire:key="shared-module-{{ $module->id }}" class="saas-feature-card">
                             <p class="admin-kicker">{{ __('Shared Module') }}</p>
                             <h2 class="mt-2 font-bold text-[#262d33]">{{ $module->title }}</h2>
-                            <p class="mt-1 text-xs text-[#7d878d]">{{ $module->code }} · {{ $module->versions_count }} {{ __('versions') }}</p>
-                            <span class="status-pill {{ $status['modifier'] }} mt-4">{{ $status['label'] }}</span>
+                            <p class="mt-1 text-xs text-[#7d878d]">{{ $module->code }}</p>
+                            <div class="mt-4 flex flex-wrap gap-2">
+                                @if ($module->status === 'published')
+                                    <span class="status-pill {{ $status['modifier'] }}">{{ __('Published version :number', ['number' => $module->version_number]) }}</span>
+                                    @if ($module->has_active_draft)
+                                        <span class="status-pill status-pill--warning">{{ __('Active draft') }}</span>
+                                    @endif
+                                @else
+                                    <span class="status-pill status-pill--warning">{{ __('Draft version :number', ['number' => $module->version_number]) }}</span>
+                                    <span class="text-sm text-[#707a80]">{{ __('Not published yet') }}</span>
+                                @endif
+                            </div>
                         </a>
                     @endforeach
                 </div>

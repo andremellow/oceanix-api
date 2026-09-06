@@ -23,7 +23,7 @@ class CreateModuleDraft
             $source = ($this->lineageLock ?? app(ModuleLineageLock::class))->versions([$source->id])->firstWhere('id', $source->id)
                 ?? throw new LogicException('The module is unavailable.');
 
-            if ($authorized === null || ! $source->is_shared || $source->company_id !== null || $source->status === ModuleVersionStatus::Archived || $source->lineage_archived_at !== null) {
+            if ($authorized === null || ! $source->is_shared || $source->company_id !== null || in_array($source->status, [ModuleVersionStatus::Archived, ModuleVersionStatus::Discarded], true) || $source->lineage_archived_at !== null) {
                 throw new LogicException('Only a platform administrator can edit shared content.');
             }
 

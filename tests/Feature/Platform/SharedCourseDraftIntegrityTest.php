@@ -1043,6 +1043,10 @@ PHP,
         ->and(AuditLog::query()->withoutGlobalScopes()->where('action', 'shared_course.draft_discarded')->count())->toBe($terminal->status === CourseVersionStatus::Discarded ? 1 : 0);
 
     DB::table('audit_logs')->delete();
+    // Publication can win the race and create propagation rows that restrict course deletion.
+    $propagationIds = DB::table('shared_content_propagation_items')->where('course_id', $course->id)->pluck('propagation_id');
+    DB::table('shared_content_propagation_items')->where('course_id', $course->id)->delete();
+    DB::table('shared_content_propagations')->whereIn('id', $propagationIds)->delete();
     DB::table('courses')->where('id', $course->id)->delete();
     DB::table('lessons')->where('lineage_uuid', $module->lineage_uuid)->delete();
     DB::table('accounts')->where('id', $actor->id)->delete();
