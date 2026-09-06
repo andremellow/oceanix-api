@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { coursePreviewShare, createPreviewPlayer } from '../../resources/js/course-preview.js';
+import { coursePreviewShare, createPreviewPlayer, mountPreviewPlayers } from '../../resources/js/course-preview.js';
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const reply = (status, data) => ({ ok: status >= 200 && status < 300, status, json: async () => data });
 const grantData = n => ({ playback_url: `https://media.test/${n}.mp4`, expires_at: new Date(60000).toISOString() });
@@ -250,3 +250,44 @@ for (const code of [404, 410]) {
         assert.equal(p.status.textContent, 'ended');
     });
 }
+
+function navigationFixture(request) {
+    const video = new Control(), button = new Control(), status = {}, guidance = { hidden: true };
+    const root = { dataset: { endpoint: '/platform/preview/playback' }, querySelector: selector => ({ video, '[data-play]': button, '[data-status]': status, '[data-ended-guidance]': guidance }[selector]) };
+    const doc = new EventTarget(), win = new EventTarget(), timers = new Map();
+    doc.querySelectorAll = () => [root];
+    let id = 0;
+    const dependencies = { fetch: request, Hls: { isSupported: () => false }, csrf: () => 'csrf', now: () => 0,
+        setTimeout: fn => { timers.set(++id, fn); return id; }, clearTimeout: id => timers.delete(id) };
+    return { doc, win, root, video, button, timers, mount: () => mountPreviewPlayers(doc, win, dependencies) };
+}
+
+for (const event of ['livewire:navigating', 'pagehide']) {
+    test(`${event} stops renewals and permits a clean remount of a cached preview`, async () => {
+        let calls = 0;
+        const p = navigationFixture(async () => { calls++; return reply(200, grantData(calls)); });
+        p.mount(); p.mount();
+        p.button.dispatchEvent(new Event('click')); await tick();
+        assert.equal(calls, 1); assert.equal(p.timers.size, 1);
+        (event === 'pagehide' ? p.win : p.doc).dispatchEvent(new Event(event));
+        assert.equal(p.timers.size, 0); assert.equal(p.video.paused, true);
+        assert.equal(p.video.src, undefined); assert.equal(p.root.dataset.initialized, undefined);
+        p.button.dispatchEvent(new Event('click')); await tick(); assert.equal(calls, 1);
+        p.mount(); p.button.dispatchEvent(new Event('click')); await tick();
+        assert.equal(calls, 2); assert.equal(p.timers.size, 1);
+        p.doc.dispatchEvent(new Event('livewire:navigating'));
+        p.win.dispatchEvent(new Event('pagehide'));
+        assert.equal(p.timers.size, 0); assert.equal(p.video.src, undefined);
+    });
+}
+
+test('navigation invalidates a pending grant so a detached player cannot resume or renew', async () => {
+    let resolve, calls = 0;
+    const p = navigationFixture(() => { calls++; return new Promise(done => { resolve = done; }); });
+    p.mount(); p.button.dispatchEvent(new Event('click'));
+    p.doc.dispatchEvent(new Event('livewire:navigating'));
+    resolve(reply(200, grantData(1))); await tick();
+    assert.equal(p.video.src, undefined); assert.equal(p.video.playCalls, 0);
+    assert.equal(p.timers.size, 0);
+    p.button.dispatchEvent(new Event('click')); await tick(); assert.equal(calls, 1);
+});

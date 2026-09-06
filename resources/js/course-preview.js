@@ -119,15 +119,26 @@ export function createPreviewPlayer(root, dependencies = {}) {
     return { start, destroy() { ended = true; stop(); button.removeEventListener('click', start); video.removeEventListener('pause', pause); video.removeEventListener('play', play); video.removeEventListener('error', mediaError); } };
 }
 
-function initPreviewPlayers() {
-    document.querySelectorAll('[data-course-preview-player]').forEach(root => {
+export function mountPreviewPlayers(doc, win, dependencies = {}) {
+    doc.querySelectorAll('[data-course-preview-player]').forEach(root => {
         if (root.dataset.initialized) return;
         root.dataset.initialized = 'true';
-        const player = createPreviewPlayer(root);
-        window.addEventListener('pagehide', () => player.destroy(), { once: true });
+        const player = createPreviewPlayer(root, dependencies);
+        const cleanup = () => {
+            player.destroy();
+            delete root.dataset.initialized;
+            win.removeEventListener('pagehide', cleanup);
+            doc.removeEventListener('livewire:navigating', cleanup);
+        };
+        win.addEventListener('pagehide', cleanup, { once: true });
+        doc.addEventListener('livewire:navigating', cleanup, { once: true });
     });
 }
-if (typeof window !== 'undefined') window.coursePreviewShare = coursePreviewShare;
+const initPreviewPlayers = () => mountPreviewPlayers(document, window);
+if (typeof window !== 'undefined') {
+    window.coursePreviewShare = coursePreviewShare;
+    window.addEventListener('pageshow', initPreviewPlayers);
+}
 if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPreviewPlayers);
     else initPreviewPlayers();

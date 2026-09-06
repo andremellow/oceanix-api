@@ -129,7 +129,7 @@ Route::prefix('platform')
         Route::livewire('/shared-courses/{course}/editor', 'platform.shared-courses.editor')->name('platform.shared-courses.editor');
         Route::prefix('/shared-courses/{course}/versions/{version}/preview')->middleware(EnsurePlatformHasPermission::class.':shared-courses.view')->group(function (): void {
             Route::get('/', [PlatformCoursePreviewController::class, 'show'])->name('platform.shared-courses.preview');
-            Route::post('/items/{kind}/{item}/playback', [PlatformCoursePreviewController::class, 'playback'])->name('platform.shared-courses.preview-playback');
+            Route::post('/items/{kind}/{item}/playback', [PlatformCoursePreviewController::class, 'playback'])->middleware('throttle:playback')->name('platform.shared-courses.preview-playback');
             Route::get('/items/{kind}/{item}/media/{asset}', [PlatformCoursePreviewController::class, 'media'])->name('platform.shared-courses.preview-media');
         });
         Route::livewire('/shared-modules', 'platform.shared-modules.index')->middleware(EnsurePlatformHasPermission::class.':shared-modules.view')->name('platform.shared-modules.index');

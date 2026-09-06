@@ -18,7 +18,7 @@
                 <section class="overflow-hidden rounded-[24px] border border-[#dce3e7] bg-white shadow-sm" data-course-preview-player data-endpoint="{{ route('platform.shared-courses.preview-playback', compact('course', 'version', 'kind', 'item')) }}" data-ended="{{ __('This preview is no longer available.') }}" data-failed="{{ __('Video unavailable. Please try again.') }}" data-loading="{{ __('Loading video…') }}" data-ready="{{ __('Video ready.') }}">
                     <div class="bg-[#0f1a20]"><video class="aspect-video w-full" controls playsinline preload="none" aria-label="{{ __('Video preview') }}"></video></div>
                     <div class="space-y-2 p-4 sm:p-5">
-                        <button type="button" class="rounded-xl bg-[var(--ds-action-primary)] px-4 py-2 text-white focus-visible:outline-2" data-play>{{ __('Play or retry video') }}</button>
+                        <button type="button" class="rounded-xl bg-[var(--ds-action-primary)] px-4 py-2 text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ds-focus-ring)]" data-play>{{ __('Play or retry video') }}</button>
                         <p class="text-sm" data-status role="status" aria-live="polite"></p>
                         <p class="text-sm" data-ended-guidance hidden>{{ __('Return to the course and select an available version.') }}</p>
                     </div>

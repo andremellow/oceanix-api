@@ -153,3 +153,21 @@ it('uses the learner overview structure with metrics and actionable lesson rows'
         ->assertDontSee('aria-label="'.__('Course contents').'"', false);
     expect(substr_count($response->getContent(), 'class="metric-card '))->toBe(4);
 });
+
+it('rate limits playback before minting more provider grants and recovers after the window', function () {
+    [$actor, $version, $lesson, $params] = learnerPreviewFixture();
+    $this->withSession(['platform_account_id' => $actor->id])->withServerVariables(['REMOTE_ADDR' => '192.0.2.231']);
+    $provider = Mockery::mock(VideoProvider::class);
+    $provider->shouldReceive('key')->andReturn('local_fake');
+    $provider->shouldReceive('createPlaybackAuthorization')->times(31)->andReturnUsing(
+        fn ($video, $minutes, $expiry) => new PlaybackAuthorization('token', 'https://media.test/grant', $expiry),
+    );
+    app()->instance(VideoProvider::class, $provider);
+    $endpoint = route('platform.shared-courses.preview-playback', $params);
+    for ($i = 0; $i < 30; $i++) {
+        $this->postJson($endpoint)->assertOk();
+    }
+    $this->postJson($endpoint)->assertTooManyRequests()->assertHeader('Retry-After')->assertDontSee('playback_url');
+    $this->travel(61)->seconds();
+    $this->postJson($endpoint)->assertOk();
+});
