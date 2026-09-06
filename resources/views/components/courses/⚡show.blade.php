@@ -150,6 +150,9 @@ new class extends Component
             @endcan
         @endunless
     </x-page-hero>
+    @if($version && $version->isEditable())
+        <x-courses.preview-link-panel :$course :$version />
+    @endif
 
     <x-status-message />
 

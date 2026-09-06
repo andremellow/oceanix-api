@@ -18,6 +18,7 @@ use App\Models\UserTrainingAssignment;
 use App\Models\Video;
 use App\Services\Video\PlaybackAuthorizationService;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Carbon;
 
 /** A stand-in provider: the domain only knows the contract, never the vendor. */
 function fakeVideoProvider(): void
@@ -54,7 +55,7 @@ function fakeVideoProvider(): void
             return new VideoAssetStatus(VideoStatus::Ready);
         }
 
-        public function createPlaybackAuthorization(Video $video, int $ttlMinutes): PlaybackAuthorization
+        public function createPlaybackAuthorization(Video $video, int $ttlMinutes, ?Carbon $absoluteExpiresAt = null): PlaybackAuthorization
         {
             return new PlaybackAuthorization('signed-token', 'https://play.test/x.m3u8', now()->addMinutes($ttlMinutes));
         }

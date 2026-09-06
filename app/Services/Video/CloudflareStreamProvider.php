@@ -14,6 +14,7 @@ use App\Models\Video;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -234,9 +235,9 @@ class CloudflareStreamProvider implements VideoProvider
         );
     }
 
-    public function createPlaybackAuthorization(Video $video, int $ttlMinutes): PlaybackAuthorization
+    public function createPlaybackAuthorization(Video $video, int $ttlMinutes, ?Carbon $absoluteExpiresAt = null): PlaybackAuthorization
     {
-        $expiresAt = now()->addMinutes($ttlMinutes);
+        $expiresAt = $absoluteExpiresAt?->copy() ?? now()->addMinutes($ttlMinutes);
 
         $response = $this->request()->post(
             $this->accountUrl("/stream/{$video->provider_asset_id}/token"),

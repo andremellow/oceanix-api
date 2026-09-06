@@ -155,6 +155,9 @@ new #[Layout('layouts::platform')] class extends Component
             <flux:button wire:click="$set('confirmingArchive', true)" variant="danger">{{ __('Archive shared course') }}</flux:button>
         @endif
     </x-page-hero>
+    @if($version && $version->isEditable())
+        <x-courses.preview-link-panel :$course :$version :platform="true" />
+    @endif
 
     @error('draft')
         <flux:callout

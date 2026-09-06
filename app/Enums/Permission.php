@@ -23,6 +23,7 @@ enum Permission: string
     case CoursesUpdate = 'courses.update';
     case CoursesPublish = 'courses.publish';
     case CoursesRetire = 'courses.retire';
+    case CoursesGeneratePreviewLink = 'courses.preview-links.generate';
 
     // Shared training library
     case SharedCoursesView = 'shared-courses.view';
@@ -114,6 +115,7 @@ enum Permission: string
             self::CoursesUpdate => 'Edit course drafts',
             self::CoursesPublish => 'Publish course versions',
             self::CoursesRetire => 'Retire courses and versions',
+            self::CoursesGeneratePreviewLink => 'Generate preview links',
             self::SharedCoursesView => 'Browse shared courses',
             self::SharedCoursesAdd => 'Add shared courses to the company',
             self::SharedCoursesRemove => 'Remove shared courses from the company',
@@ -155,6 +157,7 @@ enum Permission: string
             self::CoursesUpdate => 'Change course content while it is still a draft.',
             self::CoursesPublish => 'Publish immutable course versions for assignment.',
             self::CoursesRetire => 'Remove courses or versions from future operational use.',
+            self::CoursesGeneratePreviewLink => 'Share a saved course draft publicly for seven days.',
             self::SharedCoursesView => 'Browse shared courses available for the company to adopt.',
             self::SharedCoursesAdd => 'Associate a shared course with the company without copying its content.',
             self::SharedCoursesRemove => 'Remove an unneeded shared course association when no obligation depends on it.',
@@ -213,7 +216,7 @@ enum Permission: string
             self::CoursesCreate,
             self::CoursesUpdate,
             self::CoursesRetire => [self::CoursesView],
-            self::CoursesPublish => [self::CoursesView, self::CoursesUpdate],
+            self::CoursesPublish, self::CoursesGeneratePreviewLink => [self::CoursesView, self::CoursesUpdate],
 
             self::SharedCoursesAdd,
             self::SharedCoursesRemove => [self::SharedCoursesView, self::CoursesView],

@@ -8,6 +8,7 @@ use App\Data\Video\VideoAssetStatus;
 use App\Data\Video\VideoLibraryItem;
 use App\Data\Video\VideoUpload;
 use App\Models\Video;
+use Illuminate\Support\Carbon;
 
 /**
  * The training domain never talks to a video vendor directly. Tokens, signing keys and URL
@@ -39,7 +40,7 @@ interface VideoProvider
 
     public function getAssetStatus(string $assetId): VideoAssetStatus;
 
-    public function createPlaybackAuthorization(Video $video, int $ttlMinutes): PlaybackAuthorization;
+    public function createPlaybackAuthorization(Video $video, int $ttlMinutes, ?Carbon $absoluteExpiresAt = null): PlaybackAuthorization;
 
     public function createDownloadAuthorization(Video $video, int $ttlMinutes): DownloadAuthorization;
 

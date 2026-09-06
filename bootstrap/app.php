@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsurePlatformTaskApiAccess;
 use App\Http\Middleware\IdentifyCompany;
+use App\Http\Middleware\PublicCoursePreview;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Foundation\Application;
@@ -9,6 +10,9 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Session\TokenMismatchException;
+use Laravel\Nightwatch\Facades\Nightwatch;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -28,6 +32,23 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectUsersTo(fn (): string => route('dashboard'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->report(function (Throwable $exception) {
+            if (request()->is('preview/courses/*')) {
+                // Do not attach capability URLs or route parameters to exception reports.
+                return false;
+            }
+        });
+        $exceptions->render(function (Throwable $exception, Request $request) {
+            if (! $request->is('preview/courses/*')) {
+                return null;
+            }
+            Nightwatch::dontSample();
+            PublicCoursePreview::locale($request);
+            $status = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode()
+                : ($exception instanceof TokenMismatchException ? 419 : 503);
+
+            return PublicCoursePreview::headers(PublicCoursePreview::error($request, $status));
+        });
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );

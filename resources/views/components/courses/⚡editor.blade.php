@@ -761,6 +761,9 @@ new class extends Component
             <flux:button wire:click="confirmPublish" variant="primary" class="admin-primary-action">{{ __('Publish version') }}</flux:button>
         @endcan
     </x-page-hero>
+    @if($version && $version->isEditable())
+        <x-courses.preview-link-panel :$course :$version />
+    @endif
 
     @if ($usingFakeVideoProvider)
         <flux:callout variant="secondary" :heading="__('ui.fake_video_provider')" :text="__('ui.fake_video_provider_help')" />

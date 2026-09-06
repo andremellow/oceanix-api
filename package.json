@@ -3,6 +3,7 @@
     "private": true,
     "type": "module",
     "scripts": {
+        "test:preview": "node --test tests/JavaScript/course-preview.test.mjs",
         "build": "vite build",
         "dev": "vite"
     },
