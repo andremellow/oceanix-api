@@ -127,7 +127,7 @@ new #[Layout('layouts::platform')] class extends Component
             'versions' => $this->course->versions()->with('platformPublisher')->get(),
             'version' => $this->selectedVersionId === null ? null : CourseVersion::query()
                 ->with(['moduleCompositions.moduleVersion.video', 'moduleCompositions.moduleVersion.questions.options'])
-                ->find($this->selectedVersionId),
+                ->where('course_id', $this->course->id)->find($this->selectedVersionId),
             'associationCount' => $this->course->companyAssociations()->whereNull('removed_at')->count(),
             'canDiscardDraft' => $access->account() !== null,
             'manualDraft' => $this->course->manualDraftVersion(),
@@ -189,7 +189,12 @@ new #[Layout('layouts::platform')] class extends Component
 
         <section class="detail-card">
             @if ($version)
-                <h2 class="detail-card-title">{{ $version->title }}</h2>
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <h2 class="detail-card-title">{{ $version->title }}</h2>
+                    @if ($course->is_shared && $course->company_id === null && $version->status !== CourseVersionStatus::Discarded)
+                        <flux:button :href="route('platform.shared-courses.preview', ['course' => $course, 'version' => $version])" variant="ghost" icon="eye">{{ __('Preview as learner') }}</flux:button>
+                    @endif
+                </div>
                 <p class="mt-1 text-sm text-[#6f797f]">{{ $version->description ?: __('No description provided') }}</p>
                 <div class="mt-5 space-y-3">
                     @forelse ($version->moduleCompositions as $composition)

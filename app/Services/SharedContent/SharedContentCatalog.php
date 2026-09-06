@@ -56,11 +56,21 @@ class SharedContentCatalog
         return Module::query()->withoutGlobalScopes()
             ->whereNull('company_id')->where('is_shared', true)
             ->whereNull('lineage_archived_at')
-            ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('lessons as newer')->whereColumn('newer.lineage_uuid', 'lessons.lineage_uuid')->whereColumn('newer.version_number', '>', 'lessons.version_number'))
+            ->whereIn('status', ['published', 'draft'])
+            // Prefer the latest publication; use the active draft only before first publication.
+            ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('lessons as newer')
+                ->whereColumn('newer.lineage_uuid', 'lessons.lineage_uuid')
+                ->whereNull('newer.company_id')->where('newer.is_shared', true)
+                ->whereNull('newer.lineage_archived_at')->whereIn('newer.status', ['published', 'draft'])
+                ->where(fn ($preferred) => $preferred
+                    ->where(fn ($published) => $published->where('newer.status', 'published')->where('lessons.status', 'draft'))
+                    ->orWhere(fn ($latest) => $latest->whereColumn('newer.status', 'lessons.status')
+                        ->whereColumn('newer.version_number', '>', 'lessons.version_number'))))
             ->when(filled($search), fn ($query) => $query->where(fn ($query) => $query
                 ->where('title', 'like', '%'.trim((string) $search).'%')
                 ->orWhere('code', 'like', '%'.trim((string) $search).'%')))
-            ->withCount('versions')->with('currentPublishedVersion')
+            ->withExists(['versions as has_active_draft' => fn ($query) => $query
+                ->where('status', 'draft')->whereNull('lineage_archived_at')])
             ->orderBy('title')->get();
     }
 
