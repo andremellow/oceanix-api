@@ -26,7 +26,9 @@
                     <video class="w-full rounded-xl" controls playsinline preload="none" aria-label="{{ __('Video preview') }}"></video>
                     <button type="button" class="mt-3 rounded-xl bg-[var(--ds-action-primary)] px-4 py-2 text-white focus-visible:outline-2" data-play>{{ __('Play or retry video') }}</button>
                     <p class="mt-2 text-sm" data-status role="status" aria-live="polite"></p>
+                    <p class="mt-2 text-sm" data-ended-guidance hidden>{{ __('Please contact the person who shared this link for more information.') }}</p>
                 </section>
+                <div class="lesson-content break-words">{{ $preview['selected']['after_video'] }}</div>
             @endif
             @if(count($preview['selected']['questions']))
                 <section class="space-y-5" aria-label="{{ __('Assessment preview') }}">

@@ -42,8 +42,8 @@ it('projects the selected shared lineage version with its own questions and vide
     $account = Account::factory()->create(['is_platform_admin' => true, 'status' => 'active']);
     $this->withSession(['platform_account_id' => $account->id]);
     $version = CourseVersion::factory()->shared()->create();
-    $selected = Lesson::factory()->create(['company_id' => null, 'is_shared' => true, 'course_version_id' => null, 'status' => 'published', 'content_markdown' => 'Selected exact body']);
-    $newer = Lesson::factory()->create(['company_id' => null, 'is_shared' => true, 'course_version_id' => null, 'lineage_uuid' => $selected->lineage_uuid, 'version_number' => 2, 'status' => 'published', 'content_markdown' => 'Newer excluded body']);
+    $selected = Lesson::factory()->create(['company_id' => null, 'is_shared' => true, 'course_version_id' => null, 'status' => 'published', 'content_markdown' => "Selected exact body\n\n:::video"]);
+    $newer = Lesson::factory()->create(['company_id' => null, 'is_shared' => true, 'course_version_id' => null, 'lineage_uuid' => $selected->lineage_uuid, 'version_number' => 2, 'status' => 'published', 'content_markdown' => "Newer excluded body\n\n:::video"]);
     $item = CourseVersionModule::create(['course_version_id' => $version->id, 'lesson_id' => $selected->id, 'position' => 1, 'is_required' => true]);
     foreach ([[$selected, 'Selected question', 'Selected option'], [$newer, 'Newer question', 'Newer option']] as [$lesson, $prompt, $choice]) {
         $question = Question::factory()->create(['company_id' => null, 'lesson_id' => $lesson->id, 'prompt' => $prompt]);

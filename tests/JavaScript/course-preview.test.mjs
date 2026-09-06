@@ -5,23 +5,23 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 const reply = (status, data) => ({ ok: status >= 200 && status < 300, status, json: async () => data });
 const grantData = n => ({ playback_url: `https://media.test/${n}.mp4`, expires_at: new Date(60000).toISOString() });
 class Control extends EventTarget {
-    currentTime = 0; paused = true; playCalls = 0;
+    currentTime = 0; paused = true; playCalls = 0; loadCalls = 0; hidden = false;
     play() { this.playCalls++; this.paused = false; this.dispatchEvent(new Event('play')); return Promise.resolve(); }
     pause() { this.paused = true; this.dispatchEvent(new Event('pause')); }
-    load() {}
+    load() { this.loadCalls++; }
     removeAttribute(name) { delete this[name]; }
     metadata() { this.dispatchEvent(new Event('loadedmetadata')); }
 }
 function player(responses, hlsClient = { isSupported: () => false }) {
-    const video = new Control(), button = new Control(), status = {};
+    const video = new Control(), button = new Control(), status = {}, guidance = { hidden: true, textContent: 'contact sender' };
     const calls = [], timers = new Map(); let counter = 0;
-    const root = { dataset: { endpoint: '/preview/courses/test/items/composition/4/playback', loading: 'loading', ready: 'ready', failed: 'failed' }, querySelector: selector => ({ video, '[data-play]': button, '[data-status]': status }[selector]) };
+    const root = { dataset: { endpoint: '/preview/courses/test/items/composition/4/playback', loading: 'loading', ready: 'ready', failed: 'failed', ended: 'ended' }, querySelector: selector => ({ video, '[data-play]': button, '[data-status]': status, '[data-ended-guidance]': guidance }[selector]) };
     const instance = createPreviewPlayer(root, {
         fetch: async (...args) => { calls.push(args); return typeof responses[0] === 'function' ? responses.shift()() : responses.shift(); },
         Hls: hlsClient, csrf: () => 'csrf', now: () => 0,
         setTimeout: (fn, delay) => { timers.set(++counter, { fn, delay }); return counter; }, clearTimeout: id => timers.delete(id),
     });
-    return { instance, video, button, status, calls, timers, renew: () => [...timers.values()][0].fn() };
+    return { instance, video, button, status, guidance, calls, timers, renew: () => [...timers.values()][0].fn() };
 }
 
 test('generate/reuse/copy/manual fallback/revocation use only the operator endpoint', async () => {
@@ -224,4 +224,29 @@ for (const action of ['generate', 'copy']) {
             }
         });
     }
+}
+
+test('the dedicated Play button loads and plays native media before any metadata event', async () => {
+    const p = player([reply(200, grantData(1))]);
+    p.video.preload = 'none';
+    p.button.dispatchEvent(new Event('click')); await tick();
+    assert.equal(p.video.loadCalls, 1); assert.equal(p.video.preload, 'auto');
+    assert.equal(p.video.src, grantData(1).playback_url);
+    assert.equal(p.video.playCalls, 1); assert.equal(p.video.paused, false);
+    p.video.metadata(); assert.equal(p.video.playCalls, 1);
+    p.instance.destroy();
+});
+
+for (const code of [404, 410]) {
+    test(`terminal ${code} replaces native controls with persistent ended guidance`, async () => {
+        const p = player([reply(200, grantData(1)), reply(code, { message: 'provider response' })]);
+        await p.instance.start(); await p.renew();
+        assert.equal(p.video.hidden, true); assert.equal(p.button.hidden, true);
+        assert.equal(p.guidance.hidden, false); assert.equal(p.guidance.textContent, 'contact sender');
+        assert.equal(p.status.textContent, 'ended'); assert.equal(p.video.src, undefined); assert.equal(p.timers.size, 0);
+        p.button.dispatchEvent(new Event('click')); p.video.metadata(); p.video.dispatchEvent(new Event('error')); await tick();
+        assert.equal(p.calls.length, 2); assert.equal(p.video.playCalls, 1);
+        assert.equal(p.video.hidden, true); assert.equal(p.button.hidden, true); assert.equal(p.guidance.hidden, false);
+        assert.equal(p.status.textContent, 'ended');
+    });
 }

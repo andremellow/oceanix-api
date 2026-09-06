@@ -82,3 +82,33 @@ The foreign-asset regression now supplies distinct selected and foreign files on
 ## Round 11: actual local media MIME
 
 The shared local stream lets BinaryFileResponse detect content MIME instead of forcing MP4. An extensionless synthetic EBML/WebM header fixture verifies video/webm and exact response bytes for both full and Range responses on preview and original development routes. Targeted playback tests passed (14 tests, 116 assertions). `PREVIEW_PG_TEST=1 toscanini verify --run-id public-draft-preview-20260905` passed, including PostgreSQL contention, client tests, Pint and build. Log: `/private/tmp/preview-round11-verify.log`. No dependencies or QA fixtures changed.
+
+## Round 13: authored media and catalog upgrade
+
+PR22-01/02/03 regressions failed before implementation (6 failing cases, 14 existing passing): retained media after marker removal, provider access without authored inclusion, misplaced player in Markdown/HTML, and absent catalog permission. The resolver now uses the renderer’s sanitized authored-marker interpretation for projection, pre/post-provider grants, and signed local requests. The player renders once between sanitized content sections. An additive migration inserts only missing sharing permission/prerequisite rows and preserves IDs, labels, other catalog rows and grants, including rollback. The upgrade test runs ordinary Artisan migration against a populated prior catalog, saves a real access profile, and authorizes a non-admin with no permission-seeding helper.
+
+Focused verification: 41 tests passed, 420 assertions. Full Pint passed. The single `PREVIEW_PG_TEST=1 toscanini verify --run-id public-draft-preview-20260905` run passed, including PostgreSQL contention tests, client tests, Pint and build; raw log `/private/tmp/preview-round13-verify.log`. Laravel Boost application information and relevant documentation were queried (Laravel 13.26.1, Livewire 4.4.1). New isolated QA helper `/private/tmp/oceanix-preview-qa-round13.php` was syntax checked only; existing QA data untouched.
+
+## Round 14: repeated authored markers
+
+Added persisted Markdown and HTML repeated-marker cases proving before/player/between/after ordering, one player, no remaining markers or placeholders, and sanitized unsafe trailing content. New cases passed (2 tests, 18 assertions); complete playback test file passed (21 tests, 176 assertions). Pint passed. Test-only change; round 13 canonical verification retained by impact. Existing temporary QA fixtures/helpers untouched.
+
+## PR correction final deterministic checkpoint
+
+After the test-only repeated-marker addition, the final canonical command passed against the frozen source and tests:632 PHP tests,2913 assertions,10 existing conditional skips,19 client tests, all3 preview PostgreSQL contention scenarios, Pint and production build. PHP test duration42.86seconds. Log: /private/tmp/preview-round14-final-verify.log. Full Pint also passed in round13. Runtime UI and final review verdicts are tracked separately; this command is not their approval.
+
+## Round 15: playback initiation and terminal controls
+
+The Play button now initiates native loading and playback without waiting for metadata; metadata restores position and renewal retains current pause intent. Terminal 404/410 responses hide video/retry controls and reveal localized sender-contact guidance. Executed client regressions cover initiation before metadata, both terminal statuses, persistent hidden controls and prior pause/inflight cases. Client suite: 22 passed. Targeted PHP playback/content suite: 27 passed, 232 assertions. Full Pint and standalone production build passed. Source files: resources/js/course-preview.js, resources/views/course-preview/reader.blade.php, tests/JavaScript/course-preview.test.mjs, tests/Feature/Video/CoursePreviewPlaybackTest.php (all already in inventory). Canonical launch returned 127 because the installed Toscanini symlink points to absent /Users/andrepiresdemello/Code/toscanini; this is an environment blocker, not a verification pass. Logs: /private/tmp/preview-round15-{js,php,build,verify}.log.
+
+Round 15 verification continuation: contract validator approved with no findings. Parent-authorized underlying canonical `PREVIEW_PG_TEST=1 composer verify` passed (full PHP suite including preview PostgreSQL contention, client suite, Pint, build). Raw log: `/private/tmp/preview-round15-composer-verify.log`. The unavailable Toscanini wrapper itself is not claimed complete; its broken installed symlink remains separately reported.
+
+## Current correction evidence and delivery limits
+
+Frozen round15 canonical result: 633 PHP tests passed, 2,919 assertions, 10 existing conditional skips; all three preview PostgreSQL contention cases ran. All 22 JavaScript tests, Pint and production build passed. `git diff --check` passed.
+
+Fresh bounded executable media QA round15 passed: actual native playback in Markdown/HTML authored order, pause maintained beyond 60 seconds, missing-file and invalid-byte retry recovery, removed authored media absent despite a retained database row/file, 390px keyboard navigation without overflow, and friendly ended/contact rendering after open-page expiry. Direct HTTP media transport returned 206 with video/mp4 and exact range bytes; this is separate from browser observations because browser network capture was unavailable. Production data and files were not used for QA.
+
+The fresh final whole-feature Code Reviewer launch failed at the collaboration tool's agent-thread limit. No inherited review is substituted for that required independent gate. The `toscanini verify` wrapper remains unavailable due its broken installation path; successful contract validation and `composer verify` are recorded separately, without claiming wrapper or overall Toscanini completion.
+
+Final local completion gate returned1 after the fresh design approval: ENV17-01 and ENV17-02 remain open, and the required final independent Code Review after QA is missing. There are no remaining recorded product findings in the correction scope. This gate failure is preserved; no overall delivery approval is claimed.

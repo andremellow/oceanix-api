@@ -15,7 +15,7 @@ class PreviewPlaybackService
     public function authorize(#[\SensitiveParameter] string $token, string $kind, string $item): array
     {
         $link = $this->resolver->resolve($token);
-        $video = $this->resolver->item($link, $kind, $item)->video;
+        $video = $this->resolver->authoredVideo($this->resolver->item($link, $kind, $item));
         abort_unless($video?->isPlayable() && $video->provider === $this->provider->key(), 409);
         $expiry = Carbon::instance($link->expires_at)->min(now()->addSeconds(60))->startOfSecond();
         if ($this->provider instanceof FakeVideoProvider) {
@@ -30,7 +30,7 @@ class PreviewPlaybackService
             $poster = $grant->posterUrl;
         }
         // Provider latency can cross expiry, publication, composition edits or replacement.
-        $current = $this->resolver->item($this->resolver->resolve($token), $kind, $item)->video;
+        $current = $this->resolver->authoredVideo($this->resolver->item($this->resolver->resolve($token), $kind, $item));
         abort_unless($current?->isPlayable() && $current->id === $video->id && $current->provider_asset_id === $video->provider_asset_id && $current->provider === $video->provider, 409);
         abort_unless($expiry->isFuture(), 410);
 

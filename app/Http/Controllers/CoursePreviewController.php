@@ -47,7 +47,7 @@ class CoursePreviewController extends Controller
     {
         abort_unless($provider instanceof FakeVideoProvider && app()->environment(['local', 'testing']), 404);
         abort_unless($request->hasValidSignature() && (int) $request->query('expires') > now()->timestamp, 403);
-        $video = $resolver->item($resolver->resolve($token), $kind, $item)->video;
+        $video = $resolver->authoredVideo($resolver->item($resolver->resolve($token), $kind, $item));
         abort_unless($video?->isPlayable() && (string) $video->id === $asset && $video->provider === $provider->key(), 404);
 
         return $stream->response($video->provider_asset_id, $provider);

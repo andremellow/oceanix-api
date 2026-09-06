@@ -6,11 +6,17 @@ use App\Models\Course;
 use App\Models\CoursePreviewLink;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
+use App\Models\Video;
 use Illuminate\Support\Collection;
 
 class PublicPreviewResolver
 {
-    public function __construct(private readonly CoursePreviewAuthority $authority) {}
+    public function __construct(private readonly CoursePreviewAuthority $authority, private readonly LessonContentRenderer $renderer) {}
+
+    public function authoredVideo(Lesson $lesson): ?Video
+    {
+        return $this->renderer->splitAtVideo((string) $lesson->content_markdown) !== null ? $lesson->video : null;
+    }
 
     public function resolve(#[\SensitiveParameter] string $token): CoursePreviewLink
     {

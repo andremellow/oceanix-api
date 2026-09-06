@@ -18,6 +18,7 @@ bootstrap/app.php
 composer.json
 database/factories/CoursePreviewLinkFactory.php
 database/migrations/2026_09_05_231432_create_course_preview_links_table.php
+database/migrations/2026_09_06_011954_project_course_preview_permission_catalog.php
 lang/pt_BR.json
 package.json
 resources/js/app.js
@@ -33,6 +34,7 @@ resources/views/course-preview/unavailable.blade.php
 routes/web.php
 tests/Feature/Compliance/PlaybackAuthorizationTest.php
 tests/Feature/Courses/CoursePreviewAccessTest.php
+tests/Feature/Courses/CoursePreviewCatalogUpgradeTest.php
 tests/Feature/Courses/CoursePreviewConcurrencyTest.php
 tests/Feature/Courses/CoursePreviewContentTest.php
 tests/Feature/Courses/CoursePreviewLifecycleTest.php

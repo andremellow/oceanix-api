@@ -53,6 +53,7 @@ export function createPreviewPlayer(root, dependencies = {}) {
     const video = root.querySelector('video');
     const button = root.querySelector('[data-play]');
     const status = root.querySelector('[data-status]');
+    const guidance = root.querySelector('[data-ended-guidance]');
     let hls, timer, metadata, busy = false, ended = false, wantsToPlay = false, requestGeneration = 0;
     const pause = () => { wantsToPlay = false; };
     const play = () => { wantsToPlay = true; };
@@ -75,6 +76,11 @@ export function createPreviewPlayer(root, dependencies = {}) {
             if (!response.ok) {
                 ended = [404, 410].includes(response.status);
                 stop(); status.textContent = data.message || root.dataset.failed;
+                if (ended) {
+                    video.hidden = true; button.hidden = true;
+                    status.textContent = root.dataset.ended;
+                    guidance.hidden = false;
+                }
                 return;
             }
             // Read position and play intent after the request: the visitor may have paused
@@ -83,7 +89,6 @@ export function createPreviewPlayer(root, dependencies = {}) {
             if (metadata) video.removeEventListener('loadedmetadata', metadata);
             metadata = () => {
                 video.currentTime = position;
-                if (wantsToPlay && !ended) video.play().catch(() => {});
             };
             video.addEventListener('loadedmetadata', metadata, { once: true });
             hls?.destroy();
@@ -91,7 +96,12 @@ export function createPreviewPlayer(root, dependencies = {}) {
                 hls = new HlsClient({ enableWorker: true });
                 hls.loadSource(data.playback_url); hls.attachMedia(video);
                 hls.on(HlsClient.Events.ERROR, (_event, info) => { if (info.fatal) { stop(); status.textContent = root.dataset.failed; } });
-            } else video.src = data.playback_url;
+            } else {
+                video.preload = 'auto'; video.src = data.playback_url; video.load();
+            }
+            // Initiate playback instead of waiting for metadata that preload="none"
+            // may never fetch. A paused visitor still receives a renewable source.
+            if (wantsToPlay && !ended) video.play().catch(() => {});
             if (data.poster_url) video.poster = data.poster_url;
             status.textContent = root.dataset.ready;
             cancel(timer);

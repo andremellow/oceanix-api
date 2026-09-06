@@ -56,3 +56,12 @@ T001–T002 precede all application edits. T003–T004 precede US1. US2 extends 
 ## Implementation strategy
 
 Deliver US1 as the first demonstrable slice, then exact lifecycle and media/assessment. Finish all stories before declaring completion. No partial MVP is a substitute for the approved scope. Mark only actually verified tasks complete; unavailable gates stay open. No Spec Kit extension hooks configured.
+
+## PR review corrections
+
+- [x] T024 Enforce saved authored-video inclusion in public projection, authorization, post-provider revalidation and signed local media; test retained assets after marker removal for Markdown and HTML.
+- [x] T025 Project sharing permission and prerequisites through an additive idempotent migration; verify existing-installation upgrade and real non-admin access-profile persistence without helper-created target permissions.
+- [x] T026 Render a single player at its authored position between sanitized content sections; verify ordering and no duplicate placeholder in both content formats.
+- [ ] T027 Consolidated source/test/architecture checkpoint, executable UI/API validation and final independent review of the corrected scope; update PR with exact verification evidence and remaining limitations.
+
+Correction status: T024–T026 implemented and verified. The affected browser/API paths and fresh final reader/player design review passed. T022–T023/T027 remain open for overall delivery certification: the final fresh whole-feature Code Reviewer cannot launch at the session agent limit, and the installed Toscanini CLI is unavailable. Updating the existing PR does not mark those gates approved.

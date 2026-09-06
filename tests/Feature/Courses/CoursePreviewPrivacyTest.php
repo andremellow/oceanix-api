@@ -42,7 +42,7 @@ it('applies all privacy headers to HTML JSON media and every public error bounda
     app()->bind(VideoProvider::class, FakeVideoProvider::class);
     Storage::fake('local');
     $version = CourseVersion::factory()->create();
-    $lesson = Lesson::factory()->create(['course_version_id' => $version->id]);
+    $lesson = Lesson::factory()->create(['course_version_id' => $version->id, 'content_markdown' => ':::video']);
     $video = Video::factory()->create(['lesson_id' => $lesson->id, 'provider' => 'local_fake']);
     Storage::disk('local')->put('dev-videos/'.$video->provider_asset_id, 'abcdef');
     $link = app(GenerateCoursePreviewLink::class)->handle($version->course, $version, adminUser());

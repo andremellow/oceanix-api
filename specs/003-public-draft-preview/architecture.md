@@ -56,3 +56,11 @@ AC-09: planning evidence and independent architecture/design verdicts; later imp
 ## Decision
 
 Approved architecture contract. User accepted the media boundary and authorized implementation. Implementation alignment and executable gates remain required.
+
+## Authored media and catalog deployment boundary
+
+The current saved authored video marker, interpreted through LessonContentRenderer, defines media inclusion; retaining a Video database row alone does not include it in the preview. Projection places the single interactive player between sanitized sections at that marker. Grant authorization checks the marker before contacting a provider and again after provider latency; signed local media requests independently recheck it. Existing bounded external-grant lifetime remains unchanged. Removing a marker preserves the asset/history but denies subsequent application access.
+
+The atomic company sharing permission must be projected into the permissions table during ordinary migrations on existing installations. Use an additive, idempotent migration for this permission and its required catalog prerequisites, preserve existing permission identities and role grants, and avoid the broad seeder's deletion behavior. Rollback must not erase operational grants. No new permissions are silently granted to roles. Validate an existing populated catalog without the new key, apply the migration, save a real access profile, and authorize a non-admin recipient without helpers that recreate the target permission.
+
+These requirements enforce existing AC-01/03/06/07/08 and INV-03/06. Tests cover both Markdown and HTML authoring, content on both sides of the player, no marker with an attached playable asset, removal during provider latency, and a previously signed local media request after removal. Regression scope includes sanitization, tenant boundaries, expiry and preserved catalog rows. Catalog redesign, media deletion, learner behavior changes and external CDN revocation remain out of scope.

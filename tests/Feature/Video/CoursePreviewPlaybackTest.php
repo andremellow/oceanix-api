@@ -29,7 +29,7 @@ use Illuminate\Support\Facades\URL;
 function previewVideoGraph(string $provider = 'cloudflare_stream'): array
 {
     $version = CourseVersion::factory()->create();
-    $lesson = Lesson::factory()->create(['course_version_id' => $version->id]);
+    $lesson = Lesson::factory()->create(['course_version_id' => $version->id, 'content_markdown' => "Before video\n\n:::video\n\nAfter video"]);
     $video = Video::factory()->create(['lesson_id' => $lesson->id, 'provider' => $provider]);
     $link = app(GenerateCoursePreviewLink::class)->handle($version->course, $version, adminUser());
     $item = CourseVersionModule::where('lesson_id', $lesson->id)->first();
@@ -236,4 +236,72 @@ it('detects extensionless WebM bytes for full and Range preview and development 
         $range->baseResponse->sendContent();
         expect(ob_get_clean())->toBe(substr($bytes, 0, 4));
     }
+});
+
+it('removes authored media from projection grants and an existing local signature without deleting the asset', function (string $content) {
+    app()->bind(VideoProvider::class, FakeVideoProvider::class);
+    Storage::fake(FakeVideoProvider::DISK);
+    [$version, $lesson, $video, $link, $url] = previewVideoGraph('local_fake');
+    $lesson->update(['content_markdown' => $content]);
+    Storage::disk(FakeVideoProvider::DISK)->put('dev-videos/'.$video->provider_asset_id, 'retained-private-video');
+    $grant = $this->postJson($url)->assertOk()->json();
+    $this->get($grant['playback_url'])->assertOk();
+    $lesson->update(['content_markdown' => 'Saved text without a video marker']);
+    $this->get(str_replace('/playback', '', $url))->assertOk()->assertDontSee('data-course-preview-player', false);
+    $this->postJson($url)->assertStatus(409)->assertJsonPath('error', 'media_unavailable')->assertDontSee('playback_url');
+    $this->get($grant['playback_url'])->assertNotFound()->assertDontSee('retained-private-video');
+    expect($video->fresh())->not->toBeNull();
+    Storage::disk(FakeVideoProvider::DISK)->assertExists('dev-videos/'.$video->provider_asset_id);
+})->with(['markdown' => "Before\n\n:::video\n\nAfter", 'html' => '<p>Before</p><div data-oceanix-video></div><p>After</p>']);
+
+it('does not contact a provider without an authored marker and rechecks removal during provider latency', function () {
+    app()->bind(VideoProvider::class, CloudflareStreamProvider::class);
+    [$version, $lesson, $video, $link, $url] = previewVideoGraph();
+    $lesson->update(['content_markdown' => 'No authored media']);
+    Http::fake();
+    $this->postJson($url)->assertStatus(409);
+    Http::assertNothingSent();
+    $lesson->update(['content_markdown' => ':::video']);
+    Http::fake(function () use ($lesson) {
+        $lesson->update(['content_markdown' => 'Marker removed while requesting grant']);
+
+        return Http::response(['success' => true, 'result' => ['token' => 'must-not-leak']]);
+    });
+    $this->postJson($url)->assertStatus(409)->assertDontSee('must-not-leak')->assertDontSee('playback_url');
+    Http::assertSentCount(1);
+});
+
+it('places one player at the authored marker between sanitized sections', function (string $content) {
+    [$version, $lesson, $video, $link, $url] = previewVideoGraph();
+    $lesson->update(['content_markdown' => $content]);
+    $response = $this->get(str_replace('/playback', '', $url))->assertOk();
+    $response->assertSeeInOrder(['Before authored media', 'data-course-preview-player', 'After authored media'], false)
+        ->assertDontSee('lesson-video-placeholder', false)->assertDontSee('javascript:', false)->assertDontSee('onerror=', false)->assertDontSee('<script>attack()', false);
+    expect(substr_count($response->getContent(), 'data-course-preview-player'))->toBe(1);
+})->with([
+    'markdown' => "Before authored media\n\n:::video\n\nAfter authored media\n\n[Unsafe](javascript:alert(1))",
+    'html' => '<p>Before authored media</p><div data-oceanix-video></div><p>After authored media</p><script>attack()</script><img src="javascript:bad" onerror="attack()">',
+]);
+
+it('normalizes repeated authored markers to one player while preserving sanitized content order', function (string $content) {
+    [$version, $lesson, $video, $link, $url] = previewVideoGraph();
+    $lesson->update(['content_markdown' => $content]);
+    $response = $this->get(str_replace('/playback', '', $url))->assertOk();
+    $response->assertSeeInOrder(['Before first marker', 'data-course-preview-player', 'Between authored markers', 'After last marker'], false)
+        ->assertDontSee('lesson-video-placeholder', false)->assertDontSee('data-oceanix-video', false)
+        ->assertDontSee(':::video', false)->assertDontSee('javascript:', false)->assertDontSee('onerror=', false)
+        ->assertDontSee('<script>attack()', false);
+    expect(substr_count($response->getContent(), 'data-course-preview-player'))->toBe(1);
+})->with([
+    'markdown' => "Before first marker\n\n:::video\n\nBetween authored markers\n\n:::video\n\nAfter last marker\n\n[Unsafe](javascript:alert(1))",
+    'html' => '<p>Before first marker</p><div data-oceanix-video></div><p>Between authored markers</p><div data-oceanix-video></div><p>After last marker</p><script>attack()</script><img src="javascript:bad" onerror="attack()">',
+]);
+
+it('renders localized sender guidance initially hidden for terminal player transitions', function () {
+    [$version, $lesson, $video, $link, $url] = previewVideoGraph();
+    $itemUrl = str_replace('/playback', '', $url);
+    $this->get($itemUrl)->assertOk()->assertSee('data-ended-guidance hidden', false)
+        ->assertSee('Entre em contato com quem enviou este link para obter mais informações.');
+    $this->withSession(['preview_locale' => 'en'])->get($itemUrl)->assertOk()->assertSee('data-ended-guidance hidden', false)
+        ->assertSee('Please contact the person who shared this link for more information.');
 });
