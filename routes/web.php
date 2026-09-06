@@ -9,6 +9,7 @@ use App\Http\Controllers\Auth\WorkosController;
 use App\Http\Controllers\CertificateDownloadController;
 use App\Http\Controllers\CertificateVerificationController;
 use App\Http\Controllers\ComplianceExportController;
+use App\Http\Controllers\CoursePreviewController;
 use App\Http\Controllers\DevVideoController;
 use App\Http\Controllers\TrainingPlaybackController;
 use App\Http\Middleware\EnsurePlatformHasPermission;
@@ -17,6 +18,8 @@ use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\EnsureUserIsPlatformAdmin;
 use App\Http\Middleware\IdentifyCompany;
+use App\Http\Middleware\PublicCoursePreview;
+use App\Http\Middleware\SetLocale;
 use App\Models\Account;
 use App\Models\Company;
 use App\Models\Role;
@@ -304,3 +307,19 @@ Route::prefix('c/{company:slug}')
             return redirect()->route('login');
         })->name('logout');
     });
+
+// Capability routes intentionally do not resolve or change the visitor's company.
+Route::prefix('preview/courses/{token}')->withoutMiddleware([IdentifyCompany::class, SetLocale::class])
+    ->middleware(PublicCoursePreview::class)->group(function (): void {
+        Route::get('/', [CoursePreviewController::class, 'show'])->name('course-preview.show');
+        Route::get('/items/{kind}/{item}', [CoursePreviewController::class, 'item'])->name('course-preview.item');
+        Route::post('/items/{kind}/{item}/playback', [CoursePreviewController::class, 'playback'])->name('course-preview.playback');
+        Route::get('/items/{kind}/{item}/media/{asset}', [CoursePreviewController::class, 'media'])->name('course-preview.local-media');
+        Route::post('/locale/{locale}', [CoursePreviewController::class, 'locale'])->name('course-preview.locale');
+    });
+Route::match(['get', 'post'], '/c/{company:slug}/courses/{course}/versions/{version}/preview-link', [CoursePreviewController::class, 'operator'])
+    ->middleware(['auth', EnsureUserHasPermission::class.':courses.preview-links.generate', 'throttle:10,1'])
+    ->name('courses.preview-link');
+Route::match(['get', 'post'], '/platform/shared-courses/{course}/versions/{version}/preview-link', [CoursePreviewController::class, 'operator'])
+    ->middleware([EnsureUserIsPlatformAdmin::class, EnsurePlatformHasPermission::class.':shared-courses.preview-links.generate', 'throttle:10,1'])
+    ->name('platform.shared-courses.preview-link');

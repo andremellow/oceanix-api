@@ -55,6 +55,12 @@ class CoursePolicy
         return $this->canWrite($user, $course, Permission::CoursesRetire);
     }
 
+    public function generatePreviewLink(User $user, Course $course): bool
+    {
+        return ! $course->is_shared && $this->belongsToUserCompany($user, $course)
+            && $user->hasPermission(Permission::CoursesGeneratePreviewLink);
+    }
+
     private function canWrite(User $user, Course $course, Permission $permission): bool
     {
         if ($course->is_shared) {

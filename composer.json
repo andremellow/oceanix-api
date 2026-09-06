@@ -75,6 +75,12 @@
         ],
         "pre-package-uninstall": [
             "Illuminate\\Foundation\\ComposerScripts::prePackageUninstall"
+        ],
+        "verify": [
+            "@test",
+            "npm run test:preview",
+            "vendor/bin/pint --dirty --format agent",
+            "npm run build"
         ]
     },
     "extra": {

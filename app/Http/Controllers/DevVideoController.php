@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Services\Video\FakeVideoProvider;
+use App\Services\Video\LocalVideoStream;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * Endpoints for the local development video provider. Registered only in the local
@@ -25,10 +25,8 @@ class DevVideoController extends Controller
         return response()->json(['stored' => true]);
     }
 
-    public function show(string $asset, FakeVideoProvider $provider): StreamedResponse
+    public function show(string $asset, FakeVideoProvider $provider): BinaryFileResponse
     {
-        abort_unless(Storage::disk(FakeVideoProvider::DISK)->exists($provider->path($asset)), 404);
-
-        return Storage::disk(FakeVideoProvider::DISK)->response($provider->path($asset));
+        return app(LocalVideoStream::class)->response($asset, $provider);
     }
 }

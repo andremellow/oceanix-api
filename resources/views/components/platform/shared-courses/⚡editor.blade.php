@@ -632,6 +632,9 @@ new #[Layout('layouts::platform')] class extends Component
     <x-page-hero :kicker="__('Shared course draft')" :title="$courseForm['title']" :description="__('Edit the complete course on one continuous screen. Module versions are managed automatically.')">
         <span class="status-pill status-pill--accent">{{ __('Shared') }}</span><flux:button :href="route('platform.shared-courses.show', ['course' => $course])" wire:navigate variant="ghost">{{ __('Cancel') }}</flux:button>
     </x-page-hero>
+    @if($version && $version->isEditable())
+        <x-courses.preview-link-panel :$course :$version :platform="true" />
+    @endif
     @error('publish') <flux:callout variant="danger" :heading="$message" /> @enderror
     <x-status-message />
 
