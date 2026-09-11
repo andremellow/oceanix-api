@@ -1,1426 +1,164 @@
 <?php
 
-use App\Actions\Assignments\ReplaceOpenAssignmentsForCourseVersion;
-use App\Actions\Courses\CreateCourse;
-use App\Actions\Courses\PublishCourseVersion;
-use App\Actions\Courses\ReorderDirectCourseContent;
-use App\Actions\Courses\UpdateCourseModuleComposition;
-use App\Enums\AssignmentStatus;
-use App\Enums\ComplianceEventType;
-use App\Enums\CourseVersionStatus;
-use App\Enums\Permission;
-use App\Enums\QuestionType;
 use App\Enums\VideoStatus;
-use App\Models\Account;
-use App\Models\AuditLog;
-use App\Models\ComplianceEvent;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
 use App\Models\Lesson;
-use App\Models\Module;
 use App\Models\ModuleVersion;
 use App\Models\Question;
-use App\Models\QuestionOption;
-use App\Models\UserTrainingAssignment;
 use App\Models\Video;
-use App\Services\Courses\CourseVersionValidator;
-use App\Services\Courses\PublicPreviewResolver;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Validation\ValidationException;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use Tests\Support\CourseEditor\EditorContextCase;
+use Tests\Support\CourseEditor\EditorFixture;
 
-function draftCourse(): Course
+/** @return array{EditorFixture, Testable} */
+function legacyCompanyEditor(): array
 {
-    $course = Course::factory()->draft()->create();
-    CourseVersion::factory()->create(['course_id' => $course->id]);
+    $fixture = EditorFixture::create(EditorContextCase::companyCourse());
+    Livewire::actingAs($fixture->user);
 
-    return $course->refresh();
+    return [$fixture, Livewire::test('courses.editor', $fixture->routeParameters())];
 }
 
-function assertCompleteEditorAlpineRoot(string $html): void
-{
-    $document = new DOMDocument;
-    @$document->loadHTML('<!doctype html><html><body>'.$html.'</body></html>', LIBXML_NOERROR | LIBXML_NOWARNING);
-    $xpath = new DOMXPath($document);
-    $roots = $xpath->query('//*[@x-data and contains(concat(" ", normalize-space(@class), " "), " admin-page ")]');
-    $root = $roots?->item(0);
-    $attributes = [];
+it('adds a lesson and persists it immediately with a stable id', function (): void {
+    [$fixture, $editor] = legacyCompanyEditor();
+    $version = $fixture->root->versions()->firstOrFail();
+    $before = $version->lessons()->count();
 
-    if ($root instanceof DOMElement) {
-        foreach ($root->attributes as $attribute) {
-            $attributes[$attribute->name] = $attribute->value;
-        }
-    }
+    $editor->call('addLesson')->assertSet('editorDirty', false)->assertCount('records', $before + 1);
 
-    $attributeNames = array_keys($attributes);
-    sort($attributeNames);
-    $requiredAttributeNames = [
-        'class',
-        'x-data',
-        'x-on:change.capture',
-        'x-on:editor-field-saved.window',
-        'x-on:editor-saved.window',
-        'x-on:editor-structure-saved.window',
-        'x-on:editor-validation-error.window',
-        'x-on:input.capture',
-        'x-on:lesson-reordered.window',
-        'x-on:livewire:navigate.window',
-        'x-on:oceanix-open-image-library.window',
-        'x-on:oceanix-open-video-library.window',
-        'x-on:pointercancel.window',
-        'x-on:pointerup.window',
-    ];
-    $allowedAttributeNames = [
-        ...$requiredAttributeNames,
-        'wire:effects',
-        'wire:id',
-        'wire:key',
-        'wire:name',
-        'wire:poll.5s',
-        'wire:snapshot',
-    ];
-    $xData = $attributes['x-data'] ?? '';
-    $selectorSourceAttributes = array_keys(array_filter(
-        $attributes,
-        fn (string $value): bool => str_contains($value, 'document.querySelector') || str_contains($value, '${lessonId}')
-    ));
-
-    expect($roots?->length)->toBe(1)
-        ->and($root)->toBeInstanceOf(DOMElement::class)
-        ->and(array_values(array_diff($requiredAttributeNames, $attributeNames)))->toBe([])
-        ->and(array_values(array_diff($attributeNames, $allowedAttributeNames)))->toBe([])
-        ->and(array_count_values($attributeNames)['x-data'] ?? 0)->toBe(1)
-        ->and($xData)->toStartWith('{ state: ')
-        ->toEndWith('} }')
-        ->toContain('trackFieldRevision(property, revision)')
-        ->toContain('markDirty(event)')
-        ->toContain('restoreLessonFocus(lessonId, direction)')
-        ->toContain("document.querySelector(`[data-lesson-focus-id='\${lessonId}'][data-lesson-focus-direction='\${direction}']:not([disabled])`)")
-        ->toContain("document.querySelector(`[data-lesson-focus-id='\${lessonId}']:not([disabled])`)")
-        ->toContain('finishLessonPointer(event, ids)')
-        ->toContain('init()')
-        ->toContain("\$wire.\$hook('request'")
-        ->not->toContain('\\"')
-        ->and($selectorSourceAttributes)->toBe(['x-data'])
-        ->and($root?->textContent)->not->toContain('${lessonId}')
-        ->not->toContain('document.querySelector');
-}
-
-function assertUnavailableModuleRecovery(string $html): void
-{
-    $document = new DOMDocument;
-    @$document->loadHTML('<!doctype html><html><body>'.$html.'</body></html>', LIBXML_NOERROR | LIBXML_NOWARNING);
-    $xpath = new DOMXPath($document);
-    $describingSections = $xpath->query('//section[contains(concat(" ", normalize-space(@aria-describedby), " "), " module-unavailable-recovery ")]');
-    $recoveryCallouts = $xpath->query('//*[@id="module-unavailable-recovery"]');
-    $resolvedCallouts = $xpath->query('//section[contains(concat(" ", normalize-space(@aria-describedby), " "), " module-unavailable-recovery ")]//*[@id="module-unavailable-recovery"]');
-    $section = $describingSections?->item(0);
-    $callout = $recoveryCallouts?->item(0);
-    $text = preg_replace('/\s+/', ' ', trim($callout?->textContent ?? ''));
-
-    expect($describingSections?->length)->toBe(1)
-        ->and($section)->toBeInstanceOf(DOMElement::class)
-        ->and($section?->getAttribute('aria-describedby'))->toBe('module-unavailable-recovery')
-        ->and($recoveryCallouts?->length)->toBe(1)
-        ->and($resolvedCallouts?->length)->toBe(1)
-        ->and($resolvedCallouts?->item(0))->toBe($callout)
-        ->and($text)->toContain('Refresh the module list')
-        ->toContain('reselect an available module')
-        ->toContain('then retry');
-}
-
-it('adds a lesson and persists it immediately', function (): void {
-    $course = draftCourse();
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->call('addLesson')
-        ->assertSet('lessons.0.title', 'New lesson');
-
-    expect($course->versions()->first()->lessons()->count())->toBe(1);
+    $created = $version->lessons()->orderByDesc('position')->firstOrFail();
+    expect($created->id)->toBeGreaterThan(0)
+        ->and(collect($editor->get('records'))->pluck('id'))->toContain($created->id);
 });
 
-it('shows and preserves both inventories for a mixed draft while blocking publication', function (): void {
-    $course = draftCourse();
-    $version = $course->versions()->first();
-    $direct = Lesson::factory()->create(['course_version_id' => $version, 'title' => 'Preserved direct lesson', 'position' => 1]);
-    $module = Lesson::factory()->create(['company_id' => $course->company_id, 'course_version_id' => null, 'is_shared' => false, 'status' => 'published', 'title' => 'Preserved reusable module', 'position' => 1]);
-    CourseVersionModule::query()->create(['course_version_id' => $version->id, 'lesson_id' => $module->id, 'position' => 2, 'is_required' => true]);
+it('keeps authored lesson fields staged until explicit Save', function (): void {
+    [$fixture, $editor] = legacyCompanyEditor();
+    $lesson = Lesson::query()->findOrFail($fixture->recordIds[0]);
+    $before = $lesson->only(['title', 'description', 'minimum_watch_percentage']);
 
-    $directRowsBefore = $version->lessons()->pluck('id')->all();
-    $moduleRowsBefore = $version->moduleCompositions()->pluck('lesson_id')->all();
+    $editor->set('records.0.title', $fixture->token.' Saved lesson')
+        ->set('records.0.description', $fixture->token.' Saved description')
+        ->set('records.0.minimum_watch_percentage', 95)
+        ->assertSet('saveState', 'dirty');
 
-    Livewire::actingAs(adminUser())->test('courses.editor', ['course' => $course])
-        ->assertSet('compositionMode', 'mixed')
-        ->assertSee($direct->title)
-        ->assertSee($module->title)
-        ->assertSee(__('ui.mixed_composition_recovery'))
-        ->assertSee('id="mixed-module-composition-conflict"', escape: false)
-        ->assertSee('aria-describedby="mixed-module-composition-conflict"', escape: false)
-        ->assertSee('id="mixed-direct-lesson-conflict"', escape: false)
-        ->assertSee('aria-describedby="mixed-direct-lesson-conflict"', escape: false)
-        ->assertSee('$wire.compositionMode === \'mixed\'', escape: false)
-        ->call('confirmPublish')
-        ->assertSet('publishProblems.0', __('ui.mixed_composition_error'));
+    expect($lesson->fresh()->only(array_keys($before)))->toBe($before);
 
-    expect($direct->fresh())->not->toBeNull()
-        ->and($module->fresh())->not->toBeNull()
-        ->and($version->fresh()->lessons()->pluck('id')->all())->toBe($directRowsBefore)
-        ->and($version->fresh()->moduleCompositions()->pluck('lesson_id')->all())->toBe($moduleRowsBefore);
-});
-
-it('renders the mode-specific explanation beside each unavailable composition action', function (): void {
-    $directCourse = draftCourse();
-    Lesson::factory()->create(['course_version_id' => $directCourse->versions()->first()]);
-    $availableModule = Module::factory()->create(['title' => 'Available company module']);
-    ModuleVersion::factory()->published()->create(['module_id' => $availableModule->id, 'title' => $availableModule->title]);
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $directCourse])
-        ->assertSee(__('ui.module_composition_conflict'))
-        ->assertSee('aria-describedby="module-composition-conflict"', escape: false);
-
-    $moduleCourse = draftCourse();
-    $moduleVersion = Lesson::factory()->create([
-        'company_id' => $moduleCourse->company_id,
-        'course_version_id' => null,
-        'is_shared' => false,
-        'status' => 'published',
-    ]);
-    CourseVersionModule::query()->create([
-        'course_version_id' => $moduleCourse->versions()->first()->id,
-        'lesson_id' => $moduleVersion->id,
-        'position' => 1,
-        'is_required' => true,
-    ]);
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $moduleCourse])
-        ->assertSee(__('ui.direct_lesson_conflict'))
-        ->assertSee('aria-describedby="direct-lesson-conflict"', escape: false);
-});
-
-it('keeps video management inside the lesson content editor', function (): void {
-    $course = draftCourse();
-    Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id]);
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->assertSee('oceanix-open-video-library', false)
-        ->assertDontSee(__('Replace video'))
-        ->assertSee(__('Watch threshold (%)'));
-});
-
-it('autosaves a lesson field straight to the database', function (): void {
-    $course = draftCourse();
-    $version = $course->versions()->first();
-    $lesson = Lesson::factory()->create(['course_version_id' => $version->id]);
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->set('lessons.0.title', 'Gas detection and alarms')
-        ->set('lessons.0.minimum_watch_percentage', 95);
-
-    expect($lesson->fresh()->title)->toBe('Gas detection and alarms')
+    $editor->call('saveDraft', false)->assertSet('saveState', 'saved');
+    expect($lesson->fresh()->title)->toBe($fixture->token.' Saved lesson')
+        ->and($lesson->fresh()->description)->toBe($fixture->token.' Saved description')
         ->and($lesson->fresh()->minimum_watch_percentage)->toBe(95);
 });
 
-it('edits visual html content and renders it safely in the lesson preview', function (): void {
-    $course = draftCourse();
-    $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id]);
-    $html = '<h2>Emergency response</h2><p>Follow the <strong>muster procedure</strong>.</p><img src="https://example.com/muster.jpg" alt="Muster station" data-align="right" data-width="40">';
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->set('lessons.0.content_markdown', $html)
-        ->assertDontSee(__('Open full preview'))
-        ->assertSee('oceanix-content-editor', escape: false);
-
-    expect($lesson->fresh()->content_markdown)->toContain('<strong>muster procedure</strong>')
-        ->toContain('data-align="right"');
-
-    $this->actingAs(adminUser())
-        ->get(route('courses.lessons.preview', ['course' => $course, 'lesson' => $lesson]))
-        ->assertOk()
-        ->assertSee('Emergency response')
-        ->assertSee('data-align="right"', escape: false);
-});
-
-it('never opens a shared course editor from tenant context even for a platform administrator', function (): void {
-    $course = Course::factory()->shared()->draft()->create();
-    $version = CourseVersion::factory()->create(['course_id' => $course->id]);
-    Lesson::factory()->create(['company_id' => null, 'is_shared' => true, 'course_version_id' => $version->id]);
-    $actor = adminUser();
-    $actor->update(['account_id' => Account::factory()->platformAdmin()->create()->id]);
-
-    Livewire::actingAs($actor)
-        ->test('courses.editor', ['course' => $course])
-        ->assertNotFound();
-});
-
 it('persists the inclusive watch threshold boundaries', function (int $threshold): void {
-    $course = draftCourse();
-    $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id, 'minimum_watch_percentage' => 75]);
+    [$fixture, $editor] = legacyCompanyEditor();
+    $editor->set('records.0.minimum_watch_percentage', $threshold)->call('saveDraft', false)->assertSet('saveState', 'saved');
 
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->set('lessons.0.minimum_watch_percentage', $threshold)
-        ->assertHasNoErrors('lessons.0.minimum_watch_percentage')
-        ->assertSet('saveState', 'saved');
-
-    expect($lesson->fresh()->minimum_watch_percentage)->toBe($threshold);
+    expect(Lesson::query()->findOrFail($fixture->recordIds[0])->minimum_watch_percentage)->toBe($threshold);
 })->with([1, 100]);
 
 it('rejects invalid watch thresholds without changing persisted tracking data', function (mixed $threshold): void {
-    $course = draftCourse();
-    $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id, 'minimum_watch_percentage' => 75]);
+    [$fixture, $editor] = legacyCompanyEditor();
+    $lesson = Lesson::query()->findOrFail($fixture->recordIds[0]);
+    $before = $lesson->minimum_watch_percentage;
 
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->set('lessons.0.minimum_watch_percentage', $threshold)
-        ->assertHasErrors('lessons.0.minimum_watch_percentage')
-        ->assertSet('saveState', 'validation-error');
+    $editor->set('records.0.minimum_watch_percentage', $threshold)
+        ->call('saveDraft', false)
+        ->assertSet('saveState', 'validation-error')
+        ->assertSet('editorDirty', true);
 
-    expect($lesson->fresh()->minimum_watch_percentage)->toBe(75);
+    expect($lesson->fresh()->minimum_watch_percentage)->toBe($before);
 })->with([0, 101, 42.5]);
 
-it('creates a question with two options ready to fill in', function (): void {
-    $course = draftCourse();
-    Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id]);
+it('creates a question with two options through an immediate structural action', function (): void {
+    [$fixture, $editor] = legacyCompanyEditor();
+    $recordId = $fixture->recordIds[0];
+    $before = Question::query()->where('lesson_id', $recordId)->count();
 
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->call('addQuestion', 0)
-        ->assertCount('lessons.0.questions', 1)
-        ->assertCount('lessons.0.questions.0.options', 2);
+    $editor->call('addQuestion', $recordId)
+        ->assertCount('records.0.questions', $before + 1)
+        ->assertSet('editorDirty', false);
+
+    expect(Question::query()->where('lesson_id', $recordId)->orderByDesc('position')->firstOrFail()->options()->count())->toBe(2);
 });
 
-it('keeps exactly one correct answer on a single-choice question', function (): void {
-    $course = draftCourse();
-    $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id]);
-    $question = Question::factory()->create(['lesson_id' => $lesson->id]);
-    $first = QuestionOption::factory()->correct()->create(['question_id' => $question->id, 'position' => 1]);
-    $second = QuestionOption::factory()->create(['question_id' => $question->id, 'position' => 2]);
+it('keeps exactly one selected answer and commits it only with Save', function (): void {
+    [$fixture, $editor] = legacyCompanyEditor();
+    $question = Question::query()->where('lesson_id', $fixture->recordIds[0])->with('options')->firstOrFail();
+    $first = $question->options[0];
+    $second = $question->options[1];
 
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->call('selectSingleCorrect', 0, 0, 1);
+    $editor->set('records.0.questions.0.options.0.is_correct', false)
+        ->set('records.0.questions.0.options.1.is_correct', true)
+        ->assertSet('records.0.questions.0.options.0.is_correct', false)
+        ->assertSet('records.0.questions.0.options.1.is_correct', true)
+        ->assertSet('editorDirty', true);
 
-    expect($first->fresh()->is_correct)->toBeFalse()
-        ->and($second->fresh()->is_correct)->toBeTrue();
+    expect($first->fresh()->is_correct)->toBeTrue()->and($second->fresh()->is_correct)->toBeFalse();
+    $editor->call('saveDraft', false)->assertSet('saveState', 'saved');
+    expect($first->fresh()->is_correct)->toBeFalse()->and($second->fresh()->is_correct)->toBeTrue();
 });
 
-it('keeps typed option text when adding an option and selecting the correct answer', function (): void {
-    $course = draftCourse();
-    $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id]);
-    $question = Question::factory()->create(['lesson_id' => $lesson->id]);
-    $first = QuestionOption::factory()->create([
-        'question_id' => $question->id,
-        'position' => 1,
-        'text' => '',
-    ]);
-    $second = QuestionOption::factory()->create([
-        'question_id' => $question->id,
-        'position' => 2,
-        'text' => '',
-    ]);
+it('shows and preserves both inventories for a mixed draft while blocking mutation', function (): void {
+    [$fixture] = legacyCompanyEditor();
+    $course = Course::query()->findOrFail($fixture->root->id);
+    $version = $course->versions()->firstOrFail();
+    $module = ModuleVersion::factory()->create();
+    CourseVersionModule::query()->create(['course_version_id' => $version->id, 'lesson_id' => $module->id, 'position' => 4, 'is_required' => true]);
+    $lessonIds = $version->lessons()->pluck('id')->all();
 
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->set('lessons.0.questions.0.options.0.text', 'Option 1')
-        ->set('lessons.0.questions.0.options.1.text', 'Option 2')
-        ->call('addOption', 0, 0)
-        ->assertSet('lessons.0.questions.0.options.0.text', 'Option 1')
-        ->assertSet('lessons.0.questions.0.options.1.text', 'Option 2')
-        ->call('selectSingleCorrect', 0, 0, 0)
-        ->assertSet('lessons.0.questions.0.options.0.text', 'Option 1')
-        ->assertSet('lessons.0.questions.0.options.0.is_correct', true);
+    $editor = Livewire::test('courses.editor', ['course' => $course])
+        ->assertSet('compositionMode', 'mixed')
+        ->assertCount('records', 3)
+        ->assertCount('preservedRecords', 1)
+        ->assertSee(__('ui.mixed_composition_title'));
 
-    expect($first->fresh()->text)->toBe('Option 1')
-        ->and($first->fresh()->is_correct)->toBeTrue()
-        ->and($second->fresh()->text)->toBe('Option 2')
-        ->and($question->options()->count())->toBe(3);
+    $editor->call('addLesson');
+    expect($version->fresh()->lessons()->pluck('id')->all())->toBe($lessonIds)
+        ->and($version->fresh()->moduleCompositions()->where('lesson_id', $module->id)->exists())->toBeTrue();
 });
 
-it('never loses draft questions or answers while changing type and uploading video', function (): void {
-    Http::fake([
-        'api.cloudflare.com/*' => Http::response([
-            'result' => ['uid' => 'draft-video', 'uploadURL' => 'https://upload.cloudflarestream.com/draft'],
-        ]),
-    ]);
-
-    $course = draftCourse();
-    $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id]);
-    $question = Question::factory()->create([
-        'lesson_id' => $lesson->id,
-        'prompt' => 'Original question',
-        'type' => QuestionType::MultipleChoice,
-    ]);
-    $first = QuestionOption::factory()->correct()->create([
-        'question_id' => $question->id,
-        'position' => 1,
-        'text' => 'Original first answer',
-    ]);
-    $second = QuestionOption::factory()->correct()->create([
-        'question_id' => $question->id,
-        'position' => 2,
-        'text' => 'Original second answer',
-    ]);
-
-    $component = Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->assertSee('wire:model.live.debounce.500ms="lessons.0.questions.0.options.0.text"', escape: false)
-        ->set('lessons.0.questions.0.prompt', 'Edited draft question')
-        ->set('lessons.0.questions.0.options.0.text', 'Edited first answer')
-        ->set('lessons.0.questions.0.options.1.text', 'Edited second answer')
-        ->call('requestUpload', 0)
-        ->call('uploadCompleted', 0)
-        ->set('lessons.0.questions.0.type', QuestionType::SingleChoice->value)
-        ->call('selectSingleCorrect', 0, 0, 1)
-        ->assertSet('lessons.0.questions.0.prompt', 'Edited draft question')
-        ->assertSet('lessons.0.questions.0.options.0.text', 'Edited first answer')
-        ->assertSet('lessons.0.questions.0.options.1.text', 'Edited second answer')
-        ->assertSet('lessons.0.questions.0.options.0.is_correct', false)
-        ->assertSet('lessons.0.questions.0.options.1.is_correct', true);
-
-    expect($question->fresh())
-        ->prompt->toBe('Edited draft question')
-        ->type->toBe(QuestionType::SingleChoice)
-        ->and($first->fresh()->text)->toBe('Edited first answer')
-        ->and($first->fresh()->is_correct)->toBeFalse()
-        ->and($second->fresh()->text)->toBe('Edited second answer')
-        ->and($second->fresh()->is_correct)->toBeTrue()
-        ->and($lesson->fresh()->video->status)->toBe(VideoStatus::Processing);
-});
-
-it('uses an input-driven save binding for every nested answer alternative', function (): void {
-    $course = draftCourse();
-    $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first()]);
-    $question = Question::factory()->create(['lesson_id' => $lesson]);
-    $first = QuestionOption::factory()->create(['question_id' => $question, 'position' => 1, 'text' => 'First answer']);
-    $second = QuestionOption::factory()->create(['question_id' => $question, 'position' => 2, 'text' => 'Second answer']);
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->assertSee('wire:model.live.debounce.500ms="lessons.0.questions.0.options.0.text"', escape: false)
-        ->assertSee('wire:model.live.debounce.500ms="lessons.0.questions.0.options.1.text"', escape: false)
-        ->set('lessons.0.questions.0.options.0.text', 'Keyboard first answer')
-        ->set('lessons.0.questions.0.options.1.text', 'Keyboard second answer');
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course->fresh()])
-        ->assertSet('lessons.0.questions.0.options.0.text', 'Keyboard first answer')
-        ->assertSet('lessons.0.questions.0.options.1.text', 'Keyboard second answer');
-
-    expect($first->fresh()->text)->toBe('Keyboard first answer')
-        ->and($second->fresh()->text)->toBe('Keyboard second answer');
-});
-
-it('acknowledges only the exact dotted nested field revision', function (): void {
-    $course = draftCourse();
-    $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first()]);
-    $question = Question::factory()->create(['lesson_id' => $lesson]);
-    $first = QuestionOption::factory()->create(['question_id' => $question, 'position' => 1, 'text' => 'First answer']);
-    QuestionOption::factory()->create(['question_id' => $question, 'position' => 2, 'text' => 'Second answer']);
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->set('clientRevision', 22)
-        ->set('clientFieldRevisions', [
-            ['property' => 'lessons.0.questions.0.options.0.text', 'revision' => 21],
-            ['property' => 'lessons.0.questions.0.options.1.text', 'revision' => 22],
-        ])
-        ->set('clientHasUnsavedChanges', true)
-        ->set('lessons.0.questions.0.options.0.text', 'Persisted exact answer')
-        ->assertDispatched(
-            'editor-field-saved',
-            property: 'lessons.0.questions.0.options.0.text',
-            revision: 21,
-        )
-        ->assertSet('clientFieldRevisions', [
-            ['property' => 'lessons.0.questions.0.options.1.text', 'revision' => 22],
-        ])
-        ->assertSet('clientHasUnsavedChanges', true)
-        ->assertSet('saveState', 'dirty')
-        ->assertNotDispatched('editor-saved');
-
-    expect($first->fresh()->text)->toBe('Persisted exact answer');
-});
-
-it('validates and recovers the keyboard-edited course title through scalar persistence', function (): void {
-    $course = draftCourse();
-    $originalTitle = $course->title;
-
-    $component = Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->assertSee('wire:model.live.debounce.500ms="courseForm.title"', escape: false)
-        ->set('clientRevision', 31)
-        ->set('clientFieldRevisions', [
-            ['property' => 'courseForm.title', 'revision' => 31],
-        ])
-        ->set('clientHasUnsavedChanges', true)
-        ->set('courseForm.title', '')
-        ->assertHasErrors('courseForm.title')
-        ->assertSet('saveState', 'validation-error');
-
-    expect($course->fresh()->title)->toBe($originalTitle);
-
-    $component
-        ->set('clientRevision', 32)
-        ->set('clientFieldRevisions', [
-            ['property' => 'courseForm.title', 'revision' => 32],
-        ])
-        ->set('courseForm.title', 'Recovered keyboard title')
-        ->assertHasNoErrors('courseForm.title')
-        ->assertDispatched('editor-field-saved', property: 'courseForm.title', revision: 32)
-        ->assertSet('clientHasUnsavedChanges', false)
-        ->assertSet('saveState', 'saved');
-
-    expect($course->fresh()->title)->toBe('Recovered keyboard title')
-        ->and($course->versions()->first()->fresh()->title)->toBe('Recovered keyboard title');
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course->fresh()])
-        ->assertSet('courseForm.title', 'Recovered keyboard title');
-});
-
-it('marks only trusted authored controls dirty so transient modal and poll updates stay clean', function (): void {
-    $course = draftCourse();
-    $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first()]);
-    Video::factory()->create(['lesson_id' => $lesson, 'status' => VideoStatus::Uploading]);
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->assertSee('$event.isTrusted && $event.target.closest(\'[data-editor-authored]\')', escape: false)
-        ->assertSee("name.startsWith('wire:model')", escape: false)
-        ->assertSee('$wire.$set(\'clientFieldRevisions\'', escape: false)
-        ->assertSee('x-on:editor-field-saved.window=', escape: false)
-        ->assertSee('data-editor-authored', escape: false)
-        ->call('syncVideos')
-        ->assertSet('clientHasUnsavedChanges', false)
-        ->call('confirmPublish')
-        ->assertSet('clientHasUnsavedChanges', false);
-});
-
-it('renders one complete html-safe Alpine editor root without leaked selector source', function (): void {
-    $course = draftCourse();
-    Lesson::factory()->create(['course_version_id' => $course->versions()->first()]);
-
-    assertCompleteEditorAlpineRoot(
-        Livewire::actingAs(adminUser())->test('courses.editor', ['course' => $course])->html()
-    );
-});
-
-it('wires lesson pointer gestures to the exact sibling reorder boundary', function (): void {
-    $course = draftCourse();
-    $version = $course->versions()->first();
-    Lesson::factory()->create(['course_version_id' => $version, 'position' => 1]);
-    Lesson::factory()->create(['course_version_id' => $version, 'position' => 2]);
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->assertSee('x-on:pointerdown.stop', escape: false)
-        ->assertSee('x-on:pointerup.window="finishLessonPointer($event', escape: false)
-        ->assertSee('document.elementFromPoint', escape: false)
-        ->assertSee('const active = this.drag; this.drag = null;', escape: false)
-        ->assertSee('data-lesson-drop-id=', escape: false)
-        ->assertDontSee("x-on:pointerup=\"if (drag?.type === 'lesson')", escape: false)
-        ->assertSee('$wire.reorderLessons', escape: false);
-});
-
-it('reorders lessons through Livewire and preserves database mirror reload and preview parity', function (): void {
-    $course = draftCourse();
-    $version = $course->versions()->first();
-    $first = Lesson::factory()->create(['course_version_id' => $version->id, 'title' => 'First', 'position' => 1]);
-    $second = Lesson::factory()->create(['course_version_id' => $version->id, 'title' => 'Second', 'position' => 2]);
-    $third = Lesson::factory()->create(['course_version_id' => $version->id, 'title' => 'Third', 'position' => 3]);
-    $expected = [$third->id, $first->id, $second->id];
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->call('reorderLessons', $expected)
-        ->assertSet('lessons.0.id', $third->id)
-        ->assertSet('lessons.1.id', $first->id)
-        ->assertSet('lessons.2.id', $second->id);
-
-    expect($version->fresh()->lessons()->pluck('id')->all())->toBe($expected)
-        ->and($version->fresh()->lessons()->pluck('position')->all())->toBe([1, 2, 3])
-        ->and($version->fresh()->moduleCompositions()->pluck('lesson_id')->all())->toBe($expected)
-        ->and($version->fresh()->moduleCompositions()->pluck('position')->all())->toBe([1, 2, 3])
-        ->and(app(PublicPreviewResolver::class)->items($version->fresh())->pluck('lesson.id')->all())->toBe($expected);
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course->fresh()])
-        ->assertSet('lessons.0.id', $third->id)
-        ->assertSet('lessons.1.id', $first->id)
-        ->assertSet('lessons.2.id', $second->id);
-});
-
-it('restores keyboard focus to the moved lesson contextual control after reorder morph', function (): void {
-    $course = draftCourse();
-    $version = $course->versions()->first();
-    $first = Lesson::factory()->create(['course_version_id' => $version, 'title' => 'First', 'position' => 1]);
-    $second = Lesson::factory()->create(['course_version_id' => $version, 'title' => 'Second', 'position' => 2]);
-    $third = Lesson::factory()->create(['course_version_id' => $version, 'title' => 'Third', 'position' => 3]);
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->assertSee('data-lesson-focus-id="'.$second->id.'"', escape: false)
-        ->assertSee('x-on:lesson-reordered.window=', escape: false)
-        ->call('moveLesson', 1, -1)
-        ->assertDispatched('lesson-reordered', lessonId: $second->id, direction: 'up')
-        ->assertSet('lessons.0.id', $second->id)
-        ->assertSet('lessons.1.id', $first->id)
-        ->assertSet('lessons.2.id', $third->id);
-
-    expect($version->fresh()->lessons()->pluck('id')->all())->toBe([$second->id, $first->id, $third->id]);
-});
-
-it('translates a selected module becoming unavailable into actionable editor feedback', function (): void {
-    $actor = adminUser();
-    $course = draftCourse();
-    $version = $course->versions()->first();
-    $existingModule = Module::factory()->create(['company_id' => $course->company_id]);
-    $existingVersion = ModuleVersion::factory()->published()->create([
-        'module_id' => $existingModule->id,
-        'company_id' => $course->company_id,
-        'is_shared' => false,
-    ]);
-    $existingModule->update(['current_published_version_id' => $existingVersion->id]);
-    $question = Question::factory()->create(['lesson_id' => $existingVersion->id, 'position' => 1]);
-    $firstOption = QuestionOption::factory()->create(['question_id' => $question->id, 'position' => 1]);
-    $secondOption = QuestionOption::factory()->create(['question_id' => $question->id, 'position' => 2]);
-    CourseVersionModule::query()->create([
-        'course_version_id' => $version->id,
-        'lesson_id' => $existingVersion->id,
-        'position' => 1,
-        'is_required' => true,
-    ]);
-    $candidateModule = Module::factory()->create(['company_id' => $course->company_id]);
-    $candidateVersion = ModuleVersion::factory()->published()->create([
-        'module_id' => $candidateModule->id,
-        'company_id' => $course->company_id,
-        'is_shared' => false,
-    ]);
-    $candidateModule->update(['current_published_version_id' => $candidateVersion->id]);
-    $component = Livewire::actingAs($actor)->test('courses.editor', ['course' => $course]);
-    $rowsBefore = $version->moduleCompositions()->orderBy('id')->get()->map->getAttributes()->all();
-    $compositionCountBefore = CourseVersionModule::query()->count();
-    $contentBefore = [
-        'question_ids' => $existingVersion->questions()->orderBy('position')->pluck('id')->all(),
-        'option_ids' => $question->options()->orderBy('position')->pluck('id')->all(),
-        'option_positions' => $question->options()->orderBy('position')->pluck('position')->all(),
-    ];
-
-    $candidateVersion->update(['lineage_archived_at' => now()]);
-
-    $component
-        ->call('addModule', $candidateVersion->id)
-        ->assertHasErrors(['modules' => __('One or more selected modules are unavailable.')])
-        ->assertSee(__('One or more selected modules are unavailable.'))
-        ->assertSet('saveState', 'validation-error')
-        ->assertSet('clientHasUnsavedChanges', true)
-        ->assertSet('moduleCompositionErrorPending', true)
-        ->assertSet('selectedModuleVersionIds', [$existingVersion->id])
-        ->assertDispatched('editor-validation-error');
-
-    assertCompleteEditorAlpineRoot($component->html());
-    assertUnavailableModuleRecovery($component->html());
-
-    expect($rowsBefore)->toHaveCount(1)
-        ->and($version->fresh()->moduleCompositions()->orderBy('id')->get()->map->getAttributes()->all())->toBe($rowsBefore)
-        ->and(CourseVersionModule::query()->count())->toBe($compositionCountBefore)
-        ->and($existingVersion->fresh()->questions()->orderBy('position')->pluck('id')->all())->toBe($contentBefore['question_ids'])
-        ->and($question->fresh()->options()->orderBy('position')->pluck('id')->all())->toBe($contentBefore['option_ids'])
-        ->and($question->fresh()->options()->orderBy('position')->pluck('position')->all())->toBe($contentBefore['option_positions'])
-        ->and([$firstOption->fresh()->id, $secondOption->fresh()->id])->toBe($contentBefore['option_ids']);
-
-    $candidateVersion->update(['lineage_archived_at' => null]);
-
-    $component
-        ->call('addModule', $candidateVersion->id)
-        ->assertHasNoErrors('modules')
-        ->assertSet('selectedModuleVersionIds', [$existingVersion->id, $candidateVersion->id])
-        ->assertSet('clientHasUnsavedChanges', false)
-        ->assertSet('moduleCompositionErrorPending', false)
-        ->assertSet('saveState', 'saved')
-        ->assertDispatched('editor-saved');
-
-    expect($version->fresh()->moduleCompositions()->orderBy('position')->pluck('lesson_id')->all())
-        ->toBe([$existingVersion->id, $candidateVersion->id])
-        ->and($version->fresh()->moduleCompositions()->orderBy('position')->pluck('position')->all())->toBe([1, 2])
-        ->and(CourseVersionModule::query()->count())->toBe($compositionCountBefore + 1);
-});
-
-it('preserves unrelated authored revisions and errors after a valid module retry', function (): void {
-    $actor = adminUser();
-    $course = draftCourse();
-    $version = $course->versions()->first();
-    $module = Module::factory()->create(['company_id' => $course->company_id]);
-    $moduleVersion = ModuleVersion::factory()->published()->create(['module_id' => $module->id]);
-    $module->update(['current_published_version_id' => $moduleVersion->id]);
-    $component = Livewire::actingAs($actor)->test('courses.editor', ['course' => $course]);
-
-    $moduleVersion->update(['lineage_archived_at' => now()]);
-    $component->call('addModule', $moduleVersion->id)->assertHasErrors('modules');
-    $component
-        ->set('clientRevision', 45)
-        ->set('clientFieldRevisions', [
-            ['property' => 'courseForm.title', 'revision' => 45],
-        ])
-        ->set('courseForm.title', '')
-        ->assertHasErrors('courseForm.title');
-
-    $moduleVersion->update(['lineage_archived_at' => null]);
-
-    $component
-        ->call('addModule', $moduleVersion->id)
-        ->assertHasNoErrors('modules')
-        ->assertHasErrors('courseForm.title')
-        ->assertSet('clientFieldRevisions', [
-            ['property' => 'courseForm.title', 'revision' => 45],
-        ])
-        ->assertSet('clientHasUnsavedChanges', true)
-        ->assertSet('moduleCompositionErrorPending', false)
-        ->assertSet('saveState', 'validation-error')
-        ->assertNotDispatched('editor-saved');
-});
-
-it('preserves a module outage through unrelated search and structural saves', function (): void {
-    $course = draftCourse();
-    $component = Livewire::actingAs(adminUser())->test('courses.editor', ['course' => $course])
-        ->set('clientModuleNetworkError', true)
-        ->set('clientHasUnsavedChanges', true)
-        ->set('moduleSearch', 'unrelated search')
-        ->call('addLesson')
-        ->assertSet('clientModuleNetworkError', true)
-        ->assertSet('clientHasUnsavedChanges', true)
-        ->assertSet('saveState', 'network-error')
-        ->assertDispatched('editor-structure-saved')
-        ->assertNotDispatched('editor-saved');
-
-    expect($course->versions()->first()->lessons()->count())->toBe(1);
-});
-
-it('preserves unresolved network error provenance after a valid module retry', function (): void {
-    $actor = adminUser();
-    $course = draftCourse();
-    $module = Module::factory()->create(['company_id' => $course->company_id]);
-    $moduleVersion = ModuleVersion::factory()->published()->create(['module_id' => $module->id]);
-    $module->update(['current_published_version_id' => $moduleVersion->id]);
-    $component = Livewire::actingAs($actor)
-        ->test('courses.editor', ['course' => $course])
-        ->assertSee('$wire.$set(\'clientHasNetworkError\', true, false)', escape: false)
-        ->set('clientHasNetworkError', true)
-        ->set('clientHasUnsavedChanges', true)
-        ->set('saveState', 'network-error');
-
-    $moduleVersion->update(['lineage_archived_at' => now()]);
-    $component
-        ->call('addModule', $moduleVersion->id)
-        ->assertHasErrors('modules')
-        ->assertSet('clientHasNetworkError', true)
-        ->assertSet('moduleCompositionErrorPending', true);
-
-    $moduleVersion->update(['lineage_archived_at' => null]);
-
-    $component
-        ->call('addModule', $moduleVersion->id)
-        ->assertHasNoErrors('modules')
-        ->assertSet('moduleCompositionErrorPending', false)
-        ->assertSet('clientHasNetworkError', true)
-        ->assertSet('clientHasUnsavedChanges', true)
-        ->assertSet('saveState', 'network-error')
-        ->assertNotDispatched('editor-saved');
-});
-
-it('settles module outage refusal and retry without clearing an unrelated authored revision', function (): void {
-    $actor = adminUser();
-    $course = draftCourse();
-    $module = Module::factory()->create(['company_id' => $course->company_id]);
-    $moduleVersion = ModuleVersion::factory()->published()->create(['module_id' => $module->id]);
-    $module->update(['current_published_version_id' => $moduleVersion->id]);
-    $component = Livewire::actingAs($actor)->test('courses.editor', ['course' => $course])
-        ->set('clientModuleNetworkError', true);
-
-    $moduleVersion->update(['lineage_archived_at' => now()]);
-    $component->call('addModule', $moduleVersion->id)
-        ->assertHasErrors('modules')
-        ->assertSet('selectedModuleVersionIds', [])
-        ->assertSet('clientModuleNetworkError', true)
-        ->assertSet('saveState', 'validation-error');
-
-    $moduleVersion->update(['lineage_archived_at' => null]);
-    $component->call('addModule', $moduleVersion->id)
-        ->assertHasNoErrors()
-        ->assertSet('clientModuleNetworkError', false)
-        ->assertSet('clientHasUnsavedChanges', false)
-        ->assertSet('saveState', 'saved');
-
-    $component->set('clientModuleNetworkError', true)
-        ->set('clientFieldRevisions', [['property' => 'courseForm.title', 'revision' => 91]])
-        ->set('clientHasUnsavedChanges', true)
-        ->call('removeModule', 0)
-        ->assertSet('clientModuleNetworkError', false)
-        ->assertSet('clientFieldRevisions', [['property' => 'courseForm.title', 'revision' => 91]])
-        ->assertSet('clientHasUnsavedChanges', true)
-        ->assertSet('saveState', 'dirty');
-});
-
-it('an authored save does not acknowledge a failed module request', function (): void {
-    $course = draftCourse();
-    Livewire::actingAs(adminUser())->test('courses.editor', ['course' => $course])
-        ->set('clientModuleNetworkError', true)
-        ->set('courseForm.title', 'A persisted authored edit')
-        ->assertSet('clientModuleNetworkError', true)
-        ->assertSet('clientHasUnsavedChanges', true)
-        ->assertSet('saveState', 'network-error');
-});
-
-it('propagates unrelated module composition exceptions', function (): void {
-    $actor = adminUser();
-    $course = draftCourse();
-    $module = Module::factory()->create(['company_id' => $course->company_id]);
-    $moduleVersion = ModuleVersion::factory()->published()->create([
-        'module_id' => $module->id,
-        'company_id' => $course->company_id,
-        'is_shared' => false,
-    ]);
-    $exception = new LogicException('unrelated composition invariant');
-    $action = Mockery::mock(UpdateCourseModuleComposition::class);
-    $action->shouldReceive('handle')->once()->andThrow($exception);
-    app()->instance(UpdateCourseModuleComposition::class, $action);
-
-    $caught = null;
-    try {
-        Livewire::actingAs($actor)
-            ->test('courses.editor', ['course' => $course])
-            ->call('addModule', $moduleVersion->id);
-    } catch (Throwable $thrown) {
-        $caught = $thrown;
-    }
-
-    expect($caught)->toBe($exception)
-        ->and($caught)->toBeInstanceOf(LogicException::class)
-        ->and($caught?->getMessage())->toBe('unrelated composition invariant');
-});
-
-it('refuses to touch a lesson that belongs to another course version', function (): void {
-    $course = draftCourse();
-    Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id]);
-    $foreign = Lesson::factory()->create();
-
-    // Ids arriving from the browser are untrusted: swap in a foreign lesson id.
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->set('lessons.0.id', $foreign->id)
-        ->call('removeLesson', 0)
-        ->assertNotFound();
-
-    expect($foreign->fresh())->not->toBeNull();
-});
-
-it('opens an upload slot and marks the video processing when the browser finishes', function (): void {
-    // The provider is behind a contract, but this test exercises the real Cloudflare
-    // implementation's request shape, so fake the HTTP layer rather than the contract.
-    Http::fake([
-        'api.cloudflare.com/*' => Http::response([
-            'result' => ['uid' => 'asset-123', 'uploadURL' => 'https://upload.cloudflarestream.com/abc'],
-        ]),
-    ]);
-
-    $course = draftCourse();
-    $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id]);
-
-    $component = Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->call('requestUpload', 0);
-
-    expect($lesson->fresh()->video)->not->toBeNull()
-        ->and($lesson->fresh()->video->status)->toBe(VideoStatus::Uploading);
-
-    $component->call('uploadCompleted', 0);
-
-    expect($lesson->fresh()->video->status)->toBe(VideoStatus::Processing);
-});
-
-it('loads the Cloudflare library and links a ready video to the lesson', function (): void {
-    Http::fake([
-        'api.cloudflare.com/client/v4/accounts/*/stream?*' => Http::response([
-            'result' => [[
-                'uid' => 'existing-asset',
-                'meta' => ['name' => 'Safety induction', 'oceanix_owner' => 'company:'.currentCompany()->id],
-                'status' => ['state' => 'ready'],
-                'duration' => 125.4,
-                'created' => '2026-08-20T14:00:00Z',
-                'playback' => ['hls' => 'https://customer.example/existing-asset/manifest/video.m3u8'],
-            ]],
-        ]),
-        'api.cloudflare.com/client/v4/accounts/*/stream/existing-asset/token' => Http::response([
-            'result' => ['token' => 'preview-token'],
-        ]),
-        'api.cloudflare.com/client/v4/accounts/*/stream/existing-asset' => Http::response([
-            'result' => [
-                'uid' => 'existing-asset',
-                'status' => ['state' => 'ready'],
-                'duration' => 125.4,
-                'requireSignedURLs' => true,
-                'meta' => ['oceanix_owner' => 'company:'.currentCompany()->id],
-                'playback' => ['hls' => 'https://customer.example/existing-asset/manifest/video.m3u8'],
-            ],
-        ]),
-    ]);
-
-    $course = draftCourse();
-    $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id]);
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->call('openVideoLibrary', 0)
-        ->assertSet('videoLibraryOpen', true)
-        ->assertSee('Safety induction')
-        ->assertSet('videoLibraryItems.0.thumbnail_url', 'https://customer.example/preview-token/thumbnails/thumbnail.jpg')
-        ->call('previewLibraryVideo', 'existing-asset')
-        ->assertSet('videoLibraryPreviewTitle', 'Safety induction')
-        ->set('videoLibrarySearch', 'safety')
-        ->call('searchVideoLibrary')
-        ->call('linkExistingVideo', 'existing-asset')
-        ->assertSet('videoLibraryOpen', false);
-
-    Http::assertSent(fn ($request): bool => $request->method() === 'GET'
-        && ($request->data()['search'] ?? null) === 'safety');
-
-    expect($lesson->fresh()->video)
-        ->provider_asset_id->toBe('existing-asset')
-        ->duration_seconds->toBe(125)
-        ->status->toBe(VideoStatus::Ready);
-});
-
-it('does not link a video that was not returned by the library', function (): void {
-    Http::fake([
-        'api.cloudflare.com/*' => Http::response(['result' => []]),
-    ]);
-
-    $course = draftCourse();
-    Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id]);
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->call('openVideoLibrary', 0)
-        ->call('linkExistingVideo', 'forged-asset')
+it('never opens a shared course editor from tenant context', function (): void {
+    $shared = Course::factory()->shared()->draft()->create();
+    CourseVersion::factory()->create(['course_id' => $shared]);
+
+    $this->actingAs(adminUser())
+        ->get(route('courses.editor', ['company' => currentCompany(), 'course' => $shared]))
         ->assertNotFound();
 });
 
-it('publishes from the editor once every rule is satisfied', function (): void {
-    $course = draftCourse();
-    $version = $course->versions()->first();
-    $lesson = Lesson::factory()->create(['course_version_id' => $version->id]);
-    Video::factory()->create(['lesson_id' => $lesson->id]);
-    $question = Question::factory()->create(['lesson_id' => $lesson->id, 'type' => QuestionType::SingleChoice]);
-    QuestionOption::factory()->correct()->create(['question_id' => $question->id, 'position' => 1]);
-    QuestionOption::factory()->create(['question_id' => $question->id, 'position' => 2]);
+it('keeps each persisted video state available through the rich-content video control', function (VideoStatus $status): void {
+    [$fixture] = legacyCompanyEditor();
+    Video::factory()->create(['lesson_id' => $fixture->recordIds[0], 'company_id' => $fixture->root->company_id, 'status' => $status, 'is_current' => true]);
 
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->call('confirmPublish')
-        ->assertSet('publishProblems', [])
-        ->call('publish')
-        ->assertRedirect(route('courses.show', ['course' => $course]));
+    Livewire::test('courses.editor', $fixture->routeParameters())
+        ->assertSee('data-editor-media-action="open-library"', escape: false)
+        ->assertSee('data-editor-action-detail="open-video-library"', escape: false)
+        ->assertDontSeeText('No video attached')
+        ->assertDontSeeText('Choose or upload video')
+        ->assertDontSeeText('Replace video')
+        ->assertDontSeeText('Remove video');
+})->with(VideoStatus::cases());
 
-    expect($version->fresh()->status)->toBe(CourseVersionStatus::Published)
-        ->and($course->fresh()->current_published_version_id)->toBe($version->id);
-});
+it('denies the editor after the update permission is revoked', function (): void {
+    [$fixture] = legacyCompanyEditor();
+    $fixture->user->roles()->detach();
 
-it('can replace every open assignment when publishing a new version', function (): void {
-    $course = draftCourse();
-    $draft = $course->versions()->first();
-    $draft->update(['version_number' => 2]);
-    $previous = CourseVersion::factory()->published()->create([
-        'course_id' => $course->id,
-        'version_number' => 1,
-    ]);
-    $course->update(['current_published_version_id' => $previous->id]);
-
-    $lesson = Lesson::factory()->create(['course_version_id' => $draft->id]);
-    Video::factory()->create(['lesson_id' => $lesson->id]);
-    $question = Question::factory()->create(['lesson_id' => $lesson->id]);
-    QuestionOption::factory()->correct()->create(['question_id' => $question->id, 'position' => 1]);
-    QuestionOption::factory()->create(['question_id' => $question->id, 'position' => 2]);
-
-    $first = UserTrainingAssignment::factory()->create([
-        'course_id' => $course->id,
-        'course_version_id' => $previous->id,
-    ]);
-    $second = UserTrainingAssignment::factory()->inProgress()->create([
-        'course_id' => $course->id,
-        'course_version_id' => $previous->id,
-    ]);
-    $completed = UserTrainingAssignment::factory()->completed()->create([
-        'course_id' => $course->id,
-        'course_version_id' => $previous->id,
-    ]);
-    $waived = UserTrainingAssignment::factory()->create([
-        'course_id' => $course->id,
-        'course_version_id' => $previous->id,
-        'status' => AssignmentStatus::Waived,
-    ]);
-    $terminalBefore = UserTrainingAssignment::query()->whereKey([$completed->id, $waived->id])->orderBy('id')->get()
-        ->map(fn (UserTrainingAssignment $assignment): array => [
-            $assignment->status->value,
-            $assignment->completed_at?->toIso8601String(),
-            $assignment->metadata,
-        ])->all();
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->set('assignmentUpdateMode', 'replace_open')
-        ->call('publish')
-        ->assertRedirect();
-
-    expect($first->fresh()->status)->toBe(AssignmentStatus::Cancelled)
-        ->and($second->fresh()->status)->toBe(AssignmentStatus::Cancelled)
-        ->and($completed->fresh()->status)->toBe(AssignmentStatus::Completed)
-        ->and($waived->fresh()->status)->toBe(AssignmentStatus::Waived)
-        ->and(UserTrainingAssignment::query()->whereKey([$completed->id, $waived->id])->orderBy('id')->get()->map(fn (UserTrainingAssignment $assignment): array => [
-            $assignment->status->value,
-            $assignment->completed_at?->toIso8601String(),
-            $assignment->metadata,
-        ])->all())->toBe($terminalBefore)
-        ->and(UserTrainingAssignment::query()->where('course_version_id', $draft->id)->count())->toBe(2)
-        ->and(UserTrainingAssignment::query()->where('supersedes_assignment_id', $first->id)->exists())->toBeTrue()
-        ->and(UserTrainingAssignment::query()->where('supersedes_assignment_id', $second->id)->exists())->toBeTrue()
-        ->and(ComplianceEvent::query()->whereIn('assignment_id', [$first->id, $second->id])->count())->toBe(2)
-        ->and(ComplianceEvent::query()->whereIn('assignment_id', UserTrainingAssignment::query()->where('course_version_id', $draft->id)->pluck('id'))->count())->toBe(2)
-        ->and(AuditLog::query()->where('action', 'assignment.replaced_for_course_version')->count())->toBe(2);
-
-    foreach ([$first, $second] as $original) {
-        $replacement = UserTrainingAssignment::query()->where('supersedes_assignment_id', $original->id)->sole();
-        $cancelledEvent = ComplianceEvent::query()->where('assignment_id', $original->id)->sole();
-        $createdEvent = ComplianceEvent::query()->where('assignment_id', $replacement->id)->sole();
-        $replacementAudit = AuditLog::query()
-            ->where('action', 'assignment.replaced_for_course_version')
-            ->where('auditable_type', $replacement->getMorphClass())
-            ->where('auditable_id', $replacement->id)
-            ->sole();
-        $frozenFields = ['user_id', 'course_id', 'training_requirement_id', 'origin_type', 'origin_id', 'series_key', 'available_at', 'due_at', 'expires_at'];
-        expect(collect($frozenFields)->mapWithKeys(fn (string $field): array => [$field => $replacement->getRawOriginal($field)])->all())
-            ->toBe(collect($frozenFields)->mapWithKeys(fn (string $field): array => [$field => $original->getRawOriginal($field)])->all())
-            ->and($cancelledEvent->event_type)->toBe(ComplianceEventType::AssignmentCancelled)
-            ->and($cancelledEvent->course_version_id)->toBe($previous->id)
-            ->and($createdEvent->event_type)->toBe(ComplianceEventType::AssignmentCreated)
-            ->and($createdEvent->course_version_id)->toBe($draft->id)
-            ->and($createdEvent->metadata['supersedes_assignment_id'])->toBe($original->id)
-            ->and($replacementAudit->auditable_type)->toBe($replacement->getMorphClass())
-            ->and($replacementAudit->auditable_id)->toBe($replacement->id)
-            ->and($replacementAudit->after)->toBe([
-                'previous_assignment_id' => $original->id,
-                'course_version_id' => $draft->id,
-            ]);
-    }
-});
-
-it('keeps open assignments on their frozen version by default and shows publication impact', function (): void {
-    $course = draftCourse();
-    $draft = $course->versions()->first();
-    $draft->update(['version_number' => 2]);
-    $previous = CourseVersion::factory()->published()->create(['course_id' => $course, 'version_number' => 1]);
-    $course->update(['current_published_version_id' => $previous->id]);
-    $lesson = Lesson::factory()->create(['course_version_id' => $draft]);
-    Video::factory()->create(['lesson_id' => $lesson]);
-    $question = Question::factory()->create(['lesson_id' => $lesson]);
-    QuestionOption::factory()->correct()->create(['question_id' => $question, 'position' => 1]);
-    QuestionOption::factory()->create(['question_id' => $question, 'position' => 2]);
-    $pending = UserTrainingAssignment::factory()->create(['course_id' => $course, 'course_version_id' => $previous]);
-    $progress = UserTrainingAssignment::factory()->inProgress()->create(['course_id' => $course, 'course_version_id' => $previous]);
-    $assignmentBefore = DB::table('user_training_assignments')->whereIn('id', [$pending->id, $progress->id])->orderBy('id')->get()->map(fn ($row) => (array) $row)->all();
-    $eventCount = ComplianceEvent::query()->count();
-    $replacementAuditCount = AuditLog::query()->where('action', 'assignment.replaced_for_course_version')->count();
-
-    Livewire::actingAs(adminUser())->test('courses.editor', ['course' => $course])
-        ->call('confirmPublish')
-        ->assertSet('assignmentUpdateMode', 'keep_existing')
-        ->assertSet('publicationImpact.open', 2)
-        ->assertSet('publicationImpact.pending', 1)
-        ->assertSet('publicationImpact.in_progress', 1)
-        ->call('publish')->assertRedirect();
-
-    expect($pending->fresh()->course_version_id)->toBe($previous->id)
-        ->and($progress->fresh()->course_version_id)->toBe($previous->id)
-        ->and($pending->fresh()->status)->toBe(AssignmentStatus::Pending)
-        ->and($progress->fresh()->status)->toBe(AssignmentStatus::InProgress)
-        ->and(DB::table('user_training_assignments')->whereIn('id', [$pending->id, $progress->id])->orderBy('id')->get()->map(fn ($row) => (array) $row)->all())->toBe($assignmentBefore)
-        ->and(UserTrainingAssignment::query()->where('course_version_id', $draft->id)->count())->toBe(0)
-        ->and(ComplianceEvent::query()->count())->toBe($eventCount)
-        ->and(AuditLog::query()->where('action', 'assignment.replaced_for_course_version')->count())->toBe($replacementAuditCount);
-});
-
-it('rolls publication back atomically when assignment replacement fails downstream', function (): void {
-    $course = draftCourse();
-    $draft = $course->versions()->first();
-    $draft->update(['version_number' => 2]);
-    $previous = CourseVersion::factory()->published()->create(['course_id' => $course, 'version_number' => 1]);
-    $course->update(['current_published_version_id' => $previous->id]);
-    $lesson = Lesson::factory()->create(['course_version_id' => $draft]);
-    $question = Question::factory()->create(['lesson_id' => $lesson]);
-    QuestionOption::factory()->correct()->create(['question_id' => $question, 'position' => 1]);
-    QuestionOption::factory()->create(['question_id' => $question, 'position' => 2]);
-    $assignment = UserTrainingAssignment::factory()->create(['course_id' => $course, 'course_version_id' => $previous]);
-    $assignmentBefore = (array) DB::table('user_training_assignments')->whereKey($assignment->id)->first();
-    $replacement = Mockery::mock(ReplaceOpenAssignmentsForCourseVersion::class);
-    $replacement->shouldReceive('handle')->once()->andThrow(new RuntimeException('replacement failed'));
-    app()->instance(ReplaceOpenAssignmentsForCourseVersion::class, $replacement);
-
-    expect(fn () => app(PublishCourseVersion::class)->handle($draft, adminUser()->id, true))
-        ->toThrow(RuntimeException::class, 'replacement failed');
-
-    expect($draft->fresh()->status)->toBe(CourseVersionStatus::Draft)
-        ->and($previous->fresh()->status)->toBe(CourseVersionStatus::Published)
-        ->and($course->fresh()->current_published_version_id)->toBe($previous->id)
-        ->and((array) DB::table('user_training_assignments')->whereKey($assignment->id)->first())->toBe($assignmentBefore)
-        ->and(AuditLog::query()->where('action', 'course_version.published')->count())->toBe(0);
-});
-
-it('renders permanent code tracking-only threshold help unique answers and video text state', function (): void {
-    $actor = adminUser();
-    $course = app(CreateCourse::class)->handle('  bosiet-01  ', 'BOSIET Refresher', actor: $actor);
-    $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first(), 'minimum_watch_percentage' => 95]);
-    Video::factory()->create(['lesson_id' => $lesson, 'status' => VideoStatus::Failed]);
-    $question = Question::factory()->create(['lesson_id' => $lesson]);
-    QuestionOption::factory()->create(['question_id' => $question, 'position' => 1]);
-    QuestionOption::factory()->create(['question_id' => $question, 'position' => 2]);
-
-    Livewire::actingAs($actor)->test('courses.editor', ['course' => $course])
-        ->assertSeeHtml('readonly')
-        ->assertSeeHtml('value="BOSIET-01"')
-        ->assertDontSee('wire:model.blur="courseForm.code"', escape: false)
-        ->assertDontSee('wire:model="courseForm.code"', escape: false)
-        ->assertDontSee('wire:model.live="courseForm.code"', escape: false)
-        ->assertSee(__('ui.permanent_course_code'))
-        ->assertSee(__('Watch threshold (%)'))
-        ->assertSee(__('ui.watch_threshold_help'))
-        ->assertSee(__('ui.video_status', ['status' => VideoStatus::Failed->label()]))
-        ->assertSee(__('ui.answer_position', ['position' => 1]))
-        ->assertSee(__('ui.answer_position', ['position' => 2]))
-        ->assertSee(__('ui.correct_answer_position', ['position' => 1]))
-        ->assertSee(__('ui.correct_answer_position', ['position' => 2]))
-        ->assertSee(__('ui.editor_network_error'));
-});
-
-it('reorders questions and answers contiguously through the exact sibling action', function (): void {
-    $course = draftCourse();
-    $version = $course->versions()->first();
-    $lesson = Lesson::factory()->create(['course_version_id' => $version]);
-    $first = Question::factory()->create(['lesson_id' => $lesson, 'position' => 1]);
-    $second = Question::factory()->create(['lesson_id' => $lesson, 'position' => 2]);
-    $a = QuestionOption::factory()->create(['question_id' => $first, 'position' => 1]);
-    $b = QuestionOption::factory()->create(['question_id' => $first, 'position' => 2]);
-    $actor = adminUser();
-
-    $action = app(ReorderDirectCourseContent::class);
-    $action->handle($version, $actor, 'questions', $lesson->id, [$second->id, $first->id]);
-    $action->handle($version, $actor, 'options', $first->id, [$b->id, $a->id]);
-
-    Livewire::actingAs($actor)
-        ->test('courses.editor', ['course' => $course->fresh()])
-        ->assertSet('lessons.0.questions.0.id', $second->id)
-        ->assertSet('lessons.0.questions.1.id', $first->id)
-        ->assertSet('lessons.0.questions.1.options.0.id', $b->id)
-        ->assertSet('lessons.0.questions.1.options.1.id', $a->id);
-
-    expect($lesson->questions()->pluck('id')->all())->toBe([$second->id, $first->id])
-        ->and($first->options()->pluck('id')->all())->toBe([$b->id, $a->id])
-        ->and($lesson->questions()->pluck('position')->all())->toBe([1, 2])
-        ->and($first->options()->pluck('position')->all())->toBe([1, 2]);
-});
-
-it('rejects duplicate stale and cross-parent reorder payloads without partial writes', function (): void {
-    $course = draftCourse();
-    $version = $course->versions()->first();
-    $lesson = Lesson::factory()->create(['course_version_id' => $version]);
-    $first = Question::factory()->create(['lesson_id' => $lesson, 'position' => 1]);
-    $second = Question::factory()->create(['lesson_id' => $lesson, 'position' => 2]);
-    $foreign = Question::factory()->create();
-    $before = $lesson->questions()->pluck('position', 'id')->all();
-    $action = app(ReorderDirectCourseContent::class);
-    $actor = adminUser();
-
-    foreach ([[$first->id, $first->id], [$first->id], [$first->id, $foreign->id]] as $ids) {
-        expect(fn () => $action->handle($version, $actor, 'questions', $lesson->id, $ids))
-            ->toThrow(ValidationException::class, __('ui.stale_order'));
-        expect($lesson->questions()->pluck('position', 'id')->all())->toBe($before);
-    }
-    expect($second->fresh()->position)->toBe(2)->and($foreign->fresh())->not->toBeNull();
-});
-
-it('rejects invalid lesson and option reorder payloads with exact errors and unchanged snapshots', function (): void {
-    $course = draftCourse();
-    $version = $course->versions()->first();
-    $firstLesson = Lesson::factory()->create(['course_version_id' => $version, 'position' => 1]);
-    $secondLesson = Lesson::factory()->create(['course_version_id' => $version, 'position' => 2]);
-    $question = Question::factory()->create(['lesson_id' => $firstLesson]);
-    $firstOption = QuestionOption::factory()->create(['question_id' => $question, 'position' => 1]);
-    $secondOption = QuestionOption::factory()->create(['question_id' => $question, 'position' => 2]);
-    $foreignOption = QuestionOption::factory()->create();
-    $action = app(ReorderDirectCourseContent::class);
-    $actor = adminUser();
-    $lessonBefore = $version->lessons()->pluck('position', 'id')->all();
-    $mirrorBefore = $version->moduleCompositions()->pluck('position', 'lesson_id')->all();
-    $optionBefore = $question->options()->pluck('position', 'id')->all();
-
-    foreach ([[$firstLesson->id, $firstLesson->id], [$firstLesson->id]] as $ids) {
-        expect(fn () => $action->handle($version, $actor, 'lessons', null, $ids))
-            ->toThrow(ValidationException::class, __('ui.stale_order'));
-        expect($version->lessons()->pluck('position', 'id')->all())->toBe($lessonBefore)
-            ->and($version->moduleCompositions()->pluck('position', 'lesson_id')->all())->toBe($mirrorBefore);
-    }
-
-    foreach ([[$firstOption->id, $firstOption->id], [$firstOption->id], [$firstOption->id, $foreignOption->id]] as $ids) {
-        expect(fn () => $action->handle($version, $actor, 'options', $question->id, $ids))
-            ->toThrow(ValidationException::class, __('ui.stale_order'));
-        expect($question->options()->pluck('position', 'id')->all())->toBe($optionBefore);
-    }
-
-    expect($secondLesson->fresh()->position)->toBe(2)->and($secondOption->fresh()->position)->toBe(2);
-});
-
-it('surfaces stale Livewire lesson reorders as an actionable unsaved validation state', function (): void {
-    $course = draftCourse();
-    $version = $course->versions()->first();
-    $first = Lesson::factory()->create(['course_version_id' => $version, 'position' => 1]);
-    $second = Lesson::factory()->create(['course_version_id' => $version, 'position' => 2]);
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->call('reorderLessons', [$first->id])
-        ->assertHasErrors(['order' => __('ui.stale_order')])
-        ->assertSet('saveState', 'validation-error')
-        ->assertSet('clientHasUnsavedChanges', true)
-        ->assertSee(__('ui.stale_order'))
-        ->assertDispatched('editor-validation-error');
-
-    expect($version->fresh()->lessons()->pluck('id')->all())->toBe([$first->id, $second->id])
-        ->and($version->fresh()->moduleCompositions()->pluck('lesson_id')->all())->toBe([$first->id, $second->id]);
-});
-
-it('scopes save acknowledgements to persisted editor revisions and blocks publication while dirty', function (): void {
-    $course = draftCourse();
-    $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first()]);
-
-    $component = Livewire::actingAs(adminUser())->test('courses.editor', ['course' => $course])
-        ->set('moduleSearch', 'survival')
-        ->assertSet('saveState', 'clean')
-        ->set('clientRevision', 7)
-        ->set('clientHasUnsavedChanges', true)
-        ->call('addQuestion', 0)
-        ->assertNotDispatched('editor-saved')
-        ->assertSet('clientHasUnsavedChanges', true)
-        ->assertSet('saveState', 'dirty')
-        ->call('confirmPublish')
-        ->assertHasErrors('publish')
-        ->assertSee(__('ui.finish_saving_before_publish'));
-
-    $component->assertSet('confirmingPublish', false)
-        ->assertSee('data-editor-mutation', escape: false)
-        ->assertDontSee('x-on:click.capture=', escape: false)
-        ->assertSee('wire:confirm="'.__('ui.confirm_remove_lesson').'"', escape: false)
-        ->assertSee('x-on:drop.stop.prevent', escape: false)
-        ->assertSee("type: 'question'", escape: false)
-        ->assertSee("type: 'option'", escape: false);
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course->fresh()])
-        ->set('clientHasUnsavedChanges', true)
-        ->set('lessons.0.title', '')
-        ->assertHasErrors('lessons.0.title')
-        ->assertSet('saveState', 'validation-error')
-        ->call('addQuestion', 0)
-        ->assertHasErrors('lessons.0.title')
-        ->assertSet('saveState', 'validation-error')
-        ->assertSet('clientHasUnsavedChanges', true);
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course->fresh()])
-        ->set('clientRevision', 8)
-        ->set('clientHasUnsavedChanges', true)
-        ->set('lessons.0.title', 'Persisted correlated edit')
-        ->assertDispatched('editor-field-saved', property: 'lessons.0.title', revision: 8)
-        ->assertSet('clientHasUnsavedChanges', false);
-
-    expect($lesson->fresh()->title)->toBe('Persisted correlated edit');
-});
-
-it('keeps one invalid scalar field dirty when a different scalar field saves', function (): void {
-    $course = draftCourse();
-    $lesson = Lesson::factory()->create([
-        'course_version_id' => $course->versions()->first(),
-        'title' => 'Original title',
-        'description' => 'Original description',
-    ]);
-
-    $component = Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->set('clientRevision', 12)
-        ->set('clientFieldRevisions', [
-            ['property' => 'lessons.0.title', 'revision' => 11],
-            ['property' => 'lessons.0.description', 'revision' => 12],
-        ])
-        ->set('clientHasUnsavedChanges', true)
-        ->set('lessons.0.title', '')
-        ->assertHasErrors('lessons.0.title')
-        ->assertSet('saveState', 'validation-error')
-        ->set('lessons.0.description', 'This field saves independently')
-        ->assertDispatched('editor-field-saved', property: 'lessons.0.description', revision: 12)
-        ->assertNotDispatched('editor-saved')
-        ->assertSet('clientFieldRevisions', [
-            ['property' => 'lessons.0.title', 'revision' => 11],
-        ])
-        ->assertSet('clientHasUnsavedChanges', true)
-        ->assertSet('saveState', 'validation-error')
-        ->assertHasErrors('lessons.0.title')
-        ->call('confirmPublish')
-        ->assertHasErrors('publish')
-        ->assertSet('confirmingPublish', false)
-        ->assertSee(__('ui.finish_saving_before_publish'));
-
-    expect($lesson->fresh()->title)->toBe('Original title')
-        ->and($lesson->fresh()->description)->toBe('This field saves independently');
-});
-
-it('gives every lesson icon action a contextual accessible name', function (): void {
-    $course = draftCourse();
-    $version = $course->versions()->first();
-    Lesson::factory()->create(['course_version_id' => $version, 'title' => 'First lesson', 'position' => 1]);
-    Lesson::factory()->create(['course_version_id' => $version, 'title' => 'Second lesson', 'position' => 2]);
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->assertSee('Move lesson 1 up')
-        ->assertSee('Move lesson 1 down')
-        ->assertSee('Remove lesson 1')
-        ->assertSee('Collapse lesson 1')
-        ->assertSee('Move lesson 2 up')
-        ->assertSee('Move lesson 2 down')
-        ->assertSee('Remove lesson 2')
-        ->assertSee('Expand lesson 2');
-});
-
-it('reports what is missing instead of publishing an incomplete version', function (): void {
-    $course = draftCourse();
-    Lesson::factory()->create(['course_version_id' => $course->versions()->first()->id]);
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->call('confirmPublish')
-        ->assertSet('confirmingPublish', true)
-        ->call('publish')
-        ->assertNoRedirect();
-
-    expect($course->versions()->first()->fresh()->status)->toBe(CourseVersionStatus::Draft);
-});
-
-it('keeps a clean publication modal open with actionable feedback when publication is refused', function (): void {
-    $course = draftCourse();
-    $version = $course->versions()->first();
-    $lesson = Lesson::factory()->create(['course_version_id' => $version]);
-    $question = Question::factory()->create(['lesson_id' => $lesson]);
-    QuestionOption::factory()->correct()->create(['question_id' => $question, 'position' => 1, 'text' => 'Correct']);
-    $removed = QuestionOption::factory()->create(['question_id' => $question, 'position' => 2, 'text' => 'Alternative']);
-
-    $component = Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->assertSet('clientHasUnsavedChanges', false)
-        ->call('confirmPublish')
-        ->assertSet('confirmingPublish', true)
-        ->assertSet('publishProblems', []);
-
-    $removed->delete();
-    $expected = app(CourseVersionValidator::class)->problems($version->fresh());
-
-    $component->call('publish')
-        ->assertNoRedirect()
-        ->assertSet('confirmingPublish', true)
-        ->assertSet('publishProblems', $expected)
-        ->assertSee(__('ui.not_publishable_yet'));
-
-    foreach ($expected as $problem) {
-        $component->assertSee($problem);
-    }
-
-    expect($version->fresh()->status)->toBe(CourseVersionStatus::Draft);
-});
-
-it('denies editing to someone who can only view courses', function (): void {
-    $course = draftCourse();
-
-    // The guard sits in mount(), so a view-only profile never even reaches the component.
-    Livewire::actingAs(userWithPermissions([Permission::CoursesView]))
-        ->test('courses.editor', ['course' => $course])
+    $this->actingAs($fixture->user)
+        ->get(route('courses.editor', $fixture->routeParameters()))
         ->assertForbidden();
 });
 
-it('denies publishing to someone who can edit but not publish', function (): void {
-    $course = draftCourse();
+it('keeps the version title synchronized on Save but freezes a published version', function (): void {
+    [$fixture, $editor] = legacyCompanyEditor();
+    $course = Course::query()->findOrFail($fixture->root->id);
+    $version = $course->versions()->firstOrFail();
+    $editor->set('courseForm.title', $fixture->token.' Renamed')->call('saveDraft', false)->assertSet('saveState', 'saved');
 
-    Livewire::actingAs(userWithPermissions([Permission::CoursesUpdate]))
-        ->test('courses.editor', ['course' => $course])
-        ->call('confirmPublish')
-        ->assertForbidden();
-});
-
-it('re-authorizes a structural edit after permission is revoked', function (): void {
-    $course = draftCourse();
-    $actor = userWithPermissions([Permission::CoursesUpdate]);
-    $component = Livewire::actingAs($actor)->test('courses.editor', ['course' => $course]);
-    $actor->roles()->detach();
-
-    $component->call('addLesson')->assertForbidden();
-    expect($course->versions()->first()->lessons()->count())->toBe(0);
-});
-
-it('renders every persisted video state as lesson-specific text', function (VideoStatus $status): void {
-    $course = draftCourse();
-    $lesson = Lesson::factory()->create(['course_version_id' => $course->versions()->first()]);
-    Video::factory()->create(['lesson_id' => $lesson, 'status' => $status]);
-
-    Livewire::actingAs(adminUser())->test('courses.editor', ['course' => $course])
-        ->assertSee(__('ui.video_status', ['status' => $status->label()]));
-})->with([
-    'uploading' => VideoStatus::Uploading,
-    'processing' => VideoStatus::Processing,
-    'ready' => VideoStatus::Ready,
-    'failed' => VideoStatus::Failed,
-]);
-
-it('keeps the version title tracking the course title while it is a draft', function (): void {
-    $course = draftCourse();
-    $version = $course->versions()->first();
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->set('courseForm.title', 'Hydrogen sulphide awareness');
-
-    expect($course->fresh()->title)->toBe('Hydrogen sulphide awareness')
-        ->and($version->fresh()->title)->toBe('Hydrogen sulphide awareness');
-});
-
-it('freezes the version title when the course is renamed after publication', function (): void {
-    $course = draftCourse();
-    $version = $course->versions()->first();
-    $lesson = Lesson::factory()->create(['course_version_id' => $version->id]);
-    Video::factory()->create(['lesson_id' => $lesson->id]);
-    $question = Question::factory()->create(['lesson_id' => $lesson->id]);
-    QuestionOption::factory()->correct()->create(['question_id' => $question->id, 'position' => 1]);
-    QuestionOption::factory()->create(['question_id' => $question->id, 'position' => 2]);
-
-    Livewire::actingAs(adminUser())
-        ->test('courses.editor', ['course' => $course])
-        ->set('courseForm.title', 'Original wording')
-        ->call('publish');
-
-    // Renaming the course afterwards must not rewrite what the published edition said.
-    $course->fresh()->update(['title' => 'Renamed later']);
-
-    expect($version->fresh()->title)->toBe('Original wording');
+    expect($version->fresh()->title)->toBe($fixture->token.' Renamed');
+    $version->update(['status' => 'published', 'published_at' => now()]);
+    $course->update(['title' => $fixture->token.' Catalog renamed']);
+    expect($version->fresh()->title)->toBe($fixture->token.' Renamed');
 });

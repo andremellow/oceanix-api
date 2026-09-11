@@ -16,10 +16,12 @@ use App\Models\ModuleVersion;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\UserTrainingAssignment;
+use App\Services\CourseEditor\EditorRevision;
 use App\Services\Courses\CourseVersionComposition;
 use App\Services\Courses\CourseVersionValidator;
 use App\Services\Courses\PublicPreviewResolver;
 use App\Tenancy\TenantContext;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -33,6 +35,11 @@ function activeModuleVersion(array $moduleAttributes): ModuleVersion
     return $version;
 }
 
+function hybridCompositionRevision(CourseVersion $version): string
+{
+    return app(EditorRevision::class)->forCompanyCourse($version->course()->firstOrFail(), $version->fresh());
+}
+
 it('orders company and shared module snapshots in a company course draft', function (): void {
     $company = currentCompany();
     $own = activeModuleVersion(['company_id' => $company->id, 'is_shared' => false]);
@@ -41,7 +48,7 @@ it('orders company and shared module snapshots in a company course draft', funct
     $draft = CourseVersion::factory()->create(['course_id' => $course->id]);
     $actor = adminUser();
 
-    app(UpdateCourseModuleComposition::class)->handle($draft, [$shared->id, $own->id], $actor);
+    app(UpdateCourseModuleComposition::class)->handle($draft, [$shared->id, $own->id], $actor, hybridCompositionRevision($draft));
 
     expect($draft->moduleCompositions()->pluck('lesson_id')->all())->toBe([$shared->id, $own->id]);
 });
@@ -55,16 +62,16 @@ it('rejects cross-tenant module injection and published-course mutation', functi
     app(TenantContext::class)->set($course->company);
     $actor = adminUser();
 
-    expect(fn () => app(UpdateCourseModuleComposition::class)->handle($draft, [$foreign->id], $actor))
+    expect(fn () => app(UpdateCourseModuleComposition::class)->handle($draft, [$foreign->id], $actor, hybridCompositionRevision($draft)))
         ->toThrow(LogicException::class);
 
     $existing = activeModuleVersion(['company_id' => $course->company_id, 'is_shared' => false]);
-    app(UpdateCourseModuleComposition::class)->handle($draft, [$existing->id], $actor);
+    app(UpdateCourseModuleComposition::class)->handle($draft, [$existing->id], $actor, hybridCompositionRevision($draft));
     $pivotId = $draft->moduleCompositions()->sole()->id;
     $pivotBefore = (array) DB::table('course_version_lessons')->whereKey($pivotId)->first();
     $draft->update(['status' => CourseVersionStatus::Published]);
-    expect(fn () => app(UpdateCourseModuleComposition::class)->handle($draft->fresh(), [], $actor))
-        ->toThrow(LogicException::class)
+    expect(fn () => app(UpdateCourseModuleComposition::class)->handle($draft->fresh(), [], $actor, 'current-revision'))
+        ->toThrow(AuthorizationException::class)
         ->and((array) DB::table('course_version_lessons')->whereKey($pivotId)->first())->toBe($pivotBefore);
 });
 
@@ -112,7 +119,7 @@ it('rejects adding a reusable module to direct content without changing question
     $option = QuestionOption::factory()->correct()->create(['question_id' => $question]);
     $module = activeModuleVersion(['company_id' => $course->company_id, 'is_shared' => false]);
 
-    expect(fn () => app(UpdateCourseModuleComposition::class)->handle($version, [$module->id], adminUser()))
+    expect(fn () => app(UpdateCourseModuleComposition::class)->handle($version, [$module->id], adminUser(), hybridCompositionRevision($version)))
         ->toThrow(ValidationException::class)
         ->and($lesson->fresh())->not->toBeNull()
         ->and($question->fresh())->not->toBeNull()
@@ -135,10 +142,10 @@ it('rejects a direct lesson in module mode without changing the composition', fu
     $course = Course::factory()->draft()->create();
     $version = CourseVersion::factory()->create(['course_id' => $course]);
     $module = activeModuleVersion(['company_id' => $course->company_id, 'is_shared' => false]);
-    app(UpdateCourseModuleComposition::class)->handle($version, [$module->id], adminUser());
+    app(UpdateCourseModuleComposition::class)->handle($version, [$module->id], adminUser(), hybridCompositionRevision($version));
     $before = $version->moduleCompositions()->pluck('lesson_id')->all();
 
-    expect(fn () => app(AddDirectCourseLesson::class)->handle($version, adminUser()))
+    expect(fn () => app(AddDirectCourseLesson::class)->handle($version, adminUser(), hybridCompositionRevision($version)))
         ->toThrow(ValidationException::class)
         ->and($version->lessons()->count())->toBe(0)
         ->and($version->moduleCompositions()->pluck('lesson_id')->all())->toBe($before);
@@ -159,12 +166,12 @@ it('removes reusable modules from a mixed draft without colliding with preserved
     $optionBefore = (array) DB::table('question_options')->whereKey($option->id)->first();
     $actor = adminUser();
 
-    app(UpdateCourseModuleComposition::class)->handle($version, [$secondModule->id], $actor);
+    app(UpdateCourseModuleComposition::class)->handle($version, [$secondModule->id], $actor, hybridCompositionRevision($version));
 
     expect($version->moduleCompositions()->orderBy('position')->pluck('lesson_id')->all())->toBe([$direct->id, $secondModule->id])
         ->and($version->moduleCompositions()->where('lesson_id', $secondModule->id)->value('position'))->toBe(2);
 
-    app(UpdateCourseModuleComposition::class)->handle($version, [], $actor);
+    app(UpdateCourseModuleComposition::class)->handle($version, [], $actor, hybridCompositionRevision($version));
 
     expect(app(CourseVersionComposition::class)->inspect($version)['mode'])->toBe(CourseVersionComposition::DirectLessons)
         ->and($version->moduleCompositions()->pluck('lesson_id')->all())->toBe([$direct->id])
@@ -201,7 +208,7 @@ it('preserves module assessment content through preview and published employee t
     $question = Question::factory()->create(['lesson_id' => $module, 'prompt' => 'Module assessment prompt']);
     QuestionOption::factory()->correct()->create(['question_id' => $question, 'position' => 1, 'text' => 'Correct module answer']);
     QuestionOption::factory()->create(['question_id' => $question, 'position' => 2, 'text' => 'Other module answer']);
-    app(UpdateCourseModuleComposition::class)->handle($version, [$module->id], adminUser());
+    app(UpdateCourseModuleComposition::class)->handle($version, [$module->id], adminUser(), hybridCompositionRevision($version));
 
     $previewLesson = app(PublicPreviewResolver::class)->items($version)->sole()['lesson'];
     expect($previewLesson->questions->sole()->prompt)->toBe('Module assessment prompt')

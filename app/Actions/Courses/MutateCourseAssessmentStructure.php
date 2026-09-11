@@ -2,28 +2,42 @@
 
 namespace App\Actions\Courses;
 
+use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\User;
+use App\Services\CourseEditor\EditorRevision;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
 final class MutateCourseAssessmentStructure
 {
-    public function handle(CourseVersion $version, User $actor, string $operation, int $parentId, ?int $recordId = null): ?int
+    public function __construct(private readonly EditorRevision $revisions) {}
+
+    public function handle(CourseVersion $version, User $actor, string $operation, int $parentId, ?int $recordId, string $expectedRevision): ?int
     {
-        return DB::transaction(function () use ($version, $actor, $operation, $parentId, $recordId): ?int {
-            $version = CourseVersion::query()->lockForUpdate()->findOrFail($version->id);
+        $this->revisions->assertExpected($expectedRevision);
+
+        return DB::transaction(function () use ($version, $actor, $operation, $parentId, $recordId, $expectedRevision): ?int {
+            $course = Course::query()->lockForUpdate()->findOrFail($version->course_id);
+            $version = CourseVersion::query()->lockForUpdate()->where('course_id', $course->id)->findOrFail($version->id);
             Gate::forUser($actor)->authorize('updateVersion', $version);
+            if (! $version->isEditable()) {
+                throw new AuthorizationException;
+            }
+            $version->moduleCompositions()->orderBy('position')->orderBy('id')->lockForUpdate()->get();
+            if (! hash_equals($this->revisions->forCompanyCourse($course, $version), $expectedRevision)) {
+                throw ValidationException::withMessages(['revision' => __('This draft changed in another session. Reload it before changing the structure.')]);
+            }
 
             return match ($operation) {
                 'add_question' => $this->addQuestion($version, $parentId),
                 'remove_question' => $this->removeQuestion($version, $parentId, $recordId),
                 'add_option' => $this->addOption($version, $parentId),
                 'remove_option' => $this->removeOption($version, $parentId, $recordId),
-                'select_single_correct' => $this->selectSingleCorrect($version, $parentId, $recordId),
                 default => throw ValidationException::withMessages(['assessment' => __('ui.assessment_operation_unavailable')]),
             };
         });
@@ -61,16 +75,6 @@ final class MutateCourseAssessmentStructure
         $question = $this->question($version, $questionId);
         $question->options()->lockForUpdate()->findOrFail($optionId)->delete();
         $question->options()->orderBy('position')->get()->each(fn (QuestionOption $o, int $i) => $o->update(['position' => $i + 1]));
-
-        return null;
-    }
-
-    private function selectSingleCorrect(CourseVersion $version, int $questionId, ?int $optionId): null
-    {
-        $question = $this->question($version, $questionId);
-        $option = $question->options()->lockForUpdate()->findOrFail($optionId);
-        $question->options()->update(['is_correct' => false]);
-        $option->update(['is_correct' => true]);
 
         return null;
     }

@@ -19,6 +19,7 @@ use App\Models\ModuleVersion;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Video;
+use App\Services\CourseEditor\EditorRevision;
 use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -184,8 +185,8 @@ it('opens and saves a clean course draft without normalizing any source content'
     $this->withSession(['platform_account_id' => $actor->id]);
     Livewire::test('platform.shared-courses.editor', ['course' => $course])
         ->assertSet('editorDirty', false)
-        ->assertSet('modules.0.content_markdown', fn ($value) => str_contains($value, 'Emergency procedure') && str_contains($value, 'Safety diagram') && str_contains($value, 'data-oceanix-video'))
-        ->assertSet('modules.0.questions.4.prompt', " Question 22? \n")
+        ->assertSet('records.0.content_markdown', fn ($value) => str_contains($value, 'Emergency procedure') && str_contains($value, 'Safety diagram') && str_contains($value, 'data-oceanix-video'))
+        ->assertSet('records.0.questions.4.prompt', " Question 22? \n")
         ->call('saveDraft', false)->assertHasNoErrors()->assertSet('editorDirty', false);
 
     expect(exactCopyContent($copy))->toBe($moduleBefore)
@@ -342,7 +343,7 @@ it('preserves immutable composition through requested replacement conflict and l
     $provider->shouldReceive('createUpload')->once()->andReturn(new VideoUpload('cloudflare_stream', 'replacement-asset', 'https://upload.example/replacement'));
     $provider->shouldReceive('getAssetStatus')->once()->with('replacement-asset')->andReturn(new VideoAssetStatus(VideoStatus::Ready, 'replacement-playback', 300));
     app()->instance(VideoProvider::class, $provider);
-    $upload = app(RequestVideoUpload::class)->handle($existing, platformActor: $actor);
+    $upload = app(RequestVideoUpload::class)->forPlatformEditor($existing, $actor, app(EditorRevision::class)->forSharedModule($existing));
     $candidate = Video::findOrFail($upload->videoId);
     $candidate->update(['status' => $status]);
     if ($expired) {
@@ -366,7 +367,7 @@ it('preserves immutable composition through requested replacement conflict and l
         ->and(exactCopyContent($existing))->toBe($existingBefore)
         ->and($existing->videos()->orderBy('id')->get()->toArray())->toBe($videosBefore);
 
-    app(SyncVideoAsset::class)->handle($candidate);
+    app(SyncVideoAsset::class)->reconcileScheduled($candidate);
 
     expect($existing->fresh()->video->id)->toBe($candidate->id)
         ->and($draft->moduleCompositions()->sole()->lesson_id)->toBe($module->id)
@@ -391,7 +392,7 @@ it('reuses identical drafts with obsolete replacement history that cannot promot
     app(CreateDraftFromVersion::class)->handle($source, $actor);
 
     $draft = exactCopyPrepare($course, $actor);
-    app(SyncVideoAsset::class)->handle($obsolete);
+    app(SyncVideoAsset::class)->reconcileScheduled($obsolete);
 
     expect($draft->moduleCompositions()->sole()->lesson_id)->toBe($existing->id)
         ->and($existing->fresh()->video->id)->not->toBe($obsolete->id)

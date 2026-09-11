@@ -14,6 +14,7 @@ use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\SharedContentPropagation;
 use App\Models\Video;
+use App\Services\CourseEditor\EditorRevision;
 use Illuminate\Support\Facades\Queue;
 
 function concurrencyPropagationFixture(): array
@@ -29,7 +30,7 @@ function concurrencyPropagationFixture(): array
     $course = Course::factory()->draft()->create();
     $courseVersion = CourseVersion::factory()->create(['course_id' => $course->id]);
     $user = adminUser();
-    app(UpdateCourseModuleComposition::class)->handle($courseVersion, [$first->id], $user);
+    app(UpdateCourseModuleComposition::class)->handle($courseVersion, [$first->id], $user, app(EditorRevision::class)->forCompanyCourse($course, $courseVersion));
     app(PublishCourseVersion::class)->handle($courseVersion, $user);
 
     return [$actor, app(CreateModuleDraft::class)->handle($first, $actor), $course];

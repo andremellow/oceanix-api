@@ -5,21 +5,29 @@ namespace App\Services\Video;
 use App\Contracts\VideoProvider;
 use App\Enums\VideoStatus;
 use App\Models\Video;
-use App\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 
 class VideoLibrary
 {
     public function __construct(
         private readonly VideoProvider $provider,
-        private readonly TenantContext $tenant,
     ) {}
 
     /** @return list<array<string, mixed>> */
-    public function items(string $search = '', bool $allOwners = false): array
+    public function forCompany(int $companyId, string $search = ''): array
     {
-        $company = $this->tenant->get();
-        $ownerKey = $allOwners ? '*' : ($company === null ? 'platform' : 'company:'.$company->id);
+        return $this->itemsForOwner('company:'.$companyId, $search);
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function forPlatform(string $search = ''): array
+    {
+        return $this->itemsForOwner('*', $search);
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function itemsForOwner(string $ownerKey, string $search): array
+    {
 
         return collect($this->provider->listAssets(search: $search, ownerKey: $ownerKey))
             ->map(function ($item): array {

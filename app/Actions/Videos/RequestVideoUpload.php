@@ -2,14 +2,16 @@
 
 namespace App\Actions\Videos;
 
+use App\Actions\Videos\Concerns\LocksEditorMediaTarget;
 use App\Contracts\VideoProvider;
 use App\Data\Video\VideoUpload;
-use App\Enums\ModuleVersionStatus;
 use App\Enums\VideoStatus;
 use App\Models\Account;
 use App\Models\Lesson;
+use App\Models\User;
 use App\Models\Video;
 use App\Services\Audit\AuditLogger;
+use App\Services\CourseEditor\EditorRevision;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 use Throwable;
@@ -23,28 +25,42 @@ use Throwable;
  */
 class RequestVideoUpload
 {
+    use LocksEditorMediaTarget;
+
     public function __construct(
         private readonly VideoProvider $videoProvider,
         private readonly AuditLogger $audit,
+        private readonly EditorRevision $revisions,
     ) {}
 
-    public function handle(Lesson $lesson, int $maxDurationSeconds = 7200, ?Account $platformActor = null): VideoUpload
+    public function forCompanyEditor(Lesson $lesson, User $actor, string $expectedRevision, int $maxDurationSeconds = 7200): VideoUpload
     {
-        DB::transaction(fn (): Lesson => $this->assertEligible($lesson->id, $platformActor), 3);
+        return $this->request($lesson, $maxDurationSeconds, null, $actor, $expectedRevision);
+    }
+
+    public function forPlatformEditor(Lesson $lesson, Account $actor, string $expectedRevision, int $maxDurationSeconds = 7200): VideoUpload
+    {
+        return $this->request($lesson, $maxDurationSeconds, $actor, null, $expectedRevision);
+    }
+
+    private function request(Lesson $lesson, int $maxDurationSeconds, ?Account $platformActor, ?User $actor, string $expectedRevision): VideoUpload
+    {
+        $this->assertExpectedEditorMediaRevision($expectedRevision);
+        $eligible = DB::transaction(
+            fn (): Lesson => $this->lockEditorMediaTarget($lesson, $actor, $platformActor, $expectedRevision, $this->revisions)['lesson'],
+            3,
+        );
 
         $upload = $this->videoProvider->createUpload(
-            $lesson->title !== '' ? $lesson->title : __('Untitled lesson'),
+            $eligible->title !== '' ? $eligible->title : __('Untitled lesson'),
             $maxDurationSeconds,
-            $lesson->company_id === null ? 'platform' : 'company:'.$lesson->company_id,
+            $eligible->company_id === null ? 'platform' : 'company:'.$eligible->company_id,
         );
 
         try {
-            $video = DB::transaction(function () use ($lesson, $upload, $platformActor): Video {
-                $lesson = $this->assertEligible($lesson->id, $platformActor);
-
-                if ($platformActor === null) {
-                    $lesson->video?->delete();
-                }
+            $video = DB::transaction(function () use ($lesson, $upload, $platformActor, $actor, $expectedRevision): Video {
+                $target = $this->lockEditorMediaTarget($lesson, $actor, $platformActor, $expectedRevision, $this->revisions);
+                $lesson = $target['lesson'];
 
                 $generation = ((int) Video::query()->where('lesson_id', $lesson->id)->max('replacement_generation')) + 1;
                 $hasCurrent = Video::query()->where('lesson_id', $lesson->id)->where('is_current', true)->exists();
@@ -62,7 +78,7 @@ class RequestVideoUpload
                 $this->audit->log('lesson.video_upload_requested', $lesson, after: [
                     'provider' => $upload->provider,
                     'asset_id' => $upload->assetId,
-                ], platformActor: $platformActor);
+                ], platformActor: $target['platform_actor']);
 
                 return $video;
             }, 3);
@@ -77,20 +93,5 @@ class RequestVideoUpload
         }
 
         return new VideoUpload($upload->provider, $upload->assetId, $upload->uploadUrl, $upload->uploadId, $video->id);
-    }
-
-    private function assertEligible(int $lessonId, ?Account $platformActor): Lesson
-    {
-        $lesson = Lesson::query()->lockForUpdate()->findOrFail($lessonId);
-        if ($platformActor === null) {
-            return $lesson;
-        }
-
-        $authorized = Account::query()->whereKey($platformActor->id)->where('is_platform_admin', true)->where('status', 'active')->exists();
-        if (! $authorized || $lesson->company_id !== null || ! $lesson->is_shared || $lesson->status !== ModuleVersionStatus::Draft->value || $lesson->lineage_archived_at !== null) {
-            throw new LogicException('Videos can only be changed on platform-owned shared module drafts.');
-        }
-
-        return $lesson;
     }
 }

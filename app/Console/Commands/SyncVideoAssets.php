@@ -38,7 +38,7 @@ class SyncVideoAssets extends Command
             ->get();
 
         foreach ($pending as $video) {
-            $action->handle($video);
+            $action->reconcileScheduled($video);
         }
 
         $cutoff = now()->subMinutes((int) config('oceanix.video_upload_expiry_minutes', 120));

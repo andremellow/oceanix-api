@@ -17,6 +17,7 @@ use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\SharedContentPropagation;
 use App\Models\Video;
+use App\Services\CourseEditor\EditorRevision;
 use Illuminate\Support\Facades\Queue;
 
 function propagatedCourseFixture(bool $withDraft = false): array
@@ -33,7 +34,7 @@ function propagatedCourseFixture(bool $withDraft = false): array
     $course = Course::factory()->draft()->create();
     $courseVersion = CourseVersion::factory()->create(['course_id' => $course->id]);
     $user = adminUser();
-    app(UpdateCourseModuleComposition::class)->handle($courseVersion, [$firstModuleVersion->id], $user);
+    app(UpdateCourseModuleComposition::class)->handle($courseVersion, [$firstModuleVersion->id], $user, app(EditorRevision::class)->forCompanyCourse($course, $courseVersion));
     $publishedCourse = app(PublishCourseVersion::class)->handle($courseVersion, $user);
 
     $existingDraft = $withDraft

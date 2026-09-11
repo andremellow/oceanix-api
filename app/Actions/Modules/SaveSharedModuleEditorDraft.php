@@ -20,13 +20,29 @@ class SaveSharedModuleEditorDraft
             if ($authorized === null) {
                 throw new LogicException('Only an active platform administrator can edit shared content.');
             }
-            $locked = $this->lineageLock->versions([$version->id])->firstWhere('id', $version->id)
+            $lineage = $this->lineageLock->versions([$version->id]);
+            $locked = $lineage->firstWhere('id', $version->id)
                 ?? throw new LogicException('The module is unavailable.');
             if ($locked->lineage_archived_at !== null) {
                 throw new LogicException('Archived shared module lineages cannot be edited.');
             }
             $prepared = $this->writer->prepare($locked, $payload, $expectedRevision);
+            $rootId = $locked->source_lesson_id ?: $locked->id;
+            $root = $lineage->firstWhere('id', $rootId)
+                ?? throw new LogicException('The module root is unavailable.');
+            if (! $root->is_shared || $root->company_id !== null || $root->lineage_uuid !== $locked->lineage_uuid) {
+                throw new LogicException('Only platform-owned shared module drafts can be saved.');
+            }
             $this->writer->write($prepared);
+            if ($root->id !== $locked->id) {
+                $root->fill([
+                    'title' => trim($prepared['data']['title']),
+                    'description' => $prepared['data']['description'],
+                ]);
+                if ($root->isDirty()) {
+                    $root->save();
+                }
+            }
 
             return $this->writer->revision($locked->fresh());
         });

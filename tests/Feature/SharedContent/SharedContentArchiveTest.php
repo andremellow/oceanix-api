@@ -19,6 +19,7 @@ use App\Models\TrainingRequirement;
 use App\Models\TrainingRequirementTarget;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
+use App\Services\CourseEditor\EditorRevision;
 use App\Services\Modules\EligibleModuleCatalog;
 use App\Services\Requirements\AssignmentMaterializationService;
 use App\Services\SharedContent\SharedContentCatalog;
@@ -98,5 +99,5 @@ it('excludes an archived shared module from catalogs and new compositions', func
         ->and($version->fresh()->lineage_archived_at)->not->toBeNull()
         ->and(app(SharedContentCatalog::class)->availableModules()->modelKeys())->not->toContain($version->id)
         ->and(app(EligibleModuleCatalog::class)->forCourseEditor(currentCompany(), $tenantActor)['shared']->modelKeys())->not->toContain($version->id)
-        ->and(fn () => app(UpdateCourseModuleComposition::class)->handle($draft, [$version->id], $tenantActor))->toThrow(LogicException::class);
+        ->and(fn () => app(UpdateCourseModuleComposition::class)->handle($draft, [$version->id], $tenantActor, app(EditorRevision::class)->forCompanyCourse($course, $draft)))->toThrow(LogicException::class);
 });

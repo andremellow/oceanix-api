@@ -11,6 +11,7 @@ use App\Models\CompanyCourse;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Services\SharedContent\SharedContentCatalog;
+use App\Services\Courses\CoursePreviewPanel;
 use App\Tenancy\TenantContext;
 use Livewire\Component;
 
@@ -99,7 +100,7 @@ new class extends Component
         $this->redirect(route('courses.editor', ['course' => $this->course]), navigate: true);
     }
 
-    public function with(SharedContentCatalog $catalog): array
+    public function with(SharedContentCatalog $catalog, CoursePreviewPanel $previews): array
     {
         $version = $this->selectedVersionId === null ? null : CourseVersion::query()
             ->with(['lessons.video', 'lessons.questions.options', 'moduleCompositions.moduleVersion.video', 'moduleCompositions.moduleVersion.questions.options'])
@@ -113,6 +114,9 @@ new class extends Component
             'version' => $version,
             'displayLessons' => $displayLessons,
             'association' => $this->course->is_shared ? $catalog->associationFor($this->company, $this->course) : null,
+            'previewPanel' => $version?->isEditable() && ! $this->course->is_shared
+                ? $previews->forCompany($this->course, $version, auth()->user() ?? abort(403))
+                : null,
         ];
     }
 };
@@ -122,7 +126,9 @@ new class extends Component
     <x-page-hero
         :kicker="$course->code"
         :title="$course->title"
-        :description="$course->description">
+        :description="$course->description"
+        description-class="max-w-none"
+        course-wide>
         <span class="status-pill {{ $course->status->pillModifier() }}">{{ $course->status->label() }}</span>
         @if ($course->is_shared)
             <span class="status-pill status-pill--accent">{{ __('Shared') }}</span>
@@ -151,13 +157,13 @@ new class extends Component
         @endunless
     </x-page-hero>
     @if($version && $version->isEditable())
-        <x-courses.preview-link-panel :$course :$version />
+        <x-courses.preview-link-panel :panel="$previewPanel" />
     @endif
 
     <x-status-message />
 
-    <div class="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <section class="detail-card">
+    <div class="grid min-w-0 max-w-full gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <section class="detail-card min-w-0 max-w-full">
             <span class="detail-card-icon"><flux:icon.rectangle-stack class="size-5" /></span>
             <h2 class="detail-card-title">{{ __('Versions') }}</h2>
             <p class="mt-1 text-sm text-[#6f797f]">{{ __('ui.versions_help') }}</p>
@@ -178,18 +184,18 @@ new class extends Component
             </div>
         </section>
 
-        <div class="space-y-5">
+        <div class="min-w-0 max-w-full space-y-5">
             @if ($version === null)
                 <x-empty-state
                     icon="document-plus"
                     :title="__('ui.no_versions')"
                     :description="__('ui.no_versions_help')" />
             @else
-                <section class="detail-card">
+                <section class="detail-card min-w-0 max-w-full">
                     <div class="flex flex-wrap items-start justify-between gap-4">
-                        <div>
+                        <div class="min-w-0">
                             <span class="detail-card-icon"><flux:icon.film class="size-5" /></span>
-                            <h2 class="detail-card-title">{{ $version->title }}</h2>
+                            <h2 class="detail-card-title break-words">{{ $version->title }}</h2>
                             <p class="mt-1 text-sm text-[#6f797f]">
                                 {{ trans_choice('ui.lessons_count', $displayLessons->count(), ['count' => $displayLessons->count()]) }}
                                 · {{ __(':count min', ['count' => $version->estimatedMinutes()]) }}
@@ -202,11 +208,11 @@ new class extends Component
 
                     <div class="mt-6 space-y-4">
                         @forelse ($displayLessons as $lesson)
-                            <div class="rounded-[18px] border border-[#e4e9ec] bg-[#f8fafb] p-4 sm:p-5">
+                            <div class="min-w-0 max-w-full rounded-[18px] border border-[#e4e9ec] bg-[#f8fafb] p-4 sm:p-5">
                                 <div class="flex flex-wrap items-center gap-3">
                                     <span class="grid size-9 place-items-center rounded-xl bg-white text-sm font-bold text-[#1c6b84] shadow-sm ring-1 ring-[#dfe7eb]">{{ $lesson->position }}</span>
                                     <div class="min-w-0 flex-1">
-                                        <p class="font-semibold text-[#262d33]">{{ $lesson->title }}</p>
+                                        <p class="break-words font-semibold text-[#262d33]">{{ $lesson->title }}</p>
                                         <p class="mt-0.5 text-xs text-[#8a9298]">
                                             {{ __('ui.passing_score', ['score' => $lesson->passing_score]) }}
                                         </p>

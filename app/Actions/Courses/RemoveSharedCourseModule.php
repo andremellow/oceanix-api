@@ -9,13 +9,14 @@ use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
 use App\Services\Audit\AuditLogger;
+use App\Services\CourseEditor\EditorRevision;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use LogicException;
 
 class RemoveSharedCourseModule
 {
-    public function __construct(private readonly AuditLogger $audit) {}
+    public function __construct(private readonly AuditLogger $audit, private readonly EditorRevision $revisions) {}
 
     public function handle(CourseVersion $version, int $compositionId, Account $actor, string $reason, string $expectedRevision): CourseVersion
     {
@@ -37,7 +38,7 @@ class RemoveSharedCourseModule
             }
 
             $compositions = CourseVersionModule::query()->where('course_version_id', $locked->id)->orderBy('position')->orderBy('id')->lockForUpdate()->get();
-            if (! hash_equals($this->revision($locked, $compositions), $expectedRevision)) {
+            if (! hash_equals($this->revisions->forSharedCourse($course, $locked, $compositions), $expectedRevision)) {
                 throw ValidationException::withMessages(['removal' => __('This course changed elsewhere. Reload the page before trying again.')]);
             }
             $composition = $compositions->firstWhere('id', $compositionId);
@@ -59,7 +60,8 @@ class RemoveSharedCourseModule
     public function revision(CourseVersion $version, $compositions = null): string
     {
         $compositions ??= $version->moduleCompositions()->get();
+        $course = $version->course()->withoutGlobalScopes()->firstOrFail();
 
-        return hash('sha256', json_encode($compositions->map(fn ($row): array => [$row->id, $row->lesson_id, $row->position, (bool) $row->is_required])->all(), JSON_THROW_ON_ERROR));
+        return $this->revisions->forSharedCourse($course, $version, $compositions);
     }
 }

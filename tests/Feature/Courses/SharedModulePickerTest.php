@@ -39,10 +39,10 @@ it('renders ownership labels, search and accessible module controls', function (
     $actor->forceFill(['company_id' => $course->company_id])->save();
 
     Livewire::actingAs($actor)->test('courses.editor', ['course' => $course])
-        ->assertSee(__('Company Modules'))
-        ->assertSee(__('Shared Modules'))
+        ->assertSee(__('Company modules'))
+        ->assertSee(__('Shared modules'))
         ->assertSee(__('Managed by platform'))
-        ->assertSee(__('Managed by company'))
+        ->assertSee(__('Owned by this company'))
         ->assertSee('Shared Safety')
         ->assertSeeHtml('aria-live="polite"');
 });

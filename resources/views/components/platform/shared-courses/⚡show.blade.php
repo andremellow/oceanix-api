@@ -11,6 +11,7 @@ use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Services\Platform\PlatformAccess;
+use App\Services\Courses\CoursePreviewPanel;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -119,25 +120,29 @@ new #[Layout('layouts::platform')] class extends Component
         session()->flash('status', __('Shared course archived.'));
     }
 
-    public function with(PlatformAccess $access): array
+    public function with(PlatformAccess $access, CoursePreviewPanel $previews): array
     {
-        $access->authorize();
+        $actor = $access->authorize();
+        $version = $this->selectedVersionId === null ? null : CourseVersion::query()
+            ->with(['moduleCompositions.moduleVersion.video', 'moduleCompositions.moduleVersion.questions.options'])
+            ->where('course_id', $this->course->id)->find($this->selectedVersionId);
 
         return [
             'versions' => $this->course->versions()->with('platformPublisher')->get(),
-            'version' => $this->selectedVersionId === null ? null : CourseVersion::query()
-                ->with(['moduleCompositions.moduleVersion.video', 'moduleCompositions.moduleVersion.questions.options'])
-                ->where('course_id', $this->course->id)->find($this->selectedVersionId),
+            'version' => $version,
             'associationCount' => $this->course->companyAssociations()->whereNull('removed_at')->count(),
             'canDiscardDraft' => $access->account() !== null,
             'manualDraft' => $this->course->manualDraftVersion(),
+            'previewPanel' => $version?->isEditable() && $this->course->is_shared && $this->course->company_id === null
+                ? $previews->forPlatform($this->course, $version, $actor)
+                : null,
         ];
     }
 };
 ?>
 
 <div class="admin-page space-y-7">
-    <x-page-hero :kicker="$course->code" :title="$course->title" :description="$course->description ?: __('No description provided')" description-class="max-w-none">
+    <x-page-hero :kicker="$course->code" :title="$course->title" :description="$course->description ?: __('No description provided')" description-class="max-w-none" course-wide>
         <span class="status-pill {{ $course->is_shared ? 'status-pill--accent' : 'status-pill--neutral' }}">{{ $course->is_shared ? __('Shared') : __('Company-owned') }}</span>
         <span class="status-pill {{ $course->status->pillModifier() }}">{{ $course->status->label() }}</span>
         <flux:button :href="$company ? route('platform.companies.show', ['company' => $company]) : route('platform.shared-courses.index')" variant="ghost" size="sm">{{ $company ? __('Back to company') : __('Back to shared courses') }}</flux:button>
@@ -156,7 +161,7 @@ new #[Layout('layouts::platform')] class extends Component
         @endif
     </x-page-hero>
     @if($version && $version->isEditable())
-        <x-courses.preview-link-panel :$course :$version :platform="true" />
+        <x-courses.preview-link-panel :panel="$previewPanel" />
     @endif
 
     @error('draft')
@@ -174,8 +179,8 @@ new #[Layout('layouts::platform')] class extends Component
         <section class="metric-card metric-card--violet"><p class="metric-label">{{ __('Versions') }}</p><p class="metric-value">{{ $versions->count() }}</p></section>
     </div>
 
-    <div class="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <section class="detail-card">
+    <div class="grid min-w-0 max-w-full gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <section class="detail-card min-w-0 max-w-full">
             <h2 class="detail-card-title">{{ __('Versions') }}</h2>
             <div class="mt-4 space-y-2">
                 @foreach ($versions as $item)
@@ -187,7 +192,7 @@ new #[Layout('layouts::platform')] class extends Component
             </div>
         </section>
 
-        <section class="detail-card">
+        <section class="detail-card min-w-0 max-w-full">
             @if ($version)
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <h2 class="detail-card-title">{{ $version->title }}</h2>
@@ -198,8 +203,8 @@ new #[Layout('layouts::platform')] class extends Component
                 <p class="mt-1 text-sm text-[#6f797f]">{{ $version->description ?: __('No description provided') }}</p>
                 <div class="mt-5 space-y-3">
                     @forelse ($version->moduleCompositions as $composition)
-                        <div class="rounded-[18px] border border-[#e4e9ec] bg-[#f8fafb] p-4">
-                            <div class="flex items-center justify-between gap-3"><div><p class="font-semibold">{{ $composition->moduleVersion->title }}</p><p class="text-xs text-[#8a9298]">{{ __('Version :number', ['number' => $composition->moduleVersion->version_number]) }}</p></div>@unless ($composition->is_required)<span class="status-pill status-pill--neutral">{{ __('Optional') }}</span>@endunless</div>
+                        <div class="min-w-0 max-w-full rounded-[18px] border border-[#e4e9ec] bg-[#f8fafb] p-4">
+                            <div class="flex min-w-0 flex-wrap items-center justify-between gap-3"><div class="min-w-0"><p class="break-words font-semibold">{{ $composition->moduleVersion->title }}</p><p class="text-xs text-[#8a9298]">{{ __('Version :number', ['number' => $composition->moduleVersion->version_number]) }}</p></div>@unless ($composition->is_required)<span class="status-pill status-pill--neutral">{{ __('Optional') }}</span>@endunless</div>
                         </div>
                     @empty
                         <x-empty-state icon="rectangle-stack" :title="__('No modules in this version')" :description="__('Open the draft editor to compose this course.')" />

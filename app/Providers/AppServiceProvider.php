@@ -8,7 +8,9 @@ use App\Http\Middleware\AuthenticatePlatformTaskUser;
 use App\Http\Middleware\EnsureUserIsPlatformAdmin;
 use App\Models\Certificate;
 use App\Models\Course;
+use App\Models\CourseVersion;
 use App\Models\Module;
+use App\Models\ModuleVersion;
 use App\Models\PlatformTaskUser;
 use App\Models\Role;
 use App\Models\TrainingRequirement;
@@ -95,7 +97,9 @@ class AppServiceProvider extends ServiceProvider
             && $user->account->status === 'active');
 
         Gate::policy(Course::class, CoursePolicy::class);
+        Gate::policy(CourseVersion::class, CoursePolicy::class);
         Gate::policy(Module::class, ModulePolicy::class);
+        Gate::policy(ModuleVersion::class, ModulePolicy::class);
         Gate::policy(TrainingRequirement::class, TrainingRequirementPolicy::class);
         Gate::policy(UserTrainingAssignment::class, UserTrainingAssignmentPolicy::class);
         Gate::policy(Certificate::class, CertificatePolicy::class);

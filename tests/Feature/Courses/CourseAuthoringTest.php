@@ -298,16 +298,23 @@ it('keeps the answer key out of a serialized option', function (): void {
 });
 
 it('protects the editor with the update permission', function (): void {
-    $course = Course::factory()->create();
-    CourseVersion::factory()->create(['course_id' => $course->id]);
+    $course = Course::factory()->create(['company_id' => currentCompany()->id]);
+    $version = CourseVersion::factory()->create(['course_id' => $course->id]);
+    $viewer = userWithPermissions([Permission::CoursesView]);
+    $editor = userWithPermissions([Permission::CoursesUpdate]);
 
-    $this->actingAs(userWithPermissions([Permission::CoursesView]))
-        ->get(route('courses.editor', ['course' => $course]))
-        ->assertForbidden();
+    expect($editor->company_id)->toBe($course->company_id)
+        ->and($editor->hasPermission(Permission::CoursesUpdate))->toBeTrue()
+        ->and(Gate::forUser($editor)->allows('update', $course))->toBeTrue()
+        ->and(Gate::forUser($editor)->allows('updateVersion', $version))->toBeTrue();
 
-    $this->actingAs(userWithPermissions([Permission::CoursesUpdate]))
-        ->get(route('courses.editor', ['course' => $course]))
+    $this->actingAs($editor)
+        ->get(route('courses.editor', ['company' => $course->company, 'course' => $course]))
         ->assertOk();
+
+    $this->actingAs($viewer)
+        ->get(route('courses.editor', ['company' => $course->company, 'course' => $course]))
+        ->assertForbidden();
 });
 
 it('returns 404 when a course has no draft to edit', function (): void {

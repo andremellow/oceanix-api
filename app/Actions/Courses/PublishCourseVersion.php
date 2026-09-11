@@ -15,6 +15,7 @@ use App\Services\Audit\AuditLogger;
 use App\Services\Courses\CourseVersionValidator;
 use App\Services\Modules\ModuleLineageLock;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Publishing freezes a version forever and makes it the edition new assignments will
@@ -33,18 +34,25 @@ class PublishCourseVersion
 
     public function handle(CourseVersion $version, int|User|Account $publishedBy, bool $replaceOpenAssignments = false, string $expectedPublicationKind = 'manual'): CourseVersion
     {
-        $account = $publishedBy instanceof Account ? $publishedBy : null;
+        $accountId = $publishedBy instanceof Account ? $publishedBy->id : null;
         $userId = $publishedBy instanceof User ? $publishedBy->id : (is_int($publishedBy) ? $publishedBy : null);
 
-        return DB::transaction(function () use ($version, $userId, $account, $replaceOpenAssignments, $expectedPublicationKind): CourseVersion {
+        return DB::transaction(function () use ($version, $userId, $accountId, $replaceOpenAssignments, $expectedPublicationKind): CourseVersion {
             $courseId = CourseVersion::query()->whereKey($version->id)->firstOrFail(['course_id'])->course_id;
             $course = Course::query()->lockForUpdate()->findOrFail($courseId);
             $version = CourseVersion::query()->lockForUpdate()->findOrFail($version->id);
             if ((int) $version->course_id !== (int) $course->id) {
                 throw new \LogicException('The version changed courses while it was being locked.');
             }
-            if ($course->is_shared && ($account === null || ! $account->is_platform_admin || $account->status !== 'active')) {
-                throw new \LogicException('An active platform administrator account is required to publish shared content.');
+            $account = $accountId === null ? null : Account::query()->whereKey($accountId)->where('is_platform_admin', true)->where('status', 'active')->first();
+            $user = $userId === null ? null : User::query()->find($userId);
+            if ($course->is_shared) {
+                if ($account === null) {
+                    throw new \LogicException('An active platform administrator account is required to publish shared content.');
+                }
+            } else {
+                abort_unless($user instanceof User, 403);
+                Gate::forUser($user)->authorize('publish', $course);
             }
             if ($course->status === CourseStatus::Archived) {
                 throw new \LogicException('Archived courses cannot publish new versions.');

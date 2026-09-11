@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 7 * * 1'
 
 jobs:
   tests:
@@ -28,11 +31,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Build assets
         run: |
-          npm install --ignore-scripts
+          npm ci --ignore-scripts
           npm run build
 
       - name: Prepare application
@@ -44,7 +47,112 @@ jobs:
         run: ./vendor/bin/pint --test
 
       - name: Run tests
-        run: php artisan test
+        run: php artisan test --exclude-group=browser
+
+  editor-browser:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, sockets, pdo, sqlite, pdo_sqlite, bcmath, intl
+          coverage: none
+
+      - name: Authenticate Flux Pro
+        run: |
+          composer config --global --auth http-basic.composer.fluxui.dev \
+            "${{ secrets.FLUX_USERNAME }}" "${{ secrets.FLUX_LICENSE_KEY }}"
+
+      - name: Install PHP dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install JavaScript dependencies and Chromium
+        run: |
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+
+      - name: Build assets before browser execution
+        run: npm run build
+
+      - name: Prepare application
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Run editor client-state tests
+        run: npm run test:editor:unit
+
+      - name: Run required editor browser matrix
+        run: composer test:browser
+
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-browser-failure-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            tests/Browser/Screenshots/
+            tests/Browser/Artifacts/
+            storage/logs/laravel.log
+
+  editor-outage-recovery:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, sockets, pdo, sqlite, pdo_sqlite, bcmath, intl
+          coverage: none
+
+      - name: Authenticate Flux Pro
+        run: |
+          composer config --global --auth http-basic.composer.fluxui.dev \
+            "${{ secrets.FLUX_USERNAME }}" "${{ secrets.FLUX_LICENSE_KEY }}"
+
+      - name: Install PHP dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install JavaScript dependencies and Chromium
+        run: |
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+
+      - name: Build assets before outage execution
+        run: npm run build
+
+      - name: Prepare application
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Run actual application outage and recovery
+        run: npm run test:editor:outage
+
+      - name: Upload outage evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-outage-recovery-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 7
+          path: tests/Browser/Artifacts/
 
   postgres-concurrency:
     runs-on: ubuntu-latest
@@ -83,11 +191,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Build assets
         run: |
-          npm install --ignore-scripts
+          npm ci --ignore-scripts
           npm run build
 
       - name: Prepare application
@@ -104,4 +212,4 @@ jobs:
           DB_USERNAME: postgres
           DB_PASSWORD: postgres
           RUN_POSTGRES_CONCURRENCY_TESTS: 1
-        run: php artisan test tests/Feature/Platform/SharedCourseDraftIntegrityTest.php
+        run: php artisan test tests/Feature/Platform/SharedCourseDraftIntegrityTest.php tests/Feature/CourseEditor/CompanyCourseEditorPostgresConcurrencyTest.php
