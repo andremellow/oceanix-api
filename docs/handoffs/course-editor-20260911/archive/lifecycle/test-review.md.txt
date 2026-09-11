@@ -1,0 +1,48 @@
+# Test effectiveness review
+
+Verdict: REQUEST_CHANGES
+
+Run: `course-editor-lifecycle-20260911`; round 1; phase review; independent; context fresh.
+Scope: `course-editor-lifecycle-20260911-scope-v1`.
+Checkpoint: `course-editor-lifecycle-final-f61d9a8348fe`.
+
+The approved execution contract, full task delta, complete editor component, complete PHP and JavaScript test files, repository guidelines and design system were inspected. Specification and architecture are explicitly not required by this contract. No implementation reports, prior reviews or historical specifications were consulted. Production code and tests were not edited.
+
+## Evidence and coverage
+
+Executed `php -d memory_limit=512M vendor/bin/pest tests/Feature/Courses/CourseEditorTest.php --compact`: 57 passed, 465 assertions. Executed `node --test tests/JavaScript/course-editor.test.mjs`: 11 passed.
+
+| Contract | Effective evidence | Limits |
+| --- | --- | --- |
+| AC-01 | JavaScript executes the production state object and acknowledgement handlers for unchanged saved values, genuinely changed values, checkbox pairs, remount baseline, validation recovery and stale acknowledgement. PHP exercises title validation/recovery, exact nested field acknowledgements and actual database reads after writes. Installed Livewire model directive is executed for the lesson-title blur binding with an old-binding negative control. | Capture/event ordering and rendered browser behavior require QA-01; PHP source-string checks alone do not establish those behaviors. |
+| AC-02 | Production interception/request callbacks execute in JavaScript for pending and network failure. PHP uses actual module records, archives a candidate, verifies refusal, unchanged populated composition/content, restores eligibility and verifies persisted retry. Separate tests preserve authored revisions, validation errors and network provenance. | Cancellation is assumed rather than exercised; see TA-02. JavaScript request registration is mocked, so actual outage/status rendering remains QA-02 evidence. |
+| AC-03 | PHP verifies three-record order, contiguous persisted positions, mirrored composition and reload. JavaScript verifies record-aware revision deduplication using supplied identities. | Neither test layer executes input morph/rebinding or post-reorder edits; see TA-01. The focus test checks an emitted event and attributes, not actual focus. |
+| INV-01 | Representative distinct answer records, exact field persistence, guarded foreign-record rejection and populated refusal snapshots provide useful coverage. | The changed positional input reuse branch remains unprotected under TA-01. |
+| INV-02 | Exact property/revision acknowledgement, invalid-field isolation, module retry preserving unrelated pending fields and both failure provenance directions are exercised. | Cancellation gap under TA-02. |
+| INV-03 | Existing permission denial/revocation, published title freezing and assignment preservation/replacement tests run with real records. The task delta does not change domain assessment gating, authorization or assignment logic. | No new adjacent authorization, assessment or PostgreSQL matrix is required for this UI lifecycle delta. |
+
+SQLite exercises the relevant real persistence boundary; the current diff does not depend on PostgreSQL behavior. External HTTP is faked in the relevant feature fixtures. QA-01/02/03 are not claimed executed by this audit.
+
+## Findings
+
+### TA-01 — No executable regression for expanded input identity after reorder
+
+- Severity: high; classification: in-contract; blocking: yes.
+- Basis: AC-03 and INV-01; frozen surface `Expanded lesson controls and focus after reorder`, QA-03.
+- sourceRole: `test-analyst`; failureStage: `test-implementation`; discovery round: 1; phase: review.
+- Evidence: component lines 1071, 1117 and 1142 add/revise keys controlling real Livewire/Alpine node replacement. `CourseEditorTest.php` around lines 540–594 checks ordered server IDs and a focus event; it does not populate expanded nested controls then edit them after reorder. JavaScript lines 88–103 supplies already-correct IDs to `markDirty`, without mounting controls, morphing nodes, executing the new keys, restoring focus or saving a moved record. An in-memory experiment removed every lesson-fields/question/option key from the source consumed by the JavaScript suite: all 11 tests still passed, exit 0. No files were changed in this experiment.
+- Required outcome: add an executable browser/DOM integration regression using the installed binding/morph runtime and three distinctly populated expanded lessons with nested questions/options. Reorder in both directions, assert actual displayed control values against stable IDs and contextual focus, edit the moved lesson and a nested answer, then verify fresh persistence/reload changes only the intended IDs. The test must fail when the positional reuse fix is removed. Reuse the frozen QA-03 fixtures and scenario; this requests no additional product scenario. Source-key assertions or another server-only reorder test cannot prove this fix.
+
+### TA-02 — Cancellation regression test never exercises cancellation
+
+- Severity: medium; classification: in-contract; blocking: yes.
+- Basis: AC-02, specifically cancelled confirmations must not create pending state; frozen surface `Module request dispatch/failure/retry`, QA-02's cancellation control.
+- sourceRole: `test-analyst`; failureStage: `test-implementation`; discovery round: 1; phase: review.
+- Evidence: JavaScript lines 125–130 labels the test “search and cancelled confirmation” but calls only `request('moduleSearch')`. No removal control, confirmation callback, rejection, or accepted-confirmation positive control executes. The test proves only that an unlisted action leaves clean state. PHP checks the lesson `wire:confirm` attribute but cannot execute it. Installed Livewire runtime lines 16153–16190 runs the confirmation before evaluating the action; the new action interceptor depends on that boundary, which the test manually assumes.
+- Required outcome: exercise the actual confirmation-to-action boundary for the existing confirmed removal control: decline and assert no mutation request and unchanged clean/pending/revision state; accept as a positive control and assert mutation dispatch enters pending. An isolated test executing the installed confirmation/action directive and production interceptor is sufficient if it preserves their real ordering; browser automation is also suitable. Do not add a new confirmation to an unconfirmed control merely to satisfy the test.
+
+## Non-blocking execution note
+
+The new JavaScript suite currently requires an explicit invocation: `composer verify` calls `npm run test:preview`, whose script selects only `course-preview.test.mjs`, and the inspected CI workflow does not select `course-editor.test.mjs`. Wiring editor tests into routine verification is a FOLLOW_UP, not an additional blocker or authorization to expand the frozen file boundary. The suite was explicitly executed successfully for this audit.
+
+Two blocking findings; no additional blocking requirements. Complete frozen scope inspected. REQUEST_CHANGES.

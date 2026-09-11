@@ -1,0 +1,9 @@
+# Visible project verification
+
+`PHPRC=/tmp/oceanix-course-editor-readiness.ZO6Qay/php.ini toscanini verify --run-id course-editor-lifecycle-20260911` completed with exit 0 at the remediation checkpoint.
+
+Execution contract preflight approved. Laravel ^13.17; Laravel Boost not installed and optional. Canonical composer verification, preview JavaScript tests, Pint and production build passed. Optional fontaine and bundle-size advisories remain non-blocking.
+
+The first preflight invocation rejected the ledger's `test-implementation` label. The orchestrator normalized it to the schema's `tests` enum, preserving the same attribution; rerun passed. No preflight was bypassed.
+
+This command does not replace the independent behavioral completion gate or executable QA evidence.

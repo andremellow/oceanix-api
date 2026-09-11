@@ -1,0 +1,20 @@
+<?php
+require __DIR__.'/environment.php';
+require '/Users/andrepiresdemello/Code/oceanix-api/vendor/autoload.php';
+$app=require '/Users/andrepiresdemello/Code/oceanix-api/bootstrap/app.php';
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$company=App\Models\Company::where('slug','oceanix-demo')->firstOrFail();
+app(App\Tenancy\TenantContext::class)->set($company);
+$prefix=$argv[1] ?? 'LIFECYCLE';
+$course=app(App\Actions\Courses\CreateCourse::class)->handle($prefix.'-DIRECT',$prefix.' direct');
+$version=$course->versions()->firstOrFail();
+$ids=[];
+foreach (['Alpha','Bravo','Charlie'] as $index=>$label) {
+ $lesson=App\Models\Lesson::factory()->create(['course_version_id'=>$version->id,'position'=>$index+1,'title'=>$label.' lesson','description'=>$label.' description','passing_score'=>70+$index]);
+ $question=App\Models\Question::factory()->create(['lesson_id'=>$lesson->id,'prompt'=>$label.' question?']);
+ $options=[];
+ foreach ([1,2] as $position) {$option=App\Models\QuestionOption::factory()->create(['question_id'=>$question->id,'position'=>$position,'text'=>$label.' answer '.$position,'is_correct'=>$position===1]);$options[]=$option->id;}
+ $ids[]=['label'=>$label,'lesson'=>$lesson->id,'question'=>$question->id,'options'=>$options];
+}
+$moduleCourse=app(App\Actions\Courses\CreateCourse::class)->handle($prefix.'-MODULE',$prefix.' modules');
+echo json_encode(['direct_course'=>$course->id,'version'=>$version->id,'lessons'=>$ids,'module_course'=>$moduleCourse->id],JSON_PRETTY_PRINT).PHP_EOL;

@@ -1,0 +1,17 @@
+const {chromium}=require('/Users/andrepiresdemello/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const {execFileSync}=require('node:child_process');const assert=require('node:assert/strict');
+(async()=>{
+ const browser=await chromium.launch({headless:true,channel:'chrome'});const page=await browser.newPage();
+ await page.goto('http://127.0.0.1:18891/c/oceanix-demo');await page.goto('http://127.0.0.1:18891/auth/local');await page.goto('http://127.0.0.1:18891/courses/6/editor');
+ const add=page.locator('button[wire\\:click^="addModule"]:not([disabled])').first();await add.waitFor();
+ const expression=await add.getAttribute('wire:click');const id=expression.match(/\d+/)[0];
+ const waitState=s=>page.waitForFunction(s=>document.querySelector('.admin-page[x-data]')._x_dataStack[0].state===s,s);
+ await page.context().setOffline(true);await add.click();await waitState('network-error');
+ await page.context().setOffline(false);execFileSync('php',['/private/tmp/oceanix-lifecycle-module-fixture.php',id,'archive']);
+ await add.click();await waitState('validation-error');await page.locator('#module-unavailable-recovery').waitFor();
+ execFileSync('php',['/private/tmp/oceanix-lifecycle-module-fixture.php',id,'restore']);
+ await page.locator('input[wire\\:model\\.live\\.debounce\\.300ms="moduleSearch"]').fill(' ');
+ const retry=page.locator(`button[wire\\:click="${expression}"]:not([disabled])`);await retry.waitFor();await retry.click();await waitState('saved');
+ assert.equal(await page.locator('.admin-page[x-data]').evaluate(el=>el._x_dataStack[0].dirty),false);
+ console.log(JSON.stringify({moduleSmoke:'pass',id,flow:['network-error','validation-error','saved']}));await browser.close();
+})().catch(e=>{console.error(e);process.exit(1)});

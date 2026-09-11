@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.9.0",
   "configuration": {
     "adapters": [
       "laravel",
@@ -8,72 +8,107 @@
     ],
     "agents": [
       "architect",
-      "architecture-reviewer",
       "code-reviewer",
       "design-agent",
       "design-reviewer",
       "qa",
-      "test-expert"
+      "specification-reviewer",
+      "test-analyst"
     ],
-    "extensions": []
+    "extensions": [],
+    "assurance": "standard",
+    "laravelBoost": "optional"
   },
   "files": {
     "AGENTS.md": {
-      "sha256": "0523564da97f94c71b0db7e4a4bd2337e772c55610c1be4cea0523411d29ed3b"
+      "sha256": "6dbf97c4d2b8cf4aa084c0eb9e0b41ed464a3de8ed21b7db3ef7a6411a89bb72"
     },
     ".codex/agents/design-agent.toml": {
       "sha256": "07be803275d3308c9ce6d83227cccf34e403cb3e2c60f74d8ab0840b002bba7f"
     },
-    ".codex/agents/code-reviewer.toml": {
-      "sha256": "43a701f42fa93363182934577815265005fa2ca512465c975c8a087420826bb3"
+    ".codex/agents/specification-reviewer.toml": {
+      "sha256": "9591daacf86b6546540ad1f2f2703516a42d8dea9eb0ec8855ea60f6fd86c5bb"
     },
-    ".codex/agents/test-expert.toml": {
-      "sha256": "819b7a4541e4a4a68737f449c47fb1a66edad036b84c7b2a3656beb6d5c03fcb"
+    ".codex/agents/code-reviewer.toml": {
+      "sha256": "683a5f84488dc1be86c8fc6533dba28669a7bc67668144541801c743fc2343f9"
     },
     ".codex/agents/design-reviewer.toml": {
-      "sha256": "1e060b633aa945f79a6ea908644dc06533dfe9e7afa0a5f6b8b7249652065bfc"
+      "sha256": "22cadd01ed67a8b28e72b21dcb330012c49d53c2e83335cf448b7a7caed8d36d"
     },
-    ".codex/agents/architecture-reviewer.toml": {
-      "sha256": "04a5fcbf605f806756af2a0b5e405b0e4ec1548ca923291352b8572d67d8d9ff"
+    ".codex/agents/test-analyst.toml": {
+      "sha256": "a090ebcb061b3614ca2eee3a758ed8ac99c6e75d0e9a17cb7efb7b5714d3e2a8"
     },
     ".codex/agents/architect.toml": {
-      "sha256": "d5d11f7f0b40c6531161c41a3ac38dbdc0dc90e14e3fdd90901783966bbd96d9"
+      "sha256": "d511f90bc229c90d36c9880cb2aaf0f2cc7d06be2ec7faf0cd10099027640ca8"
     },
     ".codex/agents/qa.toml": {
-      "sha256": "83628e6c41dafacf882b92043aa38de7c43322a3dfb6c9b3341d237716bde458"
+      "sha256": "d3ae410856ea1eb0a11452b5e78c38cade65cadf27d7353c7d32d37da3deaa41"
     },
     ".agents/skills/toscanini-verification/SKILL.md": {
-      "sha256": "f002fadf6219df4bdcf50e87c1966700af27da912ec479d674dcd663536e8b41"
+      "sha256": "db931ad6570e5190280dfada0112f551859930709bbb4631d8ce4d0c0bbd9697"
     },
     ".agents/skills/toscanini-architecture/SKILL.md": {
-      "sha256": "1567cc69e606c995959662f58b5d568f7ee23052ba602cdf96186a684168e869"
+      "sha256": "a05f3deee267954c163fcc7c04ec6494d1fa648b497a652c0359c5e1fabec7ef"
     },
     ".agents/skills/toscanini-workflow/SKILL.md": {
-      "sha256": "f7b32c5466720b162b6f2d5417191e83097c50cd156252c7ae8b32eb30f1df62"
+      "sha256": "bbd481ce2d43fafbde83e98fc15c0cece6075c519405bff8fe5c81652454d579"
     },
     ".agents/skills/toscanini-workflow/references/orchestration.md": {
-      "sha256": "82541a0b3578e65d3374bfafda8325ae1c8446b623849e801a8064371bd8f564"
+      "sha256": "620524acec33936ae31646ca19c816071294fb514454ffe2d7d8bb873093c9c7"
+    },
+    ".agents/skills/toscanini-workflow/references/execution-contract.md": {
+      "sha256": "f4bfacdae4c271c5cde9bebb34fad3d6197263ca717cb51364bb6ec80709df03"
     },
     ".agents/skills/toscanini-workflow/references/installation.md": {
       "sha256": "2c5fd0d4ee9b8f2afc6916ca0a9fc37eda8971f6c69628d1ea67f87cf5a16223"
     },
+    ".agents/skills/toscanini-workflow/references/execution-readiness.md": {
+      "sha256": "237853d2f814ec5941a7297cbe633be9151d6cfafe2223865b7dd9d9a1bba4f8"
+    },
     ".agents/skills/toscanini-workflow/agents/openai.yaml": {
       "sha256": "99d0359317510779115e2b2f8cb542945cfe221b82c59da1de3b74cedd2483f9"
+    },
+    ".agents/skills/toscanini-assurance/SKILL.md": {
+      "sha256": "8eb2dc27f0e3ee0bef6ce4272a692b139c5c76a55abec0a7f224335a68ce58a1"
     },
     ".agents/skills/toscanini-design-review/SKILL.md": {
       "sha256": "32f6f141f532e8c09624b6f5243dfeab4bc370e377a11d10b81d9d286a12e51c"
     },
+    ".toscanini/bin/toscanini_contract.py": {
+      "sha256": "aef006a9bffc4bb451f49001ebaa52c4267464413562a58600d5ed069e233d1f"
+    },
+    ".toscanini/bin/toscanini_report.py": {
+      "sha256": "e3ee9658dab6be365d574c630e7693bff7ce88b73150bb0972e101ca55991be0"
+    },
     ".toscanini/bin/toscanini-event.py": {
-      "sha256": "03166a07337ef48f47146b49b4401ca0ef9fbb4474ff37b272dc32413b6af7eb"
+      "sha256": "7e3239ad2d569a2e2d6c990ed670df45e92fa08452790a5f65dd150926a3bb6c"
+    },
+    ".toscanini/bin/toscanini_architecture.py": {
+      "sha256": "799d50dd5d6ba68985b46e1b0756d7bba124e81cbf7481d5bf9b26ae5d6174db"
     },
     ".toscanini/bin/toscanini-gate.py": {
-      "sha256": "94eb1b4b255f69f11872b445f9ca78759d64b1da24848532cb9d0f0c1aade1eb"
+      "sha256": "05b60a3b3ada0f1cf4e7bf85226a4f5043655a31afce41d4b114e7f5f7840374"
+    },
+    ".toscanini/templates/finding-ledger.json": {
+      "sha256": "88700a646f331bb07cd474b0bf420776b1902d5c720318a8b3efb81ea5bb8bb5"
+    },
+    ".toscanini/templates/document-report.json": {
+      "sha256": "5d24101656c3a41f62d65fdbed06e1d9e630513adc524c7052847e6267190afb"
+    },
+    ".toscanini/templates/execution-contract.json": {
+      "sha256": "b0cc389a80b45208c7b9aac4058f21d1590760336c44cbb4a1ef412e65b8ad3e"
+    },
+    ".toscanini/templates/architecture.md": {
+      "sha256": "77aab60cd4410fea00e2f598304e4e291556d05fb5b5415fcb4eaee438574e17"
     },
     ".toscanini/.gitignore": {
-      "sha256": "fdcd0183a4babd894e7cce83ec87bd24f385c424cc83571009ed07ab34722d9f"
+      "sha256": "042a6297dec254e9ca75dd958a5221d5856222647c157a60aa20e92fbeef26a8"
     },
     ".specify/templates/architecture.md": {
-      "sha256": "6e653b0df19b2cb55e3c23dc48505b227c9f8092c26fe888329dbec5222558b4"
+      "sha256": "77aab60cd4410fea00e2f598304e4e291556d05fb5b5415fcb4eaee438574e17"
+    },
+    ".specify/templates/toscanini-scenarios.md": {
+      "sha256": "34a8398b5981d5025026f698138bc1ae470f6621d8f1993183531a699fcd5784"
     },
     ".specify/templates/ux.md": {
       "sha256": "8e34accc6d6e1d63974f051bdccd49f3378260e7c515399837b5141abbfb9f43"
@@ -82,7 +117,7 @@
       "sha256": "53bb4f71e69e354bf2465389bc6772f4c3388a192d42675f63ab5373df18f9b5"
     },
     ".toscanini/gaps.md": {
-      "sha256": "15bf769c7591a0788404678699d1984991d5ba8f3689f967988ab99db0409d7a"
+      "sha256": "c9fad94c0917ac4530f9818485af218e990f1c80cd10d3962866f250a64dbc4e"
     }
   }
 }

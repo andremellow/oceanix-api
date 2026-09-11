@@ -1,0 +1,15 @@
+<?php
+require __DIR__.'/environment.php';
+require '/Users/andrepiresdemello/Code/oceanix-api/vendor/autoload.php';
+$app=require '/Users/andrepiresdemello/Code/oceanix-api/bootstrap/app.php';
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+Illuminate\Support\Facades\Http::preventStrayRequests();
+Illuminate\Support\Facades\Artisan::call('migrate',['--force'=>true]);
+Illuminate\Support\Facades\Artisan::call('db:seed',['--force'=>true]);
+$company=App\Models\Company::where('slug','oceanix-demo')->firstOrFail();
+app(App\Tenancy\TenantContext::class)->set($company);
+(new Database\Seeders\RoleSeeder)->run();
+$user=App\Models\User::factory()->create(['email'=>'lifecycle.qa@example.test','name'=>'Lifecycle QA']);
+$user->roles()->syncWithoutDetaching(App\Models\Role::where('key','admin')->firstOrFail());
+echo "Isolated migrations, seeders and tenant administrator ready.\n";
+

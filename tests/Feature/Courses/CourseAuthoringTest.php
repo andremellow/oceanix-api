@@ -11,13 +11,21 @@ use App\Enums\VideoStatus;
 use App\Exceptions\CoursePublicationException;
 use App\Models\Account;
 use App\Models\AuditLog;
+use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Video;
+use App\Services\Audit\AuditLogger;
 use App\Services\Courses\CourseVersionValidator;
+use App\Tenancy\TenantContext;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Livewire\Livewire;
 
 /** Builds a draft version that satisfies every publication rule. */
 function publishableDraft(): CourseVersion
@@ -45,6 +53,84 @@ it('creates a course together with its first draft version', function (): void {
         ->and($course->status)->toBe(CourseStatus::Draft)
         ->and($course->versions()->count())->toBe(1)
         ->and($course->versions()->first()->status)->toBe(CourseVersionStatus::Draft);
+});
+
+it('normalizes company course codes and scopes their uniqueness to the owning company', function (): void {
+    $firstCompany = currentCompany();
+    $otherCompany = Company::factory()->create();
+    app(TenantContext::class)->set($firstCompany);
+    $actor = adminUser();
+    Course::factory()->create(['company_id' => $otherCompany->id, 'code' => 'HUET-01']);
+    $own = app(CreateCourse::class)->handle(' huet-01 ', 'First company course', actor: $actor);
+
+    expect($own->code)->toBe('HUET-01')->and($own->company_id)->toBe($firstCompany->id);
+
+    expect(fn () => app(CreateCourse::class)->handle(' huet-01 ', 'Duplicate', actor: $actor))
+        ->toThrow(ValidationException::class)
+        ->and(Course::withoutGlobalScopes()->where('company_id', $firstCompany->id)->where('code', 'HUET-01')->count())->toBe(1);
+});
+
+it('normalizes and reports a same-company duplicate inline in the creation modal', function (): void {
+    $actor = adminUser();
+    Course::factory()->create(['code' => 'BOSIET-01']);
+
+    Livewire::actingAs($actor)->test('courses.index')
+        ->set('code', ' bosiet-01 ')
+        ->set('title', 'Duplicate course')
+        ->call('create')
+        ->assertSet('code', 'BOSIET-01')
+        ->assertHasErrors('code')
+        ->assertNoRedirect();
+});
+
+it('translates a persistence-time course code collision without leaving a partial duplicate', function (): void {
+    $company = currentCompany();
+    $actor = adminUser();
+    $armed = true;
+
+    DB::listen(function (QueryExecuted $query) use (&$armed, $company): void {
+        if (! $armed || ! str_contains(strtolower($query->sql), 'select exists') || ! str_contains(strtolower($query->sql), 'courses')) {
+            return;
+        }
+
+        $armed = false;
+        $winner = Course::factory()->create([
+            'company_id' => $company->id,
+            'code' => 'RACE-01',
+            'title' => 'Concurrent winner',
+        ]);
+        CourseVersion::factory()->create(['course_id' => $winner]);
+    });
+
+    try {
+        app(CreateCourse::class)->handle(' race-01 ', 'Losing request', actor: $actor);
+        test()->fail('The losing request did not report its code collision.');
+    } catch (ValidationException $exception) {
+        expect($exception->errors())->toBe(['code' => [__('ui.course_code_taken')]]);
+    }
+
+    $courses = Course::withoutGlobalScopes()->where('company_id', $company->id)->where('code', 'RACE-01')->get();
+
+    expect($courses)->toHaveCount(1)
+        ->and($courses->first()->title)->toBe('Concurrent winner')
+        ->and(CourseVersion::query()->where('course_id', $courses->first()->id)->count())->toBe(1)
+        ->and(AuditLog::query()->where('action', 'course.created')->count())->toBe(0);
+});
+
+it('propagates unrelated persistence failures and rolls back the course aggregate', function (): void {
+    $beforeCourses = Course::withoutGlobalScopes()->count();
+    $beforeVersions = CourseVersion::withoutGlobalScopes()->count();
+    $failure = new QueryException('sqlite', 'insert into audit_logs', [], new RuntimeException('unrelated audit storage failure'));
+    $audit = Mockery::mock(AuditLogger::class);
+    $audit->shouldReceive('log')->once()->andThrow($failure);
+    app()->instance(AuditLogger::class, $audit);
+
+    expect(fn () => app(CreateCourse::class)->handle('FAULT-01', 'Must roll back', actor: adminUser()))
+        ->toThrow(QueryException::class, 'unrelated audit storage failure');
+
+    expect(Course::withoutGlobalScopes()->count())->toBe($beforeCourses)
+        ->and(CourseVersion::withoutGlobalScopes()->count())->toBe($beforeVersions)
+        ->and(AuditLog::query()->where('action', 'course.created')->count())->toBe(0);
 });
 
 it('publishes a complete draft and makes it the current version', function (): void {

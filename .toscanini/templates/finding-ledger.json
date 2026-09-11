@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "runId": "replace-with-run-id",
+  "findings": [
+    {
+      "id": "ROLE-01",
+      "sourceRole": "code-reviewer",
+      "severity": "blocking",
+      "classification": "IMPLEMENTATION_DEVIATION",
+      "failureStage": "implementation",
+      "scope": "in-contract",
+      "basis": "acceptance-criterion",
+      "regressionSurface": null,
+      "discoveredRound": 1,
+      "discoveredPhase": "review",
+      "acceptanceCriteria": ["AC-01"],
+      "invariants": [],
+      "summary": "Describe the observed problem without hidden reasoning.",
+      "evidence": "Reference a file, behavior, command result, or artifact.",
+      "requiredOutcome": "Describe the result required to close this finding.",
+      "learning": {
+        "proposal": "Describe a reusable rule that could prevent this class of failure.",
+        "target": "Name the project policy, agent, adapter, or workflow stage that would receive it.",
+        "decision": "pending",
+        "applied": false
+      },
+      "status": "open"
+    }
+  ]
+}

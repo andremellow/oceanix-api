@@ -1,0 +1,43 @@
+# Implementation evidence
+
+Run: course-editor-lifecycle-20260911. Frozen scope: course-editor-lifecycle-20260911-scope-v1.
+Final checkpoint: course-editor-lifecycle-final-f61d9a8348fe.
+
+## Final artifact scope
+
+- resources/views/components/courses/⚡editor.blade.php — SHA-256 f61d9a8348fed7d4f29fb0bfc2af4576d3e5a7f237ec97007c44dbcb3996b163
+- tests/Feature/Courses/CourseEditorTest.php — SHA-256 c7f8e562f08ec713ceb385682609293c681e80640891c8eea6590c287d95d594
+- tests/JavaScript/course-editor.test.mjs — SHA-256 be2c10984b379643d259a9ef24c84701d98657ac6de8ae967ac0c7fc29cef6d5
+
+`worker-delta.patch` is a neutral scope reconstruction made by reversing this worker's exact edits from the final files, then comparing that reconstructed starting state to the final files. No initial full-file snapshot was retained. Reviewers should also inspect the full final files. Pre-existing dirty work was retained; no environment file or dependency configuration was edited.
+
+## Behavior and defect sensitivity
+
+- AC-01: Authored revision tracking compares values using stable lesson/question/option IDs and field name. It reads the current Livewire field as baseline when Alpine state is recreated during morph. Native and Flux checkbox values use checked state. Repeated unchanged input/change and post-save blur do not create revisions; changed values do.
+- AC-02: Livewire action interception marks confirmed mutations pending before request dispatch, without marking cancelled confirmations. Module network failures have separate provenance so successful module retry can settle its own failure while preserving authored revisions and unrelated failures. Field saves preserve module errors.
+- AC-03: Expanded lesson/question/option subtrees remount when their positional binding changes while outer lesson identity and contextual focus remain stable. Authored blur bindings use Livewire 4 `live.blur` to send the update on blur.
+- Initial executable Alpine tests failed for duplicate unchanged revision, duplicate checkbox revision, and a clean-state module action lacking pending/error tracking. These pass after correction.
+- An executable check runs the installed Livewire model directive: the negative-control bare `blur` binding sends zero commits; the production `live.blur` title binding sends one commit containing the edited value. This verifies behavior rather than a source-string expectation.
+- Browser smoke exposed node/state remount effects on observed-value tracking and the installed Livewire 4 blur semantics. Both were corrected before the final checkpoint. Browser observations are implementation checks, not independent QA approval.
+
+## Final deterministic verification
+
+All commands completed successfully at the final production/test state. PHP checks used the disposable `PHPRC=/private/tmp/oceanix-course-editor-readiness.ZO6Qay/php.ini` with memory_limit=512M.
+
+- `node --test tests/JavaScript/course-editor.test.mjs`: 11 passed, zero failed. Executes the production Alpine object/event handlers and installed Livewire model binding.
+- `php artisan test tests/Feature/Courses/CourseEditorTest.php --compact`: 57 passed, 465 assertions.
+- `composer verify`: exit 0; 714 passed, 13 skipped, 3522 assertions. Existing preview JavaScript checks, Pint and production build passed. Build retained its pre-existing large-chunk advisory.
+- Temporary logs: /private/tmp/course-editor-lifecycle-focused-final.log and /private/tmp/course-editor-lifecycle-verify-final.log.
+
+## Worker browser smoke
+
+Headless Chrome through Playwright, disposable local harness http://127.0.0.1:18891, courses 5 and 6 only. No real provider APIs. Isolated launch required sandbox escalation, which was approved.
+
+- Direct editor: expanded all three distinct lessons and recorded every authored control by stable record ID. Reordered up/down repeatedly at 1440px and 320px. Values remained attached to their IDs, contextual focus followed the moved lesson, and no horizontal overflow or page JavaScript errors occurred.
+- Edited the moved lesson title and its first answer. Live answer revision 2 stayed unchanged after Saved and blur; the next genuine edit reached revision 3 and saved. Reloaded and compared all three records' controls against the prior values, allowing changes only to the intended title/answer. Comparison passed.
+- Invalid course title produced validation-error; unchanged blur retained that state/revision. A corrected title saved, and unchanged blur retained the saved revision. Cancelling lesson removal left saved state unchanged.
+- Module editor: starting clean, browser offline caused a real fetch failure and network-error. Reconnected with a deliberately archived candidate, observed safe validation refusal and actionable recovery. Restored eligibility and retried; state became saved with dirty=false.
+- Limitation: worker module smoke used browser offline, not termination of the local PHP server. Independent QA must execute the frozen QA-02 actual server outage scenario.
+- Temporary executable smoke scripts: /private/tmp/oceanix-lifecycle-smoke.cjs, /private/tmp/oceanix-lifecycle-module-smoke.cjs. Fixture mutation helper touches only the disposable database: /private/tmp/oceanix-lifecycle-module-fixture.php.
+
+Independent reviews, full frozen QA coverage and completion gates remain the orchestrator's next steps.

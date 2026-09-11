@@ -1,0 +1,18 @@
+# Independent code review
+
+Verdict: REQUEST_CHANGES. Run course-editor-lifecycle-20260911; round 1; phase review; fresh independent context.
+Checkpoint: course-editor-lifecycle-final-f61d9a8348fe. Scope: course-editor-lifecycle-20260911-scope-v1.
+
+## CR-LIFECYCLE-01 — Preserve unresolved module failures through unrelated requests
+
+P2, blocking, in-contract. Classification IMPLEMENTATION_DEVIATION. Detected by code-reviewer; failureStage implementation. Basis AC-02 and INV-02, frozen module request dispatch/failure/retry surface.
+
+The production Alpine failure callback sets clientModuleNetworkError but leaves clientHasUnsavedChanges false. A subsequent successful search changes the display to saving without restoring the outstanding error. An unrelated addLesson invokes touchSaved(), whose editor-saved acknowledgement clears browser dirtiness and displays Saved despite the unresolved module failure.
+
+Executing the production expression demonstrated network-error/dirty=true/moduleFailure=true/serverUnsaved=false, then saving after search, then saved/dirty=false/moduleFailure=true after unrelated structural acknowledgement.
+
+Required outcome: unresolved module failure remains visible through unrelated successful search and structural requests; only resolution of the module operation settles it. Add coverage for both boundaries.
+
+Reviewer inspected the complete reconstructed delta and all three assigned files plus relevant persistence, reorder, module action and installed Livewire event paths. No other material findings. Eleven JavaScript tests passed. This does not substitute browser QA.
+
+Report transcribed by orchestrator from the reviewer's complete verdict; reviewer emitted its own started and completed telemetry and made no production/test edits.

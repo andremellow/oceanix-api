@@ -1,0 +1,19 @@
+# Independent executable QA
+
+PASS, zero findings. Fresh independent context, round 2. Scope course-editor-lifecycle-20260911-scope-v1; checkpoint course-editor-lifecycle-remediation-43372bcbc810. All QA-01, QA-02, QA-03 completed.
+
+## Safe setup
+
+QA verified localhost harness bootstrap with disposable SQLite at /tmp/oceanix-lifecycle-harness.NqSAyE/qa.sqlite, local authentication and disabled external credentials. Assigned courses7/8, lessons11–13, answers27–32; isolated Chrome session.
+
+## Observations
+
+- QA-01: keyboard title/answer edits saved and survived reload; unchanged title/answer blur left POST count34 unchanged and retained Saved timestamp. Empty title failed validation and corrected title saved. Read-only SQLite confirmed intended values.
+- QA-02: actual server stop yielded Saving then one settled network-error message and connection-refused POST. Archived selection yielded actionable unavailable-module refusal with empty composition unchanged. Valid retry persisted version7 while retaining unrelated invalid-title error. Correcting title restored Saved. Cancelled actual lesson removal sent zero POSTs (27 to27), preserved lesson and stayed All changes saved.
+- QA-03: three expanded unique lessons reordered both directions at1440/320; titles/descriptions/scores/questions/answers remained with stable IDs and contextual focus. Targeted edits persisted only to intended lessons11/13 and answers; Bravo unchanged. Document width matched viewport, no root JavaScript errors.
+
+Screenshots inspected: /tmp/qa-independent-desktop.png, /tmp/qa-independent-mobile.png, /tmp/qa-independent-outage.png, /tmp/qa-independent-refusal.png. Browser requests/status and read-only SQLite observations support results. No unexpected failed requests or new relevant application errors.
+
+## Cleanup and evidence provenance
+
+QA restored authored course/lesson titles, lesson order, all six answers through UI; removed its course8 module association; verified version7 published/unarchived; closed isolated browser. Root retains server ownership. Reviewer emitted successful fresh independent started/completed events with all three scenario IDs and finding-count0. Orchestrator transcribed the complete final verdict without adding approval claims.

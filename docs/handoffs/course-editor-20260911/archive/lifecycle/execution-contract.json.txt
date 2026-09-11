@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 3,
+  "runId": "course-editor-lifecycle-20260911",
+  "assurance": "critical",
+  "goal": "Correct the three approved residual editor lifecycle defects: duplicate blur dirtiness, unreported module request failure, and positional input reuse after reorder.",
+  "task": {
+    "size": "small",
+    "decisionRisk": "low",
+    "estimatedBaselineMinutes": 60,
+    "specKitEnabled": true
+  },
+  "scope": {
+    "in": [
+      "Value-sensitive authored revision tracking",
+      "Module mutation pending/failure/retry state",
+      "Stable identity of expanded inputs after reorder, including subsequent edits",
+      "Behavioral regression tests and real browser validation"
+    ],
+    "out": [
+      "New product rules",
+      "Schema, dependencies, authorization, assignment or assessment changes",
+      "Unrelated preview-share and deferred hardening"
+    ],
+    "changeBoundary": [
+      "resources/views/components/courses/⚡editor.blade.php",
+      "resources/js course-editor helper only if needed for executable client testing",
+      "tests/Feature/Courses/CourseEditorTest.php",
+      "tests/JavaScript or existing JavaScript test directory for editor behavioral tests"
+    ]
+  },
+  "invariants": [
+    {
+      "id": "INV-01",
+      "statement": "No authored value may be lost or written to a different lesson/question/answer identity."
+    },
+    {
+      "id": "INV-02",
+      "statement": "Acknowledgements clear only persisted field revisions; unrelated pending work and failures remain visible."
+    },
+    {
+      "id": "INV-03",
+      "statement": "Tenant authorization, published immutability, assignment behavior and non-gating assessments remain unchanged."
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-01",
+      "statement": "After a live field saves, unchanged blur/change does not create another dirty revision. A genuinely changed value creates a revision and persists."
+    },
+    {
+      "id": "AC-02",
+      "statement": "Confirmed module mutations enter pending before dispatch; outage renders one network-error state. Safe refusal and successful retry settle truthfully without clearing unrelated edits; cancelled confirmations do not create pending state."
+    },
+    {
+      "id": "AC-03",
+      "statement": "After reordering expanded lessons, all controls display values belonging to their stable record identity immediately, keep contextual focus, and subsequent edits persist only to the intended record."
+    }
+  ],
+  "validationScope": {
+    "scopeId": "course-editor-lifecycle-20260911-scope-v1",
+    "frozen": true,
+    "regressionSurfaces": [
+      "Authored input/change acknowledgement",
+      "Module request dispatch/failure/retry",
+      "Expanded lesson controls and focus after reorder"
+    ],
+    "qaScenarios": [
+      {
+        "id": "QA-01",
+        "description": "Keyboard edit live nested answer and title; wait for Saved then blur unchanged, verify clean state/revision and reload. Then change again and verify persistence, including invalid/recovered field control.",
+        "acceptanceCriteria": [
+          "AC-01"
+        ],
+        "invariants": [
+          "INV-01",
+          "INV-02"
+        ]
+      },
+      {
+        "id": "QA-02",
+        "description": "Use Add module during actual local server outage, observe network error, reconnect with unavailable selection, observe actionable safe refusal and unchanged composition; retry valid selection and verify Saved. Cancel removal confirmation and verify no false pending.",
+        "acceptanceCriteria": [
+          "AC-02"
+        ],
+        "invariants": [
+          "INV-01",
+          "INV-02"
+        ]
+      },
+      {
+        "id": "QA-03",
+        "description": "At desktop and 320px expand three uniquely populated lessons/questions/options; reorder in both directions, immediately verify values against stable IDs and focus, edit the moved lesson and one nested answer, reload and verify only intended IDs changed, no overflow or root JS errors.",
+        "acceptanceCriteria": [
+          "AC-03"
+        ],
+        "invariants": [
+          "INV-01",
+          "INV-03"
+        ]
+      }
+    ]
+  },
+  "implementationCheckpoint": {
+    "id": "course-editor-lifecycle-remediation-43372bcbc810",
+    "recordedAfterImplementation": true
+  },
+  "specification": {
+    "required": false,
+    "status": "not-required",
+    "artifact": null,
+    "clarifyStatus": "not-required",
+    "planStatus": "not-required",
+    "waiverReason": "Narrow corrections to three concrete approved behaviors with no unresolved product or architectural choices; complete scenarios frozen here.",
+    "waivedBy": "product-owner"
+  },
+  "architecture": {
+    "required": false,
+    "status": "not-required",
+    "artifact": null,
+    "sha256": null,
+    "ownerApproval": {
+      "approvedBy": null,
+      "decision": null,
+      "artifactSha256": null,
+      "scopeId": null
+    },
+    "frameworkAlignment": []
+  },
+  "budgets": {
+    "remediationRounds": 2,
+    "specialistRuns": 17
+  },
+  "approved": true,
+  "approvedBy": "product-owner",
+  "readiness": {
+    "scopeId": "course-editor-lifecycle-20260911-scope-v1",
+    "environment": "Current local Laravel workspace with isolated SQLite and disposable browser harness",
+    "checks": [
+      {
+        "category": "runtimes",
+        "name": "runtimes",
+        "status": "verified",
+        "evidence": "Previous execution ran PHP, Node and Chrome successfully."
+      },
+      {
+        "category": "dependencies",
+        "name": "dependencies",
+        "status": "verified",
+        "evidence": "Current installed Composer/npm stack passed canonical verification; no installation planned."
+      },
+      {
+        "category": "access",
+        "name": "access",
+        "status": "not-required",
+        "evidence": "No external accounts: use local auth and fake video provider."
+      },
+      {
+        "category": "services",
+        "name": "services",
+        "status": "verified",
+        "evidence": "Current disposable SQLite migrated and seeded successfully at /tmp/oceanix-lifecycle-harness.NqSAyE/qa.sqlite; tenant administrator and uniquely populated draft fixtures created. Isolated HTTP service running on 127.0.0.1:18891 with local auth and blank external-provider credentials."
+      },
+      {
+        "category": "verification",
+        "name": "verification",
+        "status": "verified",
+        "evidence": "Preceding canonical verification and focused course tests passed; 512MB PHPRC available."
+      },
+      {
+        "category": "permissions",
+        "name": "permissions",
+        "status": "verified",
+        "evidence": "User explicitly approved these three lifecycle corrections and necessary verification."
+      }
+    ]
+  }
+}

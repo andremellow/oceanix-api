@@ -1,0 +1,55 @@
+# Toscanini execution report — course-editor-lifecycle-20260911
+
+- Result: **BLOCKED**
+- Goal: Correct the three approved residual editor lifecycle defects: duplicate blur dirtiness, unreported module request failure, and positional input reuse after reorder.
+- Assurance: critical
+- Elapsed telemetry time: 45m 33s
+- Specialist starts: 8
+- Remediation rounds observed: 2
+
+## Efficiency
+
+- Score: **84/100**
+- This is a directional execution score; its deductions are listed below.
+- Elapsed/baseline ratio: 0.8x (-0)
+- Repeated specialist starts: 3 (-6)
+- Additional remediation batches: 0 (-0)
+- Late findings: 0 (-0)
+- Out-of-contract findings: 0 (-0)
+- Execution ended blocked (-10)
+
+## Agent usage
+
+- code-reviewer: 2
+- design-reviewer: 1
+- qa: 1
+- test-analyst: 2
+- worker: 2
+
+## Findings
+
+- Total: 3
+- Resolved: 3
+- Open or deferred: 0
+- Non-blocking follow-ups: 0
+
+- `CR-LIFECYCLE-01` [in-contract] Unrelated requests hide an unresolved module failure. — detected by code-reviewer; attributed to implementation — resolved
+- `TA-01` [in-contract] No executable regression protects browser input identity after reorder. — detected by test-analyst; attributed to tests — resolved
+- `TA-02` [in-contract] Cancellation test does not execute confirmation boundary. — detected by test-analyst; attributed to tests — resolved
+
+## Efficiency signals
+
+- Roles started more than once: code-reviewer (2), test-analyst (2), worker (2)
+- Findings discovered after round 1: 0
+- Out-of-contract observations retained as follow-ups: 0
+
+## Proposed learnings — user approval required
+
+- No reusable learning was proposed. Findings remain execution-specific.
+
+Toscanini never applies a learning automatically. Accepting a proposal requires an explicit user decision and a separate change.
+
+## Gate result
+
+- QA started before approved code-reviewer
+- QA started before approved test-analyst

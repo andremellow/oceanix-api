@@ -1,0 +1,11 @@
+# Directed code verification
+
+APPROVE — CR-LIFECYCLE-01 verified closed, no new causal findings.
+
+Run course-editor-lifecycle-20260911, round 2 remediation, directed/inherited context. Checkpoint course-editor-lifecycle-remediation-43372bcbc810; scope course-editor-lifecycle-20260911-scope-v1.
+
+Failure now sets server unsaved state. Unrelated search preserves the module error. touchSaved preserves that failure and emits structural acknowledgement rather than Saved. Late editor-saved cannot clear unresolved module failure. Module retry still settles its own failure while preserving unrelated authored revisions. AC-02 and INV-02 satisfied for assigned finding.
+
+Reviewer inspected repaired raw delta and affected request/acknowledgement/retry branches. Four targeted JavaScript checks and four Pest tests (35 assertions) passed. No whole-scope audit restarted. Browser-test findings remain assigned to Test Analyst. Started/completed telemetry succeeded with approve, finding-count 0 and finding ID CR-LIFECYCLE-01.
+
+Transcribed from reviewer verdict by orchestrator; retains the original independent review.

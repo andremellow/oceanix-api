@@ -1,0 +1,15 @@
+<?php
+$values = [
+ 'APP_ENV'=>'local','APP_DEBUG'=>'true','APP_URL'=>'http://127.0.0.1:18891',
+ 'APP_KEY'=>'base64:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=',
+ 'DB_CONNECTION'=>'sqlite','DB_DATABASE'=>'/tmp/oceanix-lifecycle-harness.NqSAyE/qa.sqlite',
+ 'SESSION_DRIVER'=>'database','SESSION_COOKIE'=>'lifecycle_harness_session','SESSION_SECURE_COOKIE'=>'false','SESSION_DOMAIN'=>'',
+ 'CACHE_STORE'=>'array','QUEUE_CONNECTION'=>'sync','MAIL_MAILER'=>'array',
+ 'LOCAL_AUTH_EMAIL'=>'lifecycle.qa@example.test','ADMIN_EMAILS'=>'lifecycle.qa@example.test',
+ 'CLOUDFLARE_STREAM_ACCOUNT_ID'=>'','CLOUDFLARE_STREAM_API_TOKEN'=>'','WORKOS_CLIENT_ID'=>'','WORKOS_API_KEY'=>'',
+ 'NIGHTWATCH_ENABLED'=>'false','NIGHTWATCH_TOKEN'=>'','APP_CONFIG_CACHE'=>'/tmp/oceanix-lifecycle-harness.NqSAyE/config.php',
+ 'LOG_CHANNEL'=>'single','LOG_LEVEL'=>'error','APP_LOCALE'=>'en',
+];
+foreach ($values as $key=>$value) { putenv("$key=$value"); $_ENV[$key]=$value; $_SERVER[$key]=$value; }
+ini_set('memory_limit','512M');
+

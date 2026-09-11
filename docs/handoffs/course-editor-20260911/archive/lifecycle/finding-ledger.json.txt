@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "runId": "course-editor-lifecycle-20260911",
+  "findings": [
+    {
+      "id": "CR-LIFECYCLE-01",
+      "sourceRole": "code-reviewer",
+      "failureStage": "implementation",
+      "severity": "blocking",
+      "classification": "IMPLEMENTATION_DEVIATION",
+      "scope": "in-contract",
+      "basis": "invariant",
+      "regressionSurface": "Module request dispatch/failure/retry",
+      "discoveredRound": 1,
+      "discoveredPhase": "review",
+      "acceptanceCriteria": [
+        "AC-02"
+      ],
+      "invariants": [
+        "INV-02"
+      ],
+      "summary": "Unrelated requests hide an unresolved module failure.",
+      "evidence": "code-review.md",
+      "requiredOutcome": "Retain failure visibility through successful search and unrelated structural acknowledgement until module resolution.",
+      "status": "resolved",
+      "resolutionEvidence": "directed-code-review.md; directed-test-review.md",
+      "resolvedCheckpoint": "course-editor-lifecycle-remediation-43372bcbc810"
+    },
+    {
+      "id": "TA-01",
+      "sourceRole": "test-analyst",
+      "failureStage": "tests",
+      "severity": "blocking",
+      "classification": "TEST_GAP",
+      "scope": "in-contract",
+      "basis": "acceptance-criterion",
+      "regressionSurface": "Expanded lesson controls and focus after reorder",
+      "discoveredRound": 1,
+      "discoveredPhase": "review",
+      "acceptanceCriteria": [
+        "AC-03"
+      ],
+      "invariants": [
+        "INV-01"
+      ],
+      "summary": "No executable regression protects browser input identity after reorder.",
+      "evidence": "test-review.md",
+      "requiredOutcome": "Executable browser integration checks three expanded distinct records, both reorder directions, focus, moved title/answer edits and reload; demonstrate sensitivity to removing fix.",
+      "status": "resolved",
+      "resolutionEvidence": "directed-test-review.md",
+      "resolvedCheckpoint": "course-editor-lifecycle-remediation-43372bcbc810"
+    },
+    {
+      "id": "TA-02",
+      "sourceRole": "test-analyst",
+      "failureStage": "tests",
+      "severity": "blocking",
+      "classification": "TEST_GAP",
+      "scope": "in-contract",
+      "basis": "acceptance-criterion",
+      "regressionSurface": "Module request dispatch/failure/retry",
+      "discoveredRound": 1,
+      "discoveredPhase": "review",
+      "acceptanceCriteria": [
+        "AC-02"
+      ],
+      "invariants": [],
+      "summary": "Cancellation test does not execute confirmation boundary.",
+      "evidence": "test-review.md",
+      "requiredOutcome": "Execute real confirmation boundary: reject means no dispatch or pending, accept means dispatch and pending.",
+      "status": "resolved",
+      "resolutionEvidence": "directed-test-review.md",
+      "resolvedCheckpoint": "course-editor-lifecycle-remediation-43372bcbc810"
+    }
+  ]
+}
