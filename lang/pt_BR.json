@@ -800,6 +800,8 @@
     "Create shared module": "Criar módulo compartilhado",
     "Attach video": "Vincular vídeo",
     "Remove video": "Remover vídeo",
+    "Attached video": "Vídeo anexado",
+    "Confirmation for :action on :target could not be opened. No change was applied; try the original action again.": "Não foi possível abrir a confirmação de :action em :target. Nenhuma alteração foi aplicada; tente a ação original novamente.",
     "Upload image": "Enviar imagem",
     "Insert image": "Inserir imagem",
     "Remove lesson “:target”?": "Remover a aula “:target”?",

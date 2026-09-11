@@ -19,6 +19,7 @@ function editor(initial = {}) {
         saveState: initial.state || 'clean',
         set(...args) { wireCalls.push(['set', ...args]); },
         saveDraft(...args) { wireCalls.push(['saveDraft', ...args]); },
+        cancelDestructiveConfirmation(...args) { wireCalls.push(['cancelDestructiveConfirmation', ...args]); },
         $hook(name, callback) { hooks[name] = callback; },
     };
     state.$root = {
@@ -46,7 +47,7 @@ function control({ fieldName = 'course.title', recordKey = 'course:1', value = '
     };
 }
 
-function operationalControl({ kind = 'structure', family = null, action = 'add', detail = 'add-question', target = 'lesson:7', label = 'Add question', wireClick = 'addQuestion(7)' } = {}) {
+function operationalControl({ kind = 'structure', family = null, action = 'add', detail = 'add-question', target = 'lesson:7', targetLabel = null, label = 'Add question', wireClick = 'addQuestion(7)' } = {}) {
     const actionAttribute = kind === 'structure' ? 'data-editor-structure-action' : 'data-editor-media-action';
     const attributes = new Map([
         [actionAttribute, action],
@@ -56,6 +57,7 @@ function operationalControl({ kind = 'structure', family = null, action = 'add',
         ['wire:click', wireClick],
     ]);
     if (family) attributes.set('data-editor-media-family', family);
+    if (targetLabel) attributes.set('data-editor-target-label', targetLabel);
     const record = { dataset: { recordKey: target } };
     const node = {
         disabled: false,
@@ -67,6 +69,7 @@ function operationalControl({ kind = 'structure', family = null, action = 'add',
             editorActionDetail: detail,
             editorTargetKey: target,
             ...(family ? { editorMediaFamily: family } : {}),
+            ...(targetLabel ? { editorTargetLabel: targetLabel } : {}),
         },
         hasAttribute(name) { return attributes.has(name); },
         getAttribute(name) { return attributes.get(name) ?? null; },
@@ -519,6 +522,165 @@ test('dirty validation-error and known Save failure states do not block a clean 
 
         assert.equal(state.operationBlockReason(operation), '', editorState);
         assert.equal(state.handleOperationalClick({ target: operation }), true, editorState);
+    }
+});
+
+test('confirmation requests preserve authored save state for retryable read-only failures and isolate permission loss', () => {
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    globalThis.document = { body: null, querySelector: () => null };
+    globalThis.window = { addEventListener() {}, removeEventListener() {} };
+
+    try {
+        for (const scenario of [
+            {
+                status: 403,
+                expectedState: 'permission-lost',
+                expectedKind: 'permission',
+                expectedMessage: 'Permission was removed. Remove video on Safety lesson was not applied. Your local values remain available to copy.',
+            },
+            {
+                status: 503,
+                expectedState: 'dirty',
+                expectedKind: null,
+                expectedMessage: 'Confirmation for Remove video on Safety lesson could not be opened. No change was applied; try the original action again.',
+            },
+            {
+                status: 503,
+                expectedState: 'dirty',
+                expectedKind: null,
+                expectedMessage: 'Não foi possível abrir a confirmação de Remover vídeo em Módulo de segurança. Nenhuma alteração foi aplicada; tente a ação original novamente.',
+                label: 'Remover vídeo',
+                targetLabel: 'Módulo de segurança',
+                messages: {
+                    confirmationFailed: 'Não foi possível abrir a confirmação de :action em :target. Nenhuma alteração foi aplicada; tente a ação original novamente.',
+                },
+            },
+        ]) {
+            const operation = operationalControl({
+                kind: 'media',
+                action: 'remove',
+                detail: 'confirm-video-removal',
+                target: 'lesson:7',
+                targetLabel: scenario.targetLabel || 'Safety lesson',
+                label: scenario.label || 'Remove video',
+                wireClick: 'confirmVideoDestruction(7, 9)',
+            });
+            const { state, wireCalls, hooks } = editor({
+                dirty: true,
+                state: 'dirty',
+                observedValues: { 'course:1/course.title': JSON.stringify('Local title') },
+                messages: scenario.messages,
+            });
+            state.ready = true;
+            state.$root.contains = () => true;
+            state.$root.querySelector = () => null;
+            state.$root.querySelectorAll = selector => selector.includes('data-editor-media-action') ? [operation] : [];
+            state.init();
+
+            assert.equal(state.handleOperationalClick({ target: operation }), true);
+            assert.equal(state.activeOperations.size, 1);
+            assert.equal(Object.values(state.activeOperationMeta)[0].readOnly, true);
+
+            let failRequest;
+            hooks.request({
+                succeed() {},
+                fail(callback) { failRequest = callback; },
+            });
+            failRequest({ status: scenario.status });
+
+            assert.equal(state.state, scenario.expectedState);
+            assert.equal(state.dirty, true);
+            assert.equal(state.observedValues['course:1/course.title'], JSON.stringify('Local title'));
+            assert.equal(state.operationalGuidance, scenario.expectedMessage);
+            assert.doesNotMatch(state.operationalGuidance, /confirm-video-removal|lesson:7/);
+            assert.doesNotMatch(state.operationalGuidance, /outcome is unknown/i);
+            const failureWireCalls = wireCalls.filter(call => call[0] === 'set' && ['saveState', 'errorKind'].includes(call[1]));
+            assert.deepEqual(failureWireCalls, scenario.expectedKind ? [
+                ['set', 'saveState', scenario.expectedState, false],
+                ['set', 'errorKind', scenario.expectedKind, false],
+            ] : []);
+            assert.equal(state.confirmationFailureActive, scenario.status !== 403);
+            assert.equal(state.activeOperations.size, 0);
+        }
+    } finally {
+        globalThis.document = originalDocument;
+        globalThis.window = originalWindow;
+    }
+});
+
+test('a retryable confirmation failure clears after retry success without changing clean or dirty save provenance', () => {
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    globalThis.document = { body: null, querySelector: () => null };
+    globalThis.window = { addEventListener() {}, removeEventListener() {} };
+
+    try {
+        for (const initial of [
+            { state: 'clean', dirty: false, observedValues: { 'course:1/course.title': JSON.stringify('Saved title') } },
+            { state: 'dirty', dirty: true, observedValues: { 'course:1/course.title': JSON.stringify('Local title') } },
+        ]) {
+            const operation = operationalControl({
+                kind: 'media',
+                action: 'remove',
+                detail: 'confirm-video-removal',
+                target: 'lesson:7',
+                targetLabel: 'Safety lesson',
+                label: 'Remove video',
+                wireClick: 'confirmVideoDestruction(7, 9)',
+            });
+            const { state, wireCalls, hooks } = editor(initial);
+            state.ready = true;
+            state.$root.contains = () => true;
+            state.$root.querySelector = () => null;
+            state.$root.querySelectorAll = selector => selector.includes('data-editor-media-action') ? [operation] : [];
+            state.init();
+
+            assert.equal(state.handleOperationalClick({ target: operation }), true);
+            assert.equal(state.activeOperations.size, 1);
+            let failRequest;
+            hooks.request({ succeed() {}, fail(callback) { failRequest = callback; } });
+            failRequest({ status: 503 });
+
+            assert.equal(state.state, initial.state);
+            assert.equal(state.dirty, initial.dirty);
+            assert.deepEqual(state.observedValues, initial.observedValues);
+            assert.equal(state.confirmationFailureActive, true);
+            assert.match(state.operationalGuidance, /No change was applied/);
+
+            assert.equal(state.handleOperationalClick({ target: operation }), true);
+            assert.equal(state.activeOperations.size, 1);
+            let succeedRequest;
+            hooks.request({ succeed(callback) { succeedRequest = callback; }, fail() {} });
+            succeedRequest();
+
+            assert.equal(state.state, initial.state);
+            assert.equal(state.dirty, initial.dirty);
+            assert.deepEqual(state.observedValues, initial.observedValues);
+            assert.equal(state.confirmationFailureActive, false);
+            assert.equal(state.operationalGuidance, '');
+            assert.equal(state.activeOperations.size, 0);
+            assert.equal(wireCalls.some(call => call[0] === 'set' && ['saveState', 'errorKind'].includes(call[1])), false);
+
+            state.$wire.cancelDestructiveConfirmation('confirmingDestructive');
+            let cancelRequestSucceeded;
+            hooks.request({ succeed(callback) { cancelRequestSucceeded = callback; }, fail() {} });
+            cancelRequestSucceeded();
+
+            assert.equal(state.state, initial.state);
+            assert.equal(state.dirty, initial.dirty);
+            assert.deepEqual(state.observedValues, initial.observedValues);
+            assert.equal(state.confirmationFailureActive, false);
+            assert.equal(state.operationalGuidance, '');
+            assert.equal(state.activeOperations.size, 0);
+            assert.deepEqual(wireCalls.filter(call => call[0] === 'cancelDestructiveConfirmation'), [
+                ['cancelDestructiveConfirmation', 'confirmingDestructive'],
+            ]);
+            assert.equal(wireCalls.some(call => ['saveDraft', 'performConfirmedDestructive'].includes(call[0])), false);
+        }
+    } finally {
+        globalThis.document = originalDocument;
+        globalThis.window = originalWindow;
     }
 });
 

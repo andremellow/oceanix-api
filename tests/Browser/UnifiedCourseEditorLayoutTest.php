@@ -1,17 +1,37 @@
 <?php
 
 use App\Enums\Permission;
+use App\Enums\VideoStatus;
 use App\Models\Lesson;
 use App\Models\ModuleVersion;
 use App\Models\Question;
+use App\Models\Video;
 use Tests\Support\CourseEditor\BrowserEnvironment;
 use Tests\Support\CourseEditor\EditorContextCase;
 use Tests\Support\CourseEditor\EditorFixture;
 
 beforeEach(fn () => BrowserEnvironment::assertReady());
 
+function attachVideoForUnifiedLayoutFixture(EditorFixture $fixture): Video
+{
+    $record = $fixture->context->name === 'company-course'
+        ? Lesson::query()->findOrFail($fixture->recordIds[0])
+        : ModuleVersion::query()->findOrFail($fixture->recordIds[0]);
+
+    return Video::factory()->create([
+        'lesson_id' => $record->id,
+        'company_id' => $record->company_id,
+        'provider_asset_id' => $fixture->token.'-layout-video',
+        'status' => VideoStatus::Ready,
+        'is_current' => true,
+        'replacement_generation' => 1,
+        'metadata' => ['width' => 1280, 'height' => 720],
+    ]);
+}
+
 test('question and answer fields use the accepted width at desktop and mobile', function (string $contextName): void {
     $fixture = EditorFixture::create(EditorContextCase::all()[$contextName]);
+    attachVideoForUnifiedLayoutFixture($fixture);
 
     if ($fixture->user !== null) {
         $this->actingAs($fixture->user);
@@ -49,11 +69,53 @@ test('question and answer fields use the accepted width at desktop and mobile', 
                 ->and($measurement['controlRatio'])->toBeGreaterThanOrEqual(0.98);
         }
 
+        $videoLayout = $page->script(<<<'JS'
+            () => {
+                const panel = document.querySelector('[data-editor-current-video]');
+                const control = panel?.querySelector('[data-editor-media-action="remove"][data-editor-action-detail="confirm-video-removal"]');
+                const inspect = element => {
+                    const rect = element?.getBoundingClientRect();
+                    return rect ? {
+                        visible: rect.width > 0 && rect.height > 0,
+                        left: rect.left,
+                        right: rect.right,
+                        width: rect.width,
+                    } : null;
+                };
+
+                return {
+                    panel: inspect(panel),
+                    control: inspect(control),
+                    viewport: window.innerWidth,
+                    documentWidth: document.body.getBoundingClientRect().width,
+                };
+            }
+        JS);
+        expect($videoLayout['panel'])->not->toBeNull()
+            ->and($videoLayout['control'])->not->toBeNull()
+            ->and($videoLayout['panel']['visible'])->toBeTrue()
+            ->and($videoLayout['control']['visible'])->toBeTrue()
+            ->and($videoLayout['panel']['left'])->toBeGreaterThanOrEqual(0)
+            ->and($videoLayout['control']['left'])->toBeGreaterThanOrEqual(0)
+            ->and($videoLayout['panel']['right'])->toBeLessThanOrEqual($videoLayout['viewport'] + 1)
+            ->and($videoLayout['control']['right'])->toBeLessThanOrEqual($videoLayout['viewport'] + 1)
+            ->and($videoLayout['documentWidth'])->toBeLessThanOrEqual($videoLayout['viewport'] + 1);
+
         $overflow = $page->script(<<<'JS'
             () => [...document.querySelectorAll('body *')]
                 .filter(element => element.getBoundingClientRect().right > window.innerWidth + 1)
                 .slice(0, 8)
-                .map(element => `${element.tagName.toLowerCase()}#${element.id}.${element.className}`)
+                .map(element => {
+                    const rect = element.getBoundingClientRect();
+                    return {
+                        element: `${element.tagName.toLowerCase()}#${element.id}.${element.className}`,
+                        text: (element.innerText || '').trim().slice(0, 120),
+                        left: rect.left,
+                        right: rect.right,
+                        width: rect.width,
+                        viewport: window.innerWidth,
+                    };
+                })
         JS);
         if ($overflow !== []) {
             throw new RuntimeException("{$contextName} {$width}px overflow: ".json_encode($overflow, JSON_THROW_ON_ERROR));

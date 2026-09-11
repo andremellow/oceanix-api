@@ -17,6 +17,7 @@ export function createCourseEditorState(initial = {}) {
         operationalGuidanceTarget: '',
         operationalGuidanceAction: '',
         operationalGuidanceSeverity: 'status',
+        confirmationFailureActive: false,
         messages: {
             loading: 'Loading the editor before :action.',
             permission: 'Permission was removed. :action is unavailable; copy any local values you need.',
@@ -25,6 +26,7 @@ export function createCourseEditorState(initial = {}) {
             upload: 'Wait for the conflicting upload to finish before :action.',
             operation: 'Wait for the current editor operation to finish before :action.',
             failed: 'The response for :action on :target was lost. Automatic retry is unavailable because the outcome is unknown. Check the target, then use the original action only if it is still needed.',
+            confirmationFailed: 'Confirmation for :action on :target could not be opened. No change was applied; try the original action again.',
             denied: 'Permission was removed. :action on :target was not applied. Your local values remain available to copy.',
             pending: ':action in progress for :target…',
             ...(initial.messages || {}),
@@ -500,10 +502,13 @@ export function createCourseEditorState(initial = {}) {
             const wireClick = control.getAttribute('wire:click') || '';
             const opensConfirmation = wireClick.startsWith('confirm');
             const opensPicker = wireClick.startsWith('open') || control.type === 'button' && !wireClick;
-            if (opensConfirmation) return true;
             if (opensPicker && !['open-image-library', 'open-video-library'].includes(control.dataset.editorActionDetail)) return true;
 
             const identity = this.operationIdentity(control);
+            identity.label = this.operationLabel(control);
+            identity.targetLabel = this.operationTargetLabel(control);
+            if (opensConfirmation) identity.readOnly = true;
+            this.confirmationFailureActive = false;
             this.activeOperationMeta[identity.key] = identity;
             this.activeOperations.add(identity.key);
             delete this.operationErrors[identity.key];
@@ -536,6 +541,7 @@ export function createCourseEditorState(initial = {}) {
                 this.operationalGuidanceAction = '';
                 this.operationalGuidanceTarget = '';
                 this.operationalGuidanceSeverity = 'status';
+                this.confirmationFailureActive = false;
             }
             this.synchronizeOperationalControls();
         },
@@ -626,7 +632,7 @@ export function createCourseEditorState(initial = {}) {
             this.$wire?.$hook?.('request', ({ succeed, fail }) => {
                 const focus = this.pendingFocus;
                 const operationRequest = [...this.activeOperations]
-                    .some(key => !this.activeOperationMeta[key]?.external)
+                    .some(key => !this.activeOperationMeta[key]?.external && !this.activeOperationMeta[key]?.readOnly)
                     ? this.captureOperationRequest()
                     : null;
                 succeed?.(() => {
@@ -644,17 +650,25 @@ export function createCourseEditorState(initial = {}) {
                             .map(key => this.activeOperationMeta[key])
                             .find(identity => identity && !identity.external);
                         if (failedOperation) {
-                            const failureState = Number(status) === 403 ? 'permission-lost' : 'unknown-outcome';
-                            this.state = failureState;
-                            this.dirty = true;
-                            this.$wire?.set?.('saveState', failureState, false);
-                            this.$wire?.set?.('errorKind', failureState === 'permission-lost' ? 'permission' : 'unknown-outcome', false);
+                            const permissionDenied = Number(status) === 403;
+                            const readOnlyFailure = failedOperation.readOnly && !permissionDenied;
+                            const failureState = permissionDenied ? 'permission-lost' : 'unknown-outcome';
+                            if (!readOnlyFailure) {
+                                this.state = failureState;
+                                if (!failedOperation.readOnly) this.dirty = true;
+                                this.$wire?.set?.('saveState', failureState, false);
+                                this.$wire?.set?.('errorKind', permissionDenied ? 'permission' : 'unknown-outcome', false);
+                            }
+                            this.confirmationFailureActive = readOnlyFailure;
                             this.operationalGuidanceAction = failedOperation.detail;
                             this.operationalGuidanceTarget = failedOperation.target;
                             this.operationalGuidanceSeverity = 'danger';
-                            this.operationalGuidance = (failureState === 'permission-lost' ? this.messages.denied : this.messages.failed)
-                                .replace(':action', failedOperation.detail)
-                                .replace(':target', failedOperation.target);
+                            const message = permissionDenied
+                                ? this.messages.denied
+                                : (failedOperation.readOnly ? this.messages.confirmationFailed : this.messages.failed);
+                            this.operationalGuidance = message
+                                .replace(':action', failedOperation.label || failedOperation.detail)
+                                .replace(':target', failedOperation.targetLabel || failedOperation.target);
                             this.$dispatch?.('editor-request-terminal', { operation: failedOperation.key, state: 'failed' });
                         }
                         this.clearLocalOperations(false, false);

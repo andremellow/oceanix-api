@@ -1,6 +1,8 @@
 <?php
 
+use App\Actions\Videos\DetachEditorVideo;
 use App\Enums\VideoStatus;
+use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
@@ -8,6 +10,9 @@ use App\Models\Lesson;
 use App\Models\ModuleVersion;
 use App\Models\Question;
 use App\Models\Video;
+use App\Services\CourseEditor\EditorRevision;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Facades\Http;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\Support\CourseEditor\EditorContextCase;
@@ -20,6 +25,14 @@ function legacyCompanyEditor(): array
     Livewire::actingAs($fixture->user);
 
     return [$fixture, Livewire::test('courses.editor', $fixture->routeParameters())];
+}
+
+/** @return list<array<string, mixed>> */
+function courseEditorVideoEvidence(): array
+{
+    return Video::query()->orderBy('id')->get()->map(
+        fn (Video $video): array => $video->getAttributes(),
+    )->all();
 }
 
 it('adds a lesson and persists it immediately with a stable id', function (): void {
@@ -129,17 +142,21 @@ it('never opens a shared course editor from tenant context', function (): void {
         ->assertNotFound();
 });
 
-it('keeps each persisted video state available through the rich-content video control', function (VideoStatus $status): void {
+it('keeps each persisted video state available through the rich-content and confirmed removal controls', function (VideoStatus $status): void {
     [$fixture] = legacyCompanyEditor();
-    Video::factory()->create(['lesson_id' => $fixture->recordIds[0], 'company_id' => $fixture->root->company_id, 'status' => $status, 'is_current' => true]);
+    $video = Video::factory()->create(['lesson_id' => $fixture->recordIds[0], 'company_id' => $fixture->root->company_id, 'status' => $status, 'is_current' => true]);
 
     Livewire::test('courses.editor', $fixture->routeParameters())
         ->assertSee('data-editor-media-action="open-library"', escape: false)
         ->assertSee('data-editor-action-detail="open-video-library"', escape: false)
+        ->assertSee('data-editor-current-video', escape: false)
+        ->assertSee('data-editor-media-action="remove"', escape: false)
+        ->assertSee('data-editor-action-detail="confirm-video-removal"', escape: false)
+        ->assertSee('wire:click="confirmVideoDestruction('.$fixture->recordIds[0].', '.$video->id.')"', escape: false)
         ->assertDontSeeText('No video attached')
         ->assertDontSeeText('Choose or upload video')
         ->assertDontSeeText('Replace video')
-        ->assertDontSeeText('Remove video');
+        ->assertSeeText('Remove video');
 })->with(VideoStatus::cases());
 
 it('denies the editor after the update permission is revoked', function (): void {
@@ -161,4 +178,110 @@ it('keeps the version title synchronized on Save but freezes a published version
     $version->update(['status' => 'published', 'published_at' => now()]);
     $course->update(['title' => $fixture->token.' Catalog renamed']);
     expect($version->fresh()->title)->toBe($fixture->token.' Renamed');
+});
+
+it('leaves published company and shared video evidence unchanged when detach is denied', function (): void {
+    $companyFixture = EditorFixture::create(EditorContextCase::companyCourse());
+    $course = Course::query()->findOrFail($companyFixture->root->id);
+    $version = $course->versions()->firstOrFail();
+    $lesson = $version->lessons()->firstOrFail();
+    $companyVideo = Video::factory()->create([
+        'company_id' => $course->company_id,
+        'lesson_id' => $lesson,
+        'provider_asset_id' => $companyFixture->token.'-published-video',
+        'status' => VideoStatus::Ready,
+        'is_current' => true,
+        'replacement_generation' => 0,
+    ]);
+    Video::factory()->create([
+        'company_id' => $course->company_id,
+        'lesson_id' => $version->lessons()->whereKeyNot($lesson->id)->firstOrFail(),
+        'provider_asset_id' => $companyFixture->token.'-published-sibling-video',
+        'status' => VideoStatus::Ready,
+        'is_current' => true,
+        'replacement_generation' => 0,
+    ]);
+    $companyBefore = courseEditorVideoEvidence();
+    $version->update(['status' => 'published', 'published_at' => now()]);
+
+    expect(fn () => app(DetachEditorVideo::class)->forCompanyEditor(
+        $lesson,
+        $companyVideo->id,
+        $companyFixture->user,
+        app(EditorRevision::class)->forCompanyCourse($course->fresh(), $version->fresh()),
+    ))->toThrow(AuthorizationException::class);
+    expect(courseEditorVideoEvidence())->toBe($companyBefore);
+
+    $sharedFixture = EditorFixture::create(EditorContextCase::sharedModule());
+    $platform = Account::query()->findOrFail($sharedFixture->session['platform_account_id']);
+    $sharedVersion = ModuleVersion::query()->findOrFail($sharedFixture->recordIds[0]);
+    $sharedVideo = Video::factory()->create([
+        'company_id' => null,
+        'lesson_id' => $sharedVersion,
+        'provider_asset_id' => $sharedFixture->token.'-published-video',
+        'status' => VideoStatus::Ready,
+        'is_current' => true,
+        'replacement_generation' => 0,
+    ]);
+    Video::factory()->create([
+        'company_id' => null,
+        'lesson_id' => $sharedVersion,
+        'provider_asset_id' => $sharedFixture->token.'-published-history-video',
+        'status' => VideoStatus::Ready,
+        'is_current' => false,
+        'replacement_generation' => 0,
+    ]);
+    $sharedBefore = courseEditorVideoEvidence();
+    $sharedVersion->update(['status' => 'published', 'published_at' => now()]);
+
+    expect(fn () => app(DetachEditorVideo::class)->forPlatformEditor(
+        $sharedVersion,
+        $sharedVideo->id,
+        $platform,
+        'current-revision',
+    ))->toThrow(LogicException::class, 'Videos can only be changed on platform-owned shared module drafts.');
+    expect(courseEditorVideoEvidence())->toBe($sharedBefore);
+    Http::assertNotSent(fn ($request): bool => $request->method() === 'DELETE');
+});
+
+it('leaves a mounted shared course media graph unchanged when its draft is published', function (): void {
+    $fixture = EditorFixture::create(EditorContextCase::sharedCourse());
+    $target = ModuleVersion::query()->findOrFail($fixture->recordIds[0]);
+    $sibling = ModuleVersion::query()->findOrFail($fixture->recordIds[1]);
+    $video = Video::factory()->create([
+        'company_id' => null,
+        'lesson_id' => $target,
+        'provider_asset_id' => $fixture->token.'-shared-course-target-video',
+        'status' => VideoStatus::Ready,
+        'is_current' => true,
+        'replacement_generation' => 1,
+        'metadata' => ['hls' => 'https://video.example/target.m3u8'],
+    ]);
+    Video::factory()->create([
+        'company_id' => null,
+        'lesson_id' => $sibling,
+        'provider_asset_id' => $fixture->token.'-shared-course-sibling-video',
+        'status' => VideoStatus::Ready,
+        'is_current' => true,
+        'replacement_generation' => 1,
+        'metadata' => ['hls' => 'https://video.example/sibling.m3u8'],
+    ]);
+    $before = courseEditorVideoEvidence();
+
+    $this->withSession($fixture->session);
+    $editor = Livewire::test($fixture->context->component, $fixture->routeParameters());
+    $localTitle = $fixture->token.' retained after publication';
+    $editor->set('courseForm.title', $localTitle)
+        ->call('confirmVideoDestruction', $target->id, $video->id)
+        ->assertSet('confirmingDestructive', true);
+    $fixture->root->versions()->where('status', 'draft')->sole()->update(['status' => 'published', 'published_at' => now()]);
+
+    $editor->call('performConfirmedDestructive')
+        ->assertSet('confirmingDestructive', true)
+        ->assertSet('editorDirty', true)
+        ->assertSet('courseForm.title', $localTitle)
+        ->assertSeeText('The media change could not be completed. Try again.');
+    expect($editor->get('courseForm.title'))->toBe($localTitle)
+        ->and(courseEditorVideoEvidence())->toBe($before);
+    Http::assertNotSent(fn ($request): bool => $request->method() === 'DELETE');
 });

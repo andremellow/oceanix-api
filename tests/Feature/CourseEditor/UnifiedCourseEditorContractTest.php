@@ -55,6 +55,14 @@ function attachVideoForUnifiedContractFixture(EditorFixture $fixture): Video
     ]);
 }
 
+/** @return list<array<string, mixed>> */
+function unifiedContractVideoEvidence(): array
+{
+    return Video::query()->orderBy('id')->get()->map(
+        fn (Video $video): array => $video->getAttributes(),
+    )->all();
+}
+
 /** @return array{string, Model} */
 function unifiedTitleTarget(EditorFixture $fixture): array
 {
@@ -76,21 +84,96 @@ it('renders the same semantic contract in every editor context', function (strin
         ->assertSee('data-editor-field', escape: false);
 })->with('course editor contexts');
 
-it('keeps video access in the rich-content toolbar without a standalone record footer', function (string $contextName): void {
-    [, $editor] = unifiedEditor($contextName, withAttachedVideo: true);
+it('exposes attached video removal through the shared confirmed action in every context', function (string $contextName): void {
+    $fixture = EditorFixture::create(EditorContextCase::all()[$contextName]);
+    attachVideoForUnifiedContractFixture($fixture);
+    $video = Video::query()->where('provider_asset_id', $fixture->token.'-attached-video')->sole();
+    $recordTitle = ($fixture->context->name === 'company-course'
+        ? Lesson::query()->findOrFail($fixture->recordIds[0])
+        : ModuleVersion::query()->findOrFail($fixture->recordIds[0]))->title;
+    $record = Lesson::query()->findOrFail($fixture->recordIds[0]);
+    $otherRecord = isset($fixture->recordIds[1])
+        ? Lesson::query()->findOrFail($fixture->recordIds[1])
+        : $record;
+    $otherVideo = Video::factory()->create([
+        'lesson_id' => $otherRecord->id,
+        'company_id' => $otherRecord->company_id,
+        'provider_asset_id' => $fixture->token.'-unrelated-video',
+        'status' => VideoStatus::Ready,
+        'is_current' => $otherRecord->isNot($record),
+        'replacement_generation' => 0,
+    ]);
+    [, $editor] = unifiedEditorFromFixture($fixture);
+    $snapshotFields = ['id', 'lesson_id', 'company_id', 'provider_asset_id', 'status', 'is_current', 'replacement_generation', 'metadata'];
+    $targetBefore = $video->fresh()->only($snapshotFields);
+    $otherBefore = $otherVideo->fresh()->only($snapshotFields);
+    $allVideosBefore = unifiedContractVideoEvidence();
 
     $editor->assertDontSeeText('No video attached')
         ->assertDontSeeText('Choose or upload video')
         ->assertDontSeeText('Replace video')
-        ->assertDontSeeText('Remove video')
+        ->assertSeeText('Attached video')
+        ->assertSeeText('Remove video')
         ->assertSee('data-editor-media-action="open-library"', escape: false)
         ->assertSee('data-editor-action-detail="open-video-library"', escape: false)
+        ->assertSee('data-editor-current-video', escape: false)
+        ->assertSee('data-editor-media-action="remove"', escape: false)
+        ->assertSee('data-editor-action-detail="confirm-video-removal"', escape: false)
+        ->assertSee('data-editor-target-label="'.$recordTitle.'"', escape: false)
+        ->assertSee('wire:click="confirmVideoDestruction('.$fixture->recordIds[0].', '.$video->id.')"', escape: false)
         ->assertSee("x-on:click=\"\$dispatch('oceanix-open-video-library'", escape: false)
         ->assertSee('wire:model.self="videoLibraryOpen"', escape: false)
+        ->call('confirmVideoDestruction', $fixture->recordIds[0], $video->id)
+        ->assertSet('confirmingDestructive', true)
+        ->assertSet('destructiveAction', 'remove-video')
+        ->assertSeeText('Remove the video from “'.$recordTitle.'”?')
+        ->assertSeeText('Only the editable draft association will be removed.')
+        ->call('cancelDestructiveConfirmation', 'confirmingDestructive')
+        ->assertSet('confirmingDestructive', false)
         ->call('openEditorVideoLibrary', 'records.0.content_markdown')
         ->assertSet('videoLibraryOpen', true)
         ->assertSee('data-editor-upload-picker', escape: false)
         ->assertSee('wire:click="searchVideoLibrary"', escape: false);
+
+    expect(unifiedContractVideoEvidence())->toBe($allVideosBefore)
+        ->and($video->fresh()->is_current)->toBeTrue()
+        ->and($otherVideo->fresh()->only($snapshotFields))->toBe($otherBefore);
+
+    $editor->call('confirmVideoDestruction', $fixture->recordIds[0], $video->id)
+        ->call('performConfirmedDestructive')
+        ->assertSet('confirmingDestructive', false);
+
+    $targetAfter = $targetBefore;
+    $targetAfter['is_current'] = false;
+    $persistedVideosAfter = unifiedContractVideoEvidence();
+    $allVideosAfter = collect($allVideosBefore)->map(function (array $row) use ($persistedVideosAfter, $video): array {
+        if ($row['id'] === $video->id) {
+            $persistedTarget = collect($persistedVideosAfter)->firstWhere('id', $video->id);
+            $row['is_current'] = 0;
+            $row['updated_at'] = $persistedTarget['updated_at'];
+        }
+
+        return $row;
+    })->all();
+    expect($persistedVideosAfter)->toBe($allVideosAfter)
+        ->and($video->fresh()->only($snapshotFields))->toBe($targetAfter)
+        ->and($otherVideo->fresh()->only($snapshotFields))->toBe($otherBefore)
+        ->and(Video::query()->find($video->id))->not->toBeNull()
+        ->and(Video::query()->find($otherVideo->id))->not->toBeNull();
+    Http::assertNotSent(fn ($request): bool => $request->method() === 'DELETE');
+})->with('course editor contexts');
+
+it('renders the attached video and confirmation failure copy from the Portuguese locale', function (string $contextName): void {
+    app()->setLocale('pt_BR');
+    [, $editor] = unifiedEditor($contextName, withAttachedVideo: true);
+
+    $editor->assertSeeText('Vídeo anexado')
+        ->assertSee('Não foi possível abrir a confirmação de :action em :target. Nenhuma alteração foi aplicada; tente a ação original novamente.');
+
+    expect(__('Confirmation for :action on :target could not be opened. No change was applied; try the original action again.', [
+        'action' => 'Remover vídeo',
+        'target' => 'Módulo de segurança',
+    ]))->toBe('Não foi possível abrir a confirmação de Remover vídeo em Módulo de segurança. Nenhuma alteração foi aplicada; tente a ação original novamente.');
 })->with('course editor contexts');
 
 it('renders the approved composition search and image hooks with associated disabled and upload guidance', function (): void {

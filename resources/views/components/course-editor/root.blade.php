@@ -93,6 +93,7 @@
     data-editor-root
     data-editor-context="{{ $context }}"
     data-editor-actions-locked="{{ $actionsLocked ? 'true' : 'false' }}"
+    x-bind:data-editor-actions-locked="state === 'permission-lost' ? 'true' : 'false'"
     data-editor-hydration-state="loading"
     x-bind:data-editor-hydration-state="ready ? 'ready' : 'loading'"
     data-editor-dirty="{{ $editorDirty ? 'true' : 'false' }}"
@@ -111,6 +112,7 @@
             'upload' => __('Wait for the conflicting upload to finish before :action.'),
             'operation' => __('Wait for the current editor operation to finish before :action.'),
             'failed' => __('The response for :action on :target was lost. Automatic retry is unavailable because the outcome is unknown. Check the target, then use the original action only if it is still needed.'),
+            'confirmationFailed' => __('Confirmation for :action on :target could not be opened. No change was applied; try the original action again.'),
             'denied' => __('Permission was removed. :action on :target was not applied. Your local values remain available to copy.'),
             'pending' => __(':action in progress for :target…'),
         ]),
@@ -444,6 +446,7 @@
                     variant="primary"
                     :disabled="$actionsLocked || $selectedModuleId === null || ($isCompany && in_array($compositionMode, ['direct_lessons', 'mixed'], true))"
                     data-editor-base-disabled="{{ ($actionsLocked || $selectedModuleId === null || ($isCompany && in_array($compositionMode, ['direct_lessons', 'mixed'], true))) ? 'true' : 'false' }}"
+                    class="w-full whitespace-normal sm:w-auto"
                     x-bind:disabled="['saving', 'conflict', 'unknown-outcome', 'permission-lost'].includes(state) || {{ Js::from($isCompany && in_array($compositionMode, ['direct_lessons', 'mixed'], true)) }} || ! pickerSelection">
                     {{ __('Add module') }}
                 </flux:button>
@@ -584,6 +587,30 @@
                                 toolbar="heading | bold italic underline strike | bullet ordered blockquote link | align | image image-left image-center image-right image-size video ~ fullscreen undo redo" />
                             <flux:error id="{{ $recordErrorBase }}-content" name="records.{{ $recordIndex }}.content_markdown" />
                         </div>
+
+                        @if (($capabilities['manageMedia'] ?? false) && $record['video'] !== null)
+                            <div
+                                class="flex min-w-0 flex-col gap-3 rounded-[16px] border border-[#dde3e7] bg-[#f8fafb] p-3 sm:flex-row sm:items-center sm:justify-between"
+                                data-editor-current-video
+                                data-record-key="{{ $record['key'] }}">
+                                <div class="min-w-0">
+                                    <p class="text-sm font-bold text-[#262d33]">{{ __('Attached video') }}</p>
+                                    <p class="mt-1 text-xs text-[#707a80]">{{ $record['video']['status_label'] }} · {{ $record['video']['duration'] }}</p>
+                                </div>
+                                <flux:button
+                                    wire:click="confirmVideoDestruction({{ $record['id'] }}, {{ $record['video']['id'] }})"
+                                    data-editor-media-action="remove"
+                                    data-editor-action-detail="confirm-video-removal"
+                                    data-editor-target-key="{{ $record['key'] }}"
+                                    data-editor-target-label="{{ $record['title'] }}"
+                                    variant="ghost"
+                                    size="sm"
+                                    icon="trash"
+                                    class="w-full whitespace-normal sm:w-auto">
+                                    {{ __('Remove video') }}
+                                </flux:button>
+                            </div>
+                        @endif
 
                         <div class="grid min-w-0 gap-4 sm:grid-cols-2">
                             <flux:field data-editor-field data-field-name="module.watch-threshold">

@@ -55,6 +55,14 @@ function attachVideoForUnifiedBrowserFixture(EditorFixture $fixture): Video
     ]);
 }
 
+/** @return list<array<string, mixed>> */
+function unifiedBrowserVideoEvidence(): array
+{
+    return Video::query()->orderBy('id')->get()->map(
+        fn (Video $video): array => $video->getAttributes(),
+    )->all();
+}
+
 test('every context exposes the same observable editor contract', function (string $contextName): void {
     [$fixture, $page] = openUnifiedEditor($this, $contextName);
 
@@ -76,33 +84,206 @@ test('every context exposes the same observable editor contract', function (stri
     }
 })->with('course editor contexts');
 
-test('every context keeps video access in the rich-content toolbar without a standalone record footer', function (string $contextName): void {
-    [, $page] = openUnifiedEditor($this, $contextName, withAttachedVideo: true);
+test('every context exposes confirmed attached video removal beside the rich-content toolbar access', function (string $contextName): void {
+    [$fixture, $page] = openUnifiedEditor($this, $contextName, withAttachedVideo: true);
+    $video = Video::query()->where('provider_asset_id', $fixture->token.'-attached-video')->sole();
     $videoControl = '[data-editor-media-action="open-library"][data-editor-action-detail="open-video-library"]';
+    $recordKey = ($fixture->context->name === 'company-course' ? 'lesson:' : 'module-version:').$fixture->recordIds[0];
+    $record = '[data-editor-record][data-record-key="'.$recordKey.'"]';
+    $removeControl = $record.' [data-editor-media-action="remove"][data-editor-action-detail="confirm-video-removal"]';
+    $fieldName = $fixture->context->name === 'shared-module' ? 'module.title' : 'course.title';
+    $field = "[data-editor-field][data-field-name=\"{$fieldName}\"] input";
+    $persistedTarget = $fixture->context->name === 'shared-module'
+        ? ModuleVersion::query()->findOrFail($fixture->recordIds[0])
+        : $fixture->root;
+    $persistedBefore = $persistedTarget->fresh()->title;
+    $local = $fixture->token.' retained through video removal';
+    $revisionScript = "() => { const revisions = Alpine.\$data(document.querySelector('[data-editor-root]')).\$wire.revisions; return revisions['record:{$fixture->recordIds[0]}'] || revisions.root; }";
+    $videosBefore = unifiedBrowserVideoEvidence();
 
     $page->assertNoJavascriptErrors()
-        ->assertPresent($videoControl);
+        ->assertPresent($videoControl)
+        ->assertPresent($removeControl)
+        ->fill($field, $local)
+        ->assertDataAttribute('[data-editor-status]', 'editor-state', 'dirty')
+        ->assertScript('!document.querySelector('.json_encode($removeControl, JSON_THROW_ON_ERROR).').disabled');
 
     $evidence = $page->script(<<<'JS'
         () => {
             const root = document.querySelector('[data-editor-root]');
-            const legacyCopy = ['No video attached', 'Choose or upload video', 'Replace video', 'Remove video'];
+            const legacyCopy = ['No video attached', 'Choose or upload video', 'Replace video'];
 
             return {
                 legacyCopy: legacyCopy.filter(copy => root.innerText.includes(copy)),
                 toolbarControlCount: root.querySelectorAll('[data-editor-media-action="open-library"][data-editor-action-detail="open-video-library"]').length,
+                removalControlCount: root.querySelectorAll('[data-editor-media-action="remove"][data-editor-action-detail="confirm-video-removal"]').length,
             };
         }
     JS);
 
     expect($evidence['legacyCopy'])->toBe([])
-        ->and($evidence['toolbarControlCount'])->toBeGreaterThan(0);
+        ->and($evidence['toolbarControlCount'])->toBeGreaterThan(0)
+        ->and($evidence['removalControlCount'])->toBe(1);
+
+    $dialog = '[data-editor-destructive-confirmation][wire\\:submit="performConfirmedDestructive"]';
+    $beforeRevision = $page->script($revisionScript);
+    $page->click($removeControl)
+        ->wait(0.2)
+        ->assertVisible($dialog)
+        ->assertDataAttribute($dialog, 'destructive-action', 'remove')
+        ->assertPresent($dialog.' [data-editor-media-action="remove"][data-editor-action-detail="remove-video"]')
+        ->assertSee('Only the editable draft association will be removed.')
+        ->click($dialog.' [data-editor-destructive-cancel]')
+        ->wait(0.2)
+        ->assertScript('document.querySelector('.json_encode($dialog, JSON_THROW_ON_ERROR).').getBoundingClientRect().height === 0')
+        ->assertValue($field, $local);
+
+    expect(unifiedBrowserVideoEvidence())->toBe($videosBefore)
+        ->and($video->fresh()->is_current)->toBeTrue()
+        ->and($persistedTarget->fresh()->title)->toBe($persistedBefore);
+
+    $page->click($removeControl)
+        ->wait(0.2)
+        ->click($dialog.' [data-editor-destructive-submit]')
+        ->wait(0.5)
+        ->assertValue($field, $local)
+        ->assertNotPresent($removeControl);
+
+    $afterRevision = $page->script($revisionScript);
+    $persistedVideosAfter = unifiedBrowserVideoEvidence();
+    $videosAfter = collect($videosBefore)->map(function (array $row) use ($persistedVideosAfter, $video): array {
+        if ($row['id'] === $video->id) {
+            $persistedTarget = collect($persistedVideosAfter)->firstWhere('id', $video->id);
+            $row['is_current'] = 0;
+            $row['updated_at'] = $persistedTarget['updated_at'];
+        }
+
+        return $row;
+    })->all();
+    expect($afterRevision)->not->toBe($beforeRevision)
+        ->and($persistedVideosAfter)->toBe($videosAfter)
+        ->and($video->fresh()->is_current)->toBeFalse()
+        ->and($persistedTarget->fresh()->title)->toBe($persistedBefore);
+
+    $page->click('[data-editor-save]')
+        ->waitForText('All changes saved')
+        ->refresh()
+        ->assertValue($field, $local);
+    expect($persistedTarget->fresh()->title)->toBe($local);
 
     $page->click($videoControl)
         ->wait(0.5)
         ->assertPresent('[data-editor-upload-picker][data-record-key]')
         ->assertPresent('[wire\\:click="searchVideoLibrary"]');
 })->with('course editor contexts');
+
+test('revoked permission while opening video removal confirmation locks the editor without implying a write', function (string $contextName): void {
+    [$fixture, $page] = openUnifiedEditor($this, $contextName, withAttachedVideo: true);
+    $video = Video::query()->where('provider_asset_id', $fixture->token.'-attached-video')->sole();
+    $recordKey = ($fixture->context->name === 'company-course' ? 'lesson:' : 'module-version:').$fixture->recordIds[0];
+    $recordTitle = ($fixture->context->name === 'company-course'
+        ? Lesson::query()->findOrFail($fixture->recordIds[0])
+        : ModuleVersion::query()->findOrFail($fixture->recordIds[0]))->title;
+    $removeControl = '[data-editor-record][data-record-key="'.$recordKey.'"] [data-editor-media-action="remove"][data-editor-action-detail="confirm-video-removal"]';
+    $fieldName = $fixture->context->name === 'shared-module' ? 'module.title' : 'course.title';
+    $field = "[data-editor-field][data-field-name=\"{$fieldName}\"] input";
+    $persistedTarget = $fixture->context->name === 'shared-module'
+        ? ModuleVersion::query()->findOrFail($fixture->recordIds[0])
+        : $fixture->root;
+    $persistedBefore = $persistedTarget->fresh()->title;
+    $local = $fixture->token.' retained after confirmation denial';
+    $videosBefore = unifiedBrowserVideoEvidence();
+
+    $page->fill($field, $local);
+    if ($fixture->user !== null) {
+        $fixture->user->roles()->detach();
+    } else {
+        Account::query()->findOrFail($fixture->session['platform_account_id'])->update(['is_platform_admin' => false]);
+    }
+
+    try {
+        $page->click($removeControl)
+            ->wait(0.8)
+            ->assertDataAttribute('[data-editor-status]', 'editor-state', 'permission-lost')
+            ->assertDataAttribute('[data-editor-root]', 'editor-actions-locked', 'true')
+            ->assertValue($field, $local)
+            ->assertSee('Permission was removed. Remove video on '.$recordTitle.' was not applied. Your local values remain available to copy.')
+            ->assertDontSee('confirm-video-removal on '.$recordKey)
+            ->assertScript("document.querySelector('[data-editor-destructive-confirmation]').getBoundingClientRect().height === 0")
+            ->assertScript("[...document.querySelectorAll('[data-editor-structure-action], [data-editor-media-action], [data-editor-save], [data-editor-save-close]')].every(control => control.disabled || control.getAttribute('aria-disabled') === 'true')");
+        expect(unifiedBrowserVideoEvidence())->toBe($videosBefore)
+            ->and($video->fresh()->is_current)->toBeTrue()
+            ->and($persistedTarget->fresh()->title)->toBe($persistedBefore);
+    } finally {
+        $page->script("() => { const root = document.querySelector('[data-editor-root]'); if (!root) return; const state = Alpine.\$data(root); state.dirty = false; state.state = 'clean'; state.destroy(); }");
+    }
+})->with('course editor contexts');
+
+test('a lost video confirmation retries through the original control and cancels without changing save provenance', function (string $contextName, bool $dirty): void {
+    [$fixture, $page] = openUnifiedEditor($this, $contextName, withAttachedVideo: true);
+    $video = Video::query()->where('provider_asset_id', $fixture->token.'-attached-video')->sole();
+    $record = $fixture->context->name === 'company-course'
+        ? Lesson::query()->findOrFail($fixture->recordIds[0])
+        : ModuleVersion::query()->findOrFail($fixture->recordIds[0]);
+    $recordKey = ($fixture->context->name === 'company-course' ? 'lesson:' : 'module-version:').$fixture->recordIds[0];
+    $removeControl = '[data-editor-record][data-record-key="'.$recordKey.'"] [data-editor-media-action="remove"][data-editor-action-detail="confirm-video-removal"]';
+    $dialog = '[data-editor-destructive-confirmation][data-record-key="'.$recordKey.'"][wire\\:submit="performConfirmedDestructive"]';
+    $fieldName = $fixture->context->name === 'shared-module' ? 'module.title' : 'course.title';
+    $field = '[data-editor-field][data-field-name="'.$fieldName.'"] input';
+    $persistedTarget = $fixture->context->name === 'shared-module'
+        ? ModuleVersion::query()->findOrFail($fixture->recordIds[0])
+        : $fixture->root;
+    $persistedBefore = $persistedTarget->fresh()->title;
+    $visibleValue = $dirty ? $fixture->token.' retained after confirmation retry' : $persistedBefore;
+    $expectedState = $dirty ? 'dirty' : 'clean';
+    $expectedGuidance = 'Confirmation for Remove video on '.$record->title.' could not be opened. No change was applied; try the original action again.';
+    $videosBefore = unifiedBrowserVideoEvidence();
+    $browserContext = $page->page()->context();
+    $contextGuid = (new ReflectionProperty($browserContext, 'guid'))->getValue($browserContext);
+
+    try {
+        if ($dirty) {
+            $page->fill($field, $visibleValue);
+        }
+
+        iterator_to_array(Client::instance()->execute($contextGuid, 'setOffline', ['offline' => true]));
+        $page->click($removeControl)
+            ->wait(0.8)
+            ->assertDataAttribute('[data-editor-status]', 'editor-state', $expectedState)
+            ->assertValue($field, $visibleValue)
+            ->assertVisible('[data-editor-operational-guidance][data-guidance-severity="danger"]')
+            ->assertSee($expectedGuidance)
+            ->assertScript('!document.querySelector('.json_encode($dialog, JSON_THROW_ON_ERROR).') || document.querySelector('.json_encode($dialog, JSON_THROW_ON_ERROR).').getBoundingClientRect().height === 0');
+
+        expect(unifiedBrowserVideoEvidence())->toBe($videosBefore)
+            ->and($video->fresh()->is_current)->toBeTrue()
+            ->and($persistedTarget->fresh()->title)->toBe($persistedBefore);
+
+        iterator_to_array(Client::instance()->execute($contextGuid, 'setOffline', ['offline' => false]));
+        $page->wait(0.5)
+            ->click($removeControl)
+            ->wait(0.5)
+            ->assertVisible($dialog)
+            ->assertSee('Remove the video from “'.$record->title.'”?')
+            ->assertValue($field, $visibleValue)
+            ->click($dialog.' [data-editor-destructive-cancel]')
+            ->wait(0.5)
+            ->assertDataAttribute('[data-editor-status]', 'editor-state', $expectedState)
+            ->assertValue($field, $visibleValue)
+            ->assertScript('!document.querySelector('.json_encode($dialog, JSON_THROW_ON_ERROR).') || document.querySelector('.json_encode($dialog, JSON_THROW_ON_ERROR).').getBoundingClientRect().height === 0')
+            ->assertScript("document.querySelector('[data-editor-operational-guidance]').getBoundingClientRect().height === 0");
+
+        expect(unifiedBrowserVideoEvidence())->toBe($videosBefore)
+            ->and($video->fresh()->is_current)->toBeTrue()
+            ->and($persistedTarget->fresh()->title)->toBe($persistedBefore);
+    } finally {
+        iterator_to_array(Client::instance()->execute($contextGuid, 'setOffline', ['offline' => false]));
+        $page->script("() => { const root = document.querySelector('[data-editor-root]'); if (!root) return; const state = Alpine.\$data(root); state.dirty = false; state.state = 'clean'; state.destroy(); }");
+    }
+})->with('course editor contexts')->with([
+    'clean' => false,
+    'dirty' => true,
+]);
 
 test('hydration exposes an explicit loading state and locks operational actions until ready', function (string $contextName): void {
     [, $page] = openUnifiedEditor($this, $contextName);
