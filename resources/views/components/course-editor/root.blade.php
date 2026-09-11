@@ -930,6 +930,7 @@
                 wire:target="confirmPublish,publish"
                 :disabled="$actionsLocked || $editorDirty || $uploadInProgress || $compositionMode === 'mixed' || $publicationProblems !== []"
                 x-bind:disabled="state === 'permission-lost' || dirty || state === 'saving' || {{ Js::from($uploadInProgress || $compositionMode === 'mixed' || $publicationProblems !== []) }}"
+                class="w-full max-w-full !whitespace-normal sm:w-auto"
                 variant="primary">{{ $publicationConfirmation['submit_label'] }}</flux:button>
             <p
                 id="editor-publish-guidance"

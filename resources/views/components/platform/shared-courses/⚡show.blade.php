@@ -195,7 +195,7 @@ new #[Layout('layouts::platform')] class extends Component
         <section class="detail-card min-w-0 max-w-full">
             @if ($version)
                 <div class="flex flex-wrap items-center justify-between gap-3">
-                    <h2 class="detail-card-title">{{ $version->title }}</h2>
+                    <h2 class="detail-card-title min-w-0 break-words">{{ $version->title }}</h2>
                     @if ($course->is_shared && $course->company_id === null && $version->status !== CourseVersionStatus::Discarded)
                         <flux:button :href="route('platform.shared-courses.preview', ['course' => $course, 'version' => $version])" variant="ghost" icon="eye">{{ __('Preview as learner') }}</flux:button>
                     @endif
