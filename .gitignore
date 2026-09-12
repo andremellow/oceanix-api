@@ -2,6 +2,7 @@
 *.cache
 *.tmp
 *.swp
+__pycache__/
 .DS_Store
 .env
 .env.backup
@@ -27,6 +28,8 @@
 /storage/*.key
 /storage/pail
 /vendor
+/tests/Browser/Screenshots
+/tests/Browser/Artifacts
 _ide_helper.php
 Homestead.json
 Homestead.yaml

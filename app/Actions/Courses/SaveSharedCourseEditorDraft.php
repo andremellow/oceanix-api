@@ -9,6 +9,7 @@ use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
 use App\Models\ModuleVersion;
+use App\Services\CourseEditor\EditorRevision;
 use App\Services\Modules\ModuleLineageLock;
 use App\Services\Modules\SharedModuleDraftWriter;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +19,11 @@ use LogicException;
 
 class SaveSharedCourseEditorDraft
 {
-    public function __construct(private readonly SharedModuleDraftWriter $writer, private readonly ?ModuleLineageLock $lineageLock = null) {}
+    public function __construct(
+        private readonly SharedModuleDraftWriter $writer,
+        private readonly EditorRevision $revisions,
+        private readonly ?ModuleLineageLock $lineageLock = null,
+    ) {}
 
     public function handle(Course $course, CourseVersion $version, Account $actor, array $courseData, array $versionData, array $modules, string $expectedRevision, array $moduleRevisions): array
     {
@@ -52,12 +57,24 @@ class SaveSharedCourseEditorDraft
                 throw ValidationException::withMessages(['modules' => __('One or more modules are unavailable.')]);
             }
             $prepared = [];
-            foreach ($modules as $modulePayload) {
+            foreach ($modules as $moduleIndex => $modulePayload) {
                 $module = $lockedModules->get($modulePayload['id']);
-                $prepared[] = $this->writer->prepare($module, $modulePayload, $moduleRevisions[$module->id] ?? '');
+                try {
+                    $prepared[] = $this->writer->prepare($module, $modulePayload, $moduleRevisions[$module->id] ?? '');
+                } catch (ValidationException $exception) {
+                    if (array_key_exists('revision', $exception->errors())) {
+                        throw $exception;
+                    }
+                    $mapped = [];
+                    foreach ($exception->errors() as $field => $messages) {
+                        $mapped["records.{$moduleIndex}.{$field}"] = $messages;
+                    }
+
+                    throw ValidationException::withMessages($mapped);
+                }
             }
-            $lockedCourse->update(['code' => $normalizedCode, 'title' => trim($data['course']['title']), 'description' => $data['course']['description']]);
-            $lockedVersion->update(['title' => trim($data['course']['title']), 'description' => $data['version']['description']]);
+            $this->updateIfChanged($lockedCourse, ['code' => $normalizedCode, 'title' => trim($data['course']['title']), 'description' => $data['course']['description']]);
+            $this->updateIfChanged($lockedVersion, ['title' => trim($data['course']['title']), 'description' => $data['version']['description']]);
             foreach ($prepared as $modulePrepared) {
                 $this->writer->write($modulePrepared);
             }
@@ -71,12 +88,18 @@ class SaveSharedCourseEditorDraft
 
     public function revision(Course $course, CourseVersion $version, $compositions = null): string
     {
-        $compositions ??= $version->moduleCompositions()->get();
+        return $this->revisions->forSharedCourse($course, $version, $compositions);
+    }
 
-        return hash('sha256', json_encode([
-            'course' => $course->only(['id', 'code', 'title', 'description']),
-            'version' => $version->only(['id', 'title', 'description']),
-            'compositions' => $compositions->map(fn ($item): array => ['id' => $item->id, 'module_id' => $item->lesson_id, 'position' => $item->position, 'required' => (bool) $item->is_required])->all(),
-        ], JSON_THROW_ON_ERROR));
+    /** @param array<string, mixed> $values */
+    private function updateIfChanged($model, array $values): bool
+    {
+        $model->fill($values);
+        if (! $model->isDirty()) {
+            return false;
+        }
+        $model->save();
+
+        return true;
     }
 }

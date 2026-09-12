@@ -1,0 +1,6 @@
+<?php
+require '/tmp/oceanix-lifecycle-harness.NqSAyE/environment.php';
+require '/Users/andrepiresdemello/Code/oceanix-api/vendor/autoload.php';
+$app=require '/Users/andrepiresdemello/Code/oceanix-api/bootstrap/app.php';
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+App\Models\ModuleVersion::findOrFail((int)$argv[1])->update(['lineage_archived_at'=>$argv[2]==='archive'?now():null]);

@@ -6,6 +6,8 @@ use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
 use App\Models\User;
+use App\Services\CourseEditor\EditorRevision;
+use App\Services\Courses\CourseVersionComposition;
 use App\Services\Modules\ModuleLineageLock;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -14,31 +16,47 @@ use Illuminate\Validation\ValidationException;
 
 class UpdateCourseModuleComposition
 {
-    public function __construct(private readonly ModuleLineageLock $lineageLock) {}
+    public function __construct(
+        private readonly ModuleLineageLock $lineageLock,
+        private readonly CourseVersionComposition $composition,
+        private readonly EditorRevision $revisions,
+    ) {}
 
     /** @param list<int> $moduleVersionIds */
-    public function handle(CourseVersion $version, array $moduleVersionIds, ?User $actor = null): CourseVersion
+    public function handle(CourseVersion $version, array $moduleVersionIds, User $actor, string $expectedRevision): CourseVersion
     {
+        $this->revisions->assertExpected($expectedRevision);
+
         $ids = array_values(array_map('intval', $moduleVersionIds));
         if (count($ids) !== count(array_unique($ids))) {
             throw ValidationException::withMessages(['modules' => __('A module can only be included once.')]);
         }
 
-        return DB::transaction(function () use ($version, $ids, $actor): CourseVersion {
+        return DB::transaction(function () use ($version, $ids, $actor, $expectedRevision): CourseVersion {
             $courseId = CourseVersion::query()->whereKey($version->id)->firstOrFail(['course_id'])->course_id;
             $course = Course::query()->lockForUpdate()->findOrFail($courseId);
             $version = CourseVersion::query()->lockForUpdate()->findOrFail($version->id);
-            if ((int) $version->course_id !== (int) $course->id || ! $version->isEditable()) {
-                throw new \LogicException('Only a draft course version can be composed.');
+            if ((int) $version->course_id !== (int) $course->id) {
+                throw new \LogicException('The version changed courses while it was being locked.');
             }
-            if ($actor !== null) {
-                Gate::forUser($actor)->authorize('updateVersion', $version);
+            Gate::forUser($actor)->authorize('updateVersion', $version);
+            if (! $version->isEditable()) {
+                throw new AuthorizationException;
             }
             if ($course->is_shared || $course->company_id === null) {
                 throw new AuthorizationException('Company course required.');
             }
 
             $version->moduleCompositions()->orderBy('position')->orderBy('id')->lockForUpdate()->get();
+            if (! hash_equals($this->revisions->forCompanyCourse($course, $version), $expectedRevision)) {
+                throw ValidationException::withMessages(['revision' => __('This draft changed in another session. Reload it before changing the structure.')]);
+            }
+
+            $state = $this->composition->inspect($version);
+            $existingReusableIds = $state['reusableRows']->pluck('lesson_id')->map(fn ($id) => (int) $id)->all();
+            if ($state['directLessons']->isNotEmpty() && array_diff($ids, $existingReusableIds) !== []) {
+                throw ValidationException::withMessages(['modules' => __('ui.module_composition_conflict')]);
+            }
             $moduleVersions = $this->lineageLock->versions($ids)->whereIn('id', $ids)->keyBy('id');
             if ($moduleVersions->count() !== count($ids)) {
                 throw ValidationException::withMessages(['modules' => __('One or more selected modules are unavailable.')]);
@@ -50,18 +68,25 @@ class UpdateCourseModuleComposition
                 if (! $eligibleOwner || $moduleVersion->lineage_archived_at !== null || $moduleVersion->getRawOriginal('status') !== 'published') {
                     throw new \LogicException(__('One or more selected modules are unavailable.'));
                 }
-                if ($actor !== null && Gate::forUser($actor)->denies('use', $moduleVersion)) {
+                if (Gate::forUser($actor)->denies('use', $moduleVersion)) {
                     throw new AuthorizationException;
                 }
             }
 
-            $version->moduleCompositions()->delete();
+            $version->moduleCompositions()->whereIn('id', $state['reusableRows']->pluck('id'))->delete();
+
+            // A mixed legacy draft may retain direct-lesson mirror rows while reusable
+            // modules are removed one at a time. Keep the replacement rows after that
+            // preserved range so the unique course-version position cannot collide.
+            $positionOffset = $state['directLessons']->isNotEmpty()
+                ? (int) $state['mirroredDirectRows']->max('position')
+                : 0;
 
             foreach ($ids as $index => $moduleVersionId) {
                 CourseVersionModule::query()->create([
                     'course_version_id' => $version->id,
                     'module_version_id' => $moduleVersionId,
-                    'position' => $index + 1,
+                    'position' => $positionOffset + $index + 1,
                     'is_required' => true,
                 ]);
             }

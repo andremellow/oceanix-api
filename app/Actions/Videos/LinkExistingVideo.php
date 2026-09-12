@@ -2,35 +2,48 @@
 
 namespace App\Actions\Videos;
 
+use App\Actions\Videos\Concerns\LocksEditorMediaTarget;
 use App\Contracts\VideoProvider;
-use App\Enums\ModuleVersionStatus;
 use App\Enums\VideoStatus;
 use App\Models\Account;
 use App\Models\Lesson;
+use App\Models\User;
 use App\Models\Video;
 use App\Services\Audit\AuditLogger;
+use App\Services\CourseEditor\EditorRevision;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use LogicException;
 
 class LinkExistingVideo
 {
+    use LocksEditorMediaTarget;
+
     public function __construct(
         private readonly VideoProvider $provider,
         private readonly AuditLogger $audit,
+        private readonly EditorRevision $revisions,
     ) {}
 
-    public function handle(Lesson $lesson, string $assetId, bool $allowAnyOwner = false, ?Account $platformActor = null): Video
+    public function forCompanyEditor(Lesson $lesson, string $assetId, User $actor, string $expectedRevision): Video
     {
-        if ($allowAnyOwner && $platformActor === null) {
-            throw new LogicException('Only a platform administrator can link videos from any owner.');
-        }
-        if ($platformActor !== null) {
-            $this->authorizePlatformActor($platformActor);
-        }
+        return $this->link($lesson, $assetId, false, null, $actor, $expectedRevision);
+    }
+
+    public function forPlatformEditor(Lesson $lesson, string $assetId, Account $actor, string $expectedRevision): Video
+    {
+        return $this->link($lesson, $assetId, true, $actor, null, $expectedRevision);
+    }
+
+    private function link(Lesson $lesson, string $assetId, bool $allowAnyOwner, ?Account $platformActor, ?User $actor, string $expectedRevision): Video
+    {
+        $this->assertExpectedEditorMediaRevision($expectedRevision);
+        $eligible = DB::transaction(
+            fn (): Lesson => $this->lockEditorMediaTarget($lesson, $actor, $platformActor, $expectedRevision, $this->revisions)['lesson'],
+            3,
+        );
 
         $asset = $this->provider->getAssetStatus($assetId);
-        $ownerKey = $lesson->company_id === null ? 'platform' : 'company:'.$lesson->company_id;
+        $ownerKey = $eligible->company_id === null ? 'platform' : 'company:'.$eligible->company_id;
 
         if ($asset->status !== VideoStatus::Ready
             || (! $allowAnyOwner && ($asset->metadata['oceanix_owner'] ?? null) !== $ownerKey)
@@ -40,12 +53,9 @@ class LinkExistingVideo
             ]);
         }
 
-        return DB::transaction(function () use ($lesson, $assetId, $asset, $platformActor): Video {
-            $lesson = Lesson::query()->lockForUpdate()->findOrFail($lesson->id);
-            $authorized = $platformActor === null ? null : $this->authorizePlatformActor($platformActor);
-            if ($authorized !== null && ($lesson->company_id !== null || ! $lesson->is_shared || $lesson->status !== ModuleVersionStatus::Draft->value || $lesson->lineage_archived_at !== null)) {
-                throw new LogicException('Videos can only be changed on platform-owned shared module drafts.');
-            }
+        return DB::transaction(function () use ($lesson, $assetId, $asset, $platformActor, $actor, $expectedRevision): Video {
+            $target = $this->lockEditorMediaTarget($lesson, $actor, $platformActor, $expectedRevision, $this->revisions);
+            $lesson = $target['lesson'];
 
             Video::query()->where('lesson_id', $lesson->id)->update(['is_current' => false]);
             $generation = ((int) Video::query()->where('lesson_id', $lesson->id)->max('replacement_generation')) + 1;
@@ -66,19 +76,9 @@ class LinkExistingVideo
             $this->audit->log('lesson.video_linked', $lesson, after: [
                 'provider' => $this->provider->key(),
                 'asset_id' => $assetId,
-            ], platformActor: $authorized);
+            ], platformActor: $target['platform_actor']);
 
             return $video;
         }, 3);
-    }
-
-    private function authorizePlatformActor(Account $actor): Account
-    {
-        $authorized = Account::query()->whereKey($actor->id)->where('is_platform_admin', true)->where('status', 'active')->first();
-        if ($authorized === null) {
-            throw new LogicException('Only an active platform administrator can change shared module videos.');
-        }
-
-        return $authorized;
     }
 }

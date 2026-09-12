@@ -2,18 +2,22 @@
  * Direct-to-provider video upload for the course editor.
  *
  * The file never transits the application server: Livewire opens a one-time upload slot at
- * the provider, the browser PUTs the file straight to that URL, and only then does the
+ * the provider, the browser POSTs the file straight to that URL, and only then does the
  * component mark the asset as processing. XHR (not fetch) because we want real progress.
  */
-document.addEventListener('alpine:init', () => {
-    const basicUploadLimit = 200 * 1024 * 1024
+const basicUploadLimit = 200 * 1024 * 1024
 
-    window.Alpine.data('lessonVideoUpload', (lessonIndex, messages = {}) => ({
+export function createLessonVideoUploadState(lessonId, messages = {}, recordKey = null) {
+    return {
         uploading: false,
         progress: 0,
         error: null,
+        retainedFile: null,
+        awaitingRetryToken: null,
 
         async start(event) {
+            if (this.uploading) return
+
             const file = event.target.files?.[0]
 
             if (! file) {
@@ -26,35 +30,78 @@ document.addEventListener('alpine:init', () => {
                 return
             }
 
+            const retryToken = this.awaitingRetryToken
+            this.awaitingRetryToken = null
+            this.retainedFile = file
+            await this.transfer(file, retryToken)
+            event.target.value = ''
+        },
+
+        async retryTransfer(detail = {}) {
+            if (this.uploading || Number(detail.recordId) !== Number(lessonId) || ! detail.uploadToken) return
+
+            this.$wire?.set?.('videoLibraryOpen', true, false)
+
+            if (! this.retainedFile) {
+                this.awaitingRetryToken = detail.uploadToken
+                this.error = messages.reselectFile ?? 'Choose the video file again to retry this upload.'
+                const chooseFile = () => this.$refs.file?.click()
+                this.$nextTick ? this.$nextTick(chooseFile) : chooseFile()
+                return
+            }
+
+            await this.transfer(this.retainedFile, detail.uploadToken)
+        },
+
+        async transfer(file, retryToken = null) {
             this.error = null
             this.uploading = true
             this.progress = 0
 
-            let uploadToken = null
+            let uploadToken = retryToken
+            let transferStarted = false
+            const operation = {
+                key: `media:video-upload:${recordKey ?? lessonId}`,
+                kind: 'media',
+                action: 'upload',
+                detail: retryToken === null ? 'video-upload' : 'video-upload-retry',
+                target: recordKey ?? `record:${lessonId}`,
+            }
+            this.$dispatch?.('oceanix:client-operation-started', operation)
 
             try {
-                const allocation = await this.$wire.requestUpload(lessonIndex)
+                const allocation = retryToken === null
+                    ? await this.$wire.requestUpload(lessonId, file.name)
+                    : await this.$wire.retryUploadTransfer(lessonId, retryToken)
                 const uploadUrl = typeof allocation === 'string' ? allocation : allocation.url
                 uploadToken = typeof allocation === 'string' ? null : allocation.token
-
-                await this.send(uploadUrl, file)
-                if (uploadToken === null) {
-                    await this.$wire.uploadCompleted(lessonIndex)
-                } else {
-                    await this.$wire.uploadCompleted(lessonIndex, uploadToken)
+                if (! uploadUrl || (retryToken !== null && uploadToken !== retryToken)) {
+                    throw new Error(messages.restartFailed ?? 'The video upload could not be restarted. Try again.')
                 }
+
+                transferStarted = true
+                await this.send(uploadUrl, file)
+                transferStarted = false
+                if (uploadToken === null) {
+                    await this.$wire.uploadCompleted(lessonId)
+                } else {
+                    await this.$wire.uploadCompleted(lessonId, uploadToken)
+                }
+                this.retainedFile = null
+                this.awaitingRetryToken = null
             } catch (error) {
-                if (uploadToken !== null) {
+                if (transferStarted && uploadToken !== null) {
                     try {
-                        await this.$wire.uploadFailed(lessonIndex, uploadToken)
+                        await this.$wire.uploadFailed(lessonId, uploadToken)
                     } catch {
                         // Keep the original provider error visible; Livewire will revalidate on the next action.
                     }
                 }
                 this.error = error?.message ?? 'Upload failed. Please try again.'
+                this.$dispatch?.('oceanix:client-operation-finished', { ...operation, state: 'failed', message: this.error })
             } finally {
                 this.uploading = false
-                event.target.value = ''
+                if (! this.error) this.$dispatch?.('oceanix:client-operation-finished', { ...operation, state: 'succeeded' })
             }
         },
 
@@ -84,29 +131,35 @@ document.addEventListener('alpine:init', () => {
                 request.send(body)
             })
         },
-    }))
+    }
+}
 
-    window.Alpine.data('videoLibraryPreview', (url, poster) => ({
-        hls: null,
+if (typeof document !== 'undefined') {
+    document.addEventListener('alpine:init', () => {
+        window.Alpine.data('lessonVideoUpload', createLessonVideoUploadState)
 
-        init() {
-            const video = this.$refs.video
-            video.poster = poster ?? ''
+        window.Alpine.data('videoLibraryPreview', (url, poster) => ({
+            hls: null,
 
-            if (url?.includes('.m3u8') && Hls.isSupported()) {
-                this.hls = new Hls({ enableWorker: true })
-                this.hls.loadSource(url)
-                this.hls.attachMedia(video)
+            init() {
+                const video = this.$refs.video
+                video.poster = poster ?? ''
 
-                return
-            }
+                if (url?.includes('.m3u8') && Hls.isSupported()) {
+                    this.hls = new Hls({ enableWorker: true })
+                    this.hls.loadSource(url)
+                    this.hls.attachMedia(video)
 
-            video.src = url ?? ''
-        },
+                    return
+                }
 
-        destroy() {
-            this.hls?.destroy()
-        },
-    }))
-})
+                video.src = url ?? ''
+            },
+
+            destroy() {
+                this.hls?.destroy()
+            },
+        }))
+    })
+}
 import Hls from 'hls.js'

@@ -11,7 +11,11 @@ use Illuminate\Support\Collection;
 
 class PublicPreviewResolver
 {
-    public function __construct(private readonly CoursePreviewAuthority $authority, private readonly LessonContentRenderer $renderer) {}
+    public function __construct(
+        private readonly CoursePreviewAuthority $authority,
+        private readonly LessonContentRenderer $renderer,
+        private readonly CourseVersionComposition $composition,
+    ) {}
 
     public function authoredVideo(Lesson $lesson): ?Video
     {
@@ -35,14 +39,25 @@ class PublicPreviewResolver
         $course = Course::withoutGlobalScopes()->findOrFail($version->course_id);
         $eligible = fn (Lesson $lesson): bool => ($lesson->is_shared && $lesson->company_id === null)
             || (! $course->is_shared && ! $lesson->is_shared && (int) $lesson->company_id === (int) $course->company_id);
-        $compositions = $version->moduleCompositions()->get();
-        if ($compositions->isNotEmpty()) {
-            $lessons = Lesson::query()->with(['video', 'questions.options'])->whereIn('id', $compositions->pluck('lesson_id'))->get()->filter($eligible)->keyBy('id');
+        $state = $this->composition->inspect($version);
+        abort_if($state['mode'] === CourseVersionComposition::Mixed, 409, __('ui.mixed_composition_error'));
 
-            return $compositions->filter(fn ($row) => $lessons->has($row->lesson_id))->map(fn ($row) => ['kind' => 'composition', 'id' => $row->id, 'lesson' => $lessons[$row->lesson_id]])->values();
+        if ($state['mode'] === CourseVersionComposition::Modules) {
+            return $state['reusableRows']->filter(fn ($row) => $row->moduleVersion && $eligible($row->moduleVersion))
+                ->map(fn ($row) => ['kind' => 'composition', 'id' => $row->id, 'lesson' => $row->moduleVersion])->values();
         }
 
-        return $version->lessons()->with(['video', 'questions.options'])->get()->filter($eligible)->map(fn ($lesson) => ['kind' => 'lesson', 'id' => $lesson->id, 'lesson' => $lesson]);
+        $mirrors = $state['mirroredDirectRows']->keyBy('lesson_id');
+
+        return $state['directLessons']->filter($eligible)->map(function (Lesson $lesson) use ($mirrors): array {
+            $mirror = $mirrors->get($lesson->id);
+
+            return [
+                'kind' => $mirror === null ? 'lesson' : 'composition',
+                'id' => $mirror?->id ?? $lesson->id,
+                'lesson' => $lesson,
+            ];
+        })->values();
     }
 
     public function item(CoursePreviewLink $link, string $kind, string $item): Lesson

@@ -1,8 +1,6 @@
 # Verification gaps
 
-No runnable canonical verification command was detected.
-
-Add a repository-owned command that composes the relevant formatter, linter, type checker, tests, static analysis, and build. Toscanini will not fabricate one.
+Canonical command: `composer verify`
 
 ## Optional Laravel Boost
 

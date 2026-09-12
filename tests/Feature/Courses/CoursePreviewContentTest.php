@@ -12,7 +12,7 @@ use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
-it('projects only exact composed items with static choices and sanitized content without training writes', function () {
+it('projects every canonical direct item with static choices and sanitized content without training writes', function () {
     Http::preventStrayRequests();
     $version = CourseVersion::factory()->create();
     $included = Lesson::factory()->create(['course_version_id' => $version->id, 'title' => 'Included item', 'content_markdown' => '<h2>Saved content</h2><script>steal()</script><img src="javascript:bad">']);
@@ -26,12 +26,12 @@ it('projects only exact composed items with static choices and sanitized content
     trainableAssignment();
     $tables = ['user_training_assignments', 'course_attempts', 'lesson_attempts', 'question_attempts', 'lesson_progress', 'compliance_events', 'certificates'];
     $before = collect($tables)->mapWithKeys(fn ($table) => [$table => DB::table($table)->get()->toJson()]);
-    $this->get($link['url'])->assertOk()->assertSee('Included item')->assertDontSee('Excluded item');
+    $this->get($link['url'])->assertOk()->assertSee('Included item')->assertSee('Excluded item');
     $item = CourseVersionModule::where('lesson_id', $included->id)->first();
     $url = route('course-preview.item', ['token' => $token, 'kind' => 'composition', 'item' => $item->id]);
     $this->get($url)->assertOk()->assertSee('Distinct question')->assertSee('First editorial choice')->assertSee('Second editorial choice')->assertDontSee('is_correct')->assertDontSee('steal()')->assertDontSee('javascript:')->assertDontSee('type="radio"', false)->assertDontSee('my-training');
     $this->postJson($url, ['answer' => 1])->assertStatus(405);
-    $this->get(route('course-preview.item', ['token' => $token, 'kind' => 'lesson', 'item' => $excluded->id]))->assertNotFound();
+    $this->get(route('course-preview.item', ['token' => $token, 'kind' => 'lesson', 'item' => $excluded->id]))->assertOk()->assertSee('Excluded item');
     $other = Lesson::factory()->create();
     $this->get(route('course-preview.item', ['token' => $token, 'kind' => 'composition', 'item' => 999999]))->assertNotFound();
     foreach ($before as $table => $rows) {
@@ -39,6 +39,50 @@ it('projects only exact composed items with static choices and sanitized content
     }
     Http::assertNothingSent();
 });
+
+it('renders persisted direct question and alternative order through the authenticated preview path', function () {
+    $version = CourseVersion::factory()->create();
+    $lesson = Lesson::factory()->create(['course_version_id' => $version->id, 'title' => 'Ordered assessment']);
+    $secondQuestion = Question::factory()->create([
+        'lesson_id' => $lesson->id,
+        'prompt' => 'Question rendered second',
+        'position' => 2,
+    ]);
+    $firstQuestion = Question::factory()->create([
+        'lesson_id' => $lesson->id,
+        'prompt' => 'Question rendered first',
+        'position' => 1,
+    ]);
+
+    QuestionOption::factory()->create(['question_id' => $firstQuestion->id, 'text' => 'First question option rendered second', 'position' => 2]);
+    QuestionOption::factory()->create(['question_id' => $firstQuestion->id, 'text' => 'First question option rendered first', 'position' => 1]);
+    QuestionOption::factory()->create(['question_id' => $secondQuestion->id, 'text' => 'Second question option rendered second', 'position' => 2]);
+    QuestionOption::factory()->create(['question_id' => $secondQuestion->id, 'text' => 'Second question option rendered first', 'position' => 1]);
+
+    $actor = adminUser();
+    $link = $this->actingAs($actor)
+        ->postJson(route('courses.preview-link', ['course' => $version->course_id, 'version' => $version->id]))
+        ->assertCreated()
+        ->json();
+    $item = CourseVersionModule::query()->where('lesson_id', $lesson->id)->sole();
+
+    $this->actingAs($actor)
+        ->get(route('course-preview.item', [
+            'token' => basename($link['url']),
+            'kind' => 'composition',
+            'item' => $item->id,
+        ]))
+        ->assertOk()
+        ->assertSeeInOrder([
+            'Question rendered first',
+            'First question option rendered first',
+            'First question option rendered second',
+            'Question rendered second',
+            'Second question option rendered first',
+            'Second question option rendered second',
+        ]);
+});
+
 it('supports legacy lessons only when no composition exists and follows saved edits', function () {
     $version = CourseVersion::factory()->create();
     $lesson = Lesson::factory()->create(['course_version_id' => $version->id, 'content_markdown' => 'Legacy body']);

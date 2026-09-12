@@ -13,16 +13,29 @@
     @php($platformAccount = app(\App\Services\Platform\PlatformAccess::class)->account())
     @php($companyIdentities = $platformAccount?->people()->withoutGlobalScope('company')->with('company')->where('status', 'active')->get()->filter(fn ($person) => $person->company?->status === 'active')->unique('company_id')->values() ?? collect())
     <header class="border-b border-[#dce3e7] bg-white">
-        <div class="mx-auto flex min-h-20 max-w-[1480px] flex-wrap items-center gap-3 px-5 py-3 sm:gap-7 sm:px-8">
-            <a href="{{ route('platform.dashboard') }}" wire:navigate><img src="{{ asset('images/oceanix-logo.png') }}" alt="Oceanix" class="w-32"></a>
+        <div class="mx-auto flex min-h-20 max-w-[1480px] flex-wrap items-center gap-2 px-4 py-3 sm:gap-7 sm:px-8">
+            <a href="{{ route('platform.dashboard') }}" wire:navigate><img src="{{ asset('images/oceanix-logo.png') }}" alt="Oceanix" class="w-24 sm:w-32"></a>
             <span class="rounded-full bg-[#16222a] px-3 py-1 text-[11px] font-bold uppercase tracking-[.13em] text-white">{{ __('Platform') }}</span>
-            <nav class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1 text-sm font-semibold sm:gap-2">
+            <nav class="flex w-full min-w-0 flex-wrap items-center justify-end gap-1 text-sm font-semibold sm:ml-auto sm:w-auto sm:gap-2">
+                <details class="group relative mr-auto sm:hidden" data-platform-mobile-menu>
+                    <summary class="cursor-pointer list-none rounded-xl border border-[#dce3e7] px-3 py-2 hover:bg-[#eef3f5]">{{ __('Menu') }}</summary>
+                    <div class="absolute left-0 z-30 mt-2 grid w-[min(18rem,calc(100vw-2rem))] rounded-2xl border border-[#dce3e7] bg-white p-2 shadow-xl">
+                        <a href="{{ route('platform.dashboard') }}" wire:navigate class="rounded-xl px-3 py-2 hover:bg-[#eef3f5]">{{ __('Overview') }}</a>
+                        <a href="{{ route('platform.companies') }}" wire:navigate class="rounded-xl px-3 py-2 hover:bg-[#eef3f5]">{{ __('Companies') }}</a>
+                        <a href="{{ route('platform.shared-courses.index') }}" wire:navigate class="rounded-xl px-3 py-2 hover:bg-[#eef3f5]">{{ __('Shared courses') }}</a>
+                        <a href="{{ route('platform.shared-modules.index') }}" wire:navigate class="rounded-xl px-3 py-2 hover:bg-[#eef3f5]">{{ __('Shared modules') }}</a>
+                        @if ($platformAccount)
+                            <a href="{{ route('platform.tasks.index') }}" wire:navigate class="rounded-xl px-3 py-2 hover:bg-[#eef3f5]">{{ __('Tasks') }}</a>
+                        @endif
+                        <a href="{{ route('platform.users') }}" wire:navigate class="rounded-xl px-3 py-2 hover:bg-[#eef3f5]">{{ __('Super admins') }}</a>
+                    </div>
+                </details>
                 <a href="{{ route('platform.dashboard') }}" wire:navigate class="hidden rounded-xl px-3 py-2 hover:bg-[#eef3f5] sm:inline-flex">{{ __('Overview') }}</a>
                 <a href="{{ route('platform.companies') }}" wire:navigate class="hidden rounded-xl px-3 py-2 hover:bg-[#eef3f5] sm:inline-flex">{{ __('Companies') }}</a>
-                <a href="{{ route('platform.shared-courses.index') }}" wire:navigate class="rounded-xl px-3 py-2 hover:bg-[#eef3f5]">{{ __('Shared courses') }}</a>
-                <a href="{{ route('platform.shared-modules.index') }}" wire:navigate class="rounded-xl px-3 py-2 hover:bg-[#eef3f5]">{{ __('Shared modules') }}</a>
+                <a href="{{ route('platform.shared-courses.index') }}" wire:navigate class="hidden rounded-xl px-3 py-2 hover:bg-[#eef3f5] sm:inline-flex">{{ __('Shared courses') }}</a>
+                <a href="{{ route('platform.shared-modules.index') }}" wire:navigate class="hidden rounded-xl px-3 py-2 hover:bg-[#eef3f5] sm:inline-flex">{{ __('Shared modules') }}</a>
                 @if ($platformAccount)
-                    <a href="{{ route('platform.tasks.index') }}" wire:navigate class="rounded-xl px-3 py-2 hover:bg-[#eef3f5]">{{ __('Tasks') }}</a>
+                    <a href="{{ route('platform.tasks.index') }}" wire:navigate class="hidden rounded-xl px-3 py-2 hover:bg-[#eef3f5] sm:inline-flex">{{ __('Tasks') }}</a>
                 @endif
                 <a href="{{ route('platform.users') }}" wire:navigate class="hidden rounded-xl px-3 py-2 hover:bg-[#eef3f5] sm:inline-flex">{{ __('Super admins') }}</a>
                 @if ($companyIdentities->count() === 1)

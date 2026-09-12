@@ -1,0 +1,373 @@
+--- a/resources/views/components/courses/⚡editor.blade.php
++++ b/resources/views/components/courses/⚡editor.blade.php
+@@ -84,6 +84,9 @@
+     /** Carries an unresolved browser request failure across unrelated successful mutations. */
+     public bool $clientHasNetworkError = false;
+ 
++    /** A module retry settles its own failed request without clearing an authored failure. */
++    public bool $clientModuleNetworkError = false;
++
+     /** Distinguishes a retryable module refusal from unrelated authored pending state. */
+     public bool $moduleCompositionErrorPending = false;
+ 
+@@ -794,10 +797,10 @@
+ 
+             $hasAuthoredValidationErrors = collect($this->getErrorBag()->keys())
+                 ->contains(fn (string $key): bool => $this->isPersistedProperty($key));
+-            $this->clientHasUnsavedChanges = $this->clientFieldRevisions !== [] || $hasAuthoredValidationErrors;
++            $this->clientHasUnsavedChanges = $this->clientModuleNetworkError || $this->moduleCompositionErrorPending || $this->clientFieldRevisions !== [] || $hasAuthoredValidationErrors;
+             $this->saveState = $hasAuthoredValidationErrors
+                 ? 'validation-error'
+-                : ($this->clientHasUnsavedChanges ? 'dirty' : 'saved');
++                : ($this->clientModuleNetworkError ? 'network-error' : ($this->moduleCompositionErrorPending ? 'validation-error' : ($this->clientHasUnsavedChanges ? 'dirty' : 'saved')));
+             $this->dispatch('editor-field-saved', at: $this->savedAt, property: $property, revision: $revision);
+ 
+             return;
+@@ -866,7 +869,8 @@
+             throw ValidationException::withMessages(['modules' => __('One or more selected modules are unavailable.')]);
+         }
+         $this->loadComposition();
+-        $recoveringFromModuleError = $this->moduleCompositionErrorPending;
++        $recoveringFromModuleError = $this->moduleCompositionErrorPending || $this->clientModuleNetworkError;
++        $this->clientModuleNetworkError = false;
+         $this->moduleCompositionErrorPending = false;
+         $this->resetErrorBag('modules');
+         if ($recoveringFromModuleError) {
+@@ -891,15 +895,15 @@
+ 
+ <div
+     class="admin-page min-w-0 space-y-7"
+-    x-data="{ state: @js($saveState), dirty: false, revision: @js($clientRevision), savingRevision: null, structuralPending: false, fieldRevisions: @js($clientFieldRevisions), unscopedDirty: false, networkError: @js($clientHasNetworkError), drag: null, moveIds(ids, from, to) { const next = [...ids]; const old = next.indexOf(from); const target = next.indexOf(to); if (old < 0 || target < 0 || old === target) return next; next.splice(target, 0, next.splice(old, 1)[0]); return next; }, trackFieldRevision(property, revision) { this.fieldRevisions = [...this.fieldRevisions.filter((pending) => pending.property !== property), { property, revision }]; $wire.$set('clientFieldRevisions', [...this.fieldRevisions], false); }, markDirty(event) { const control = event.target.closest('[data-editor-authored]'); const binding = control?.getAttributeNames().find(name => name.startsWith('wire:model')); const property = binding ? control.getAttribute(binding) : null; this.revision++; this.dirty = true; this.state = 'dirty'; if (property) { this.trackFieldRevision(property, this.revision); } else { this.unscopedDirty = true; } $wire.$set('clientRevision', this.revision, false); $wire.$set('clientHasUnsavedChanges', true, false); }, restoreLessonFocus(lessonId, direction) { this.$nextTick(() => requestAnimationFrame(() => { const preferred = document.querySelector(`[data-lesson-focus-id='${lessonId}'][data-lesson-focus-direction='${direction}']:not([disabled])`); const fallback = document.querySelector(`[data-lesson-focus-id='${lessonId}']:not([disabled])`); (preferred || fallback)?.focus(); })); }, finishLessonPointer(event, ids) { const active = this.drag; this.drag = null; if (active?.type !== 'lesson') return; const element = document.elementFromPoint(event.clientX, event.clientY); const target = element?.closest('[data-lesson-drop-id]'); const targetId = Number(target?.dataset.lessonDropId); const targetParent = Number(target?.dataset.lessonDropParent); if (!Number.isInteger(targetId) || targetParent !== active.parent || targetId === active.id) return; event.preventDefault(); this.structuralPending = true; this.state = 'saving'; $wire.reorderLessons(this.moveIds(ids, active.id, targetId)); }, init() { $wire.$hook('request', ({ succeed, fail }) => { if (!this.dirty && !this.structuralPending) return; const requestRevision = this.revision; this.savingRevision = requestRevision; this.state = 'saving'; succeed(() => setTimeout(() => { if (this.revision !== requestRevision) return; if ($wire.saveState === 'validation-error') { this.dirty = true; this.structuralPending = false; this.state = 'validation-error'; } })); fail(() => { this.dirty = true; this.structuralPending = false; this.networkError = true; this.state = 'network-error'; $wire.$set('clientHasNetworkError', true, false); }); }); } }"
++    x-data="{ state: @js($saveState), dirty: false, revision: @js($clientRevision), savingRevision: null, structuralPending: false, fieldRevisions: @js($clientFieldRevisions), unscopedDirty: false, networkError: @js($clientHasNetworkError), drag: null, observedValues: {}, modulePending: false, stopActionTracking: null, moveIds(ids, from, to) { const next = [...ids]; const old = next.indexOf(from); const target = next.indexOf(to); if (old < 0 || target < 0 || old === target) return next; next.splice(target, 0, next.splice(old, 1)[0]); return next; }, trackFieldRevision(property, revision) { this.fieldRevisions = [...this.fieldRevisions.filter((pending) => pending.property !== property), { property, revision }]; $wire.$set('clientFieldRevisions', [...this.fieldRevisions], false); }, markDirty(event) { const control = event.target.closest('[data-editor-authored]'); const binding = control?.getAttributeNames().find(name => name.startsWith('wire:model')); const property = binding ? control.getAttribute(binding) : null; const checkable = control?.type === 'checkbox' || control?.type === 'radio' || control?.localName === 'ui-checkbox'; const value = JSON.stringify(checkable ? control.checked : control?.value ?? event.detail); const identity = [control.closest('[data-lesson-drop-id]')?.dataset?.lessonDropId, control.closest('[data-editor-question-id]')?.dataset?.editorQuestionId, control.closest('[data-editor-option-id]')?.dataset?.editorOptionId, property?.startsWith('lessons.') ? property.split('.').at(-1) : property].join(':'); const previous = this.observedValues[identity] ?? JSON.stringify(checkable ? Boolean($wire.$get(property)) : String($wire.$get(property) ?? '')); if (previous === value) return; this.observedValues[identity] = value; this.revision++; this.dirty = true; this.state = 'dirty'; if (property) { this.trackFieldRevision(property, this.revision); } else { this.unscopedDirty = true; } $wire.$set('clientRevision', this.revision, false); $wire.$set('clientHasUnsavedChanges', true, false); }, restoreLessonFocus(lessonId, direction) { this.$nextTick(() => requestAnimationFrame(() => { const preferred = document.querySelector(`[data-lesson-focus-id='${lessonId}'][data-lesson-focus-direction='${direction}']:not([disabled])`); const fallback = document.querySelector(`[data-lesson-focus-id='${lessonId}']:not([disabled])`); (preferred || fallback)?.focus(); })); }, finishLessonPointer(event, ids) { const active = this.drag; this.drag = null; if (active?.type !== 'lesson') return; const element = document.elementFromPoint(event.clientX, event.clientY); const target = element?.closest('[data-lesson-drop-id]'); const targetId = Number(target?.dataset.lessonDropId); const targetParent = Number(target?.dataset.lessonDropParent); if (!Number.isInteger(targetId) || targetParent !== active.parent || targetId === active.id) return; event.preventDefault(); this.structuralPending = true; this.state = 'saving'; $wire.reorderLessons(this.moveIds(ids, active.id, targetId)); }, destroy() { this.stopActionTracking?.(); }, init() { this.stopActionTracking = $wire.$interceptAction(({ action }) => { if (!['addModule', 'moveModule', 'removeModule', 'addLesson', 'removeLesson', 'moveLesson', 'reorderLessons', 'addQuestion', 'removeQuestion', 'moveQuestion', 'reorderQuestions', 'addOption', 'removeOption', 'moveOption', 'reorderOptions', 'selectSingleCorrect'].includes(action.name)) return; this.modulePending = ['addModule', 'moveModule', 'removeModule'].includes(action.name); this.structuralPending = true; this.state = 'saving'; }); $wire.$hook('request', ({ succeed, fail }) => { if (!this.dirty && !this.structuralPending) return; const moduleRequest = this.modulePending; this.modulePending = false; const requestRevision = this.revision; this.savingRevision = requestRevision; this.state = 'saving'; succeed(() => setTimeout(() => { if (this.revision !== requestRevision) return; if ($wire.saveState === 'validation-error') { this.dirty = true; this.structuralPending = false; this.state = 'validation-error'; } })); fail(() => { this.dirty = true; this.structuralPending = false; this.networkError = true; this.state = 'network-error'; if (moduleRequest) { $wire.$set('clientModuleNetworkError', true, false); } else { $wire.$set('clientHasNetworkError', true, false); } }); }); } }"
+     x-on:input.capture="if ($event.isTrusted && $event.target.closest('[data-editor-authored]')) markDirty($event)"
+     x-on:change.capture="if ($event.isTrusted && $event.target.closest('[data-editor-authored]')) markDirty($event)"
+     x-on:pointerup.window="finishLessonPointer($event, {{ Js::from(array_column($lessons, 'id')) }})"
+     x-on:pointercancel.window="drag = null"
+     x-on:editor-validation-error.window="structuralPending = false; dirty = true; state = 'validation-error'"
+     x-on:editor-structure-saved.window="structuralPending = false; state = dirty ? (['validation-error', 'network-error'].includes($wire.saveState) ? $wire.saveState : 'dirty') : 'saved'"
+-    x-on:editor-field-saved.window="const index = fieldRevisions.findIndex((pending) => pending.property === $event.detail.property && pending.revision === $event.detail.revision); if (index !== -1) { fieldRevisions.splice(index, 1); networkError = false; $wire.$set('clientHasNetworkError', false, false); dirty = unscopedDirty || fieldRevisions.length > 0 || $wire.clientHasUnsavedChanges; state = $wire.saveState }"
+-    x-on:editor-saved.window="structuralPending = false; if ($event.detail.revision === revision) { dirty = false; state = 'saved' }"
++    x-on:editor-field-saved.window="const index = fieldRevisions.findIndex((pending) => pending.property === $event.detail.property && pending.revision === $event.detail.revision); if (index !== -1) { fieldRevisions.splice(index, 1); networkError = $wire.clientModuleNetworkError; $wire.$set('clientHasNetworkError', false, false); dirty = unscopedDirty || fieldRevisions.length > 0 || $wire.clientHasUnsavedChanges; state = $wire.saveState }"
++    x-on:editor-saved.window="structuralPending = false; if ($event.detail.revision === revision) { dirty = false; networkError = false; state = 'saved' }"
+     x-on:lesson-reordered.window="restoreLessonFocus($event.detail.lessonId, $event.detail.direction)"
+     x-on:livewire:navigate.window="if (dirty && ! window.confirm({{ Js::from(__('ui.leave_unsaved_confirm')) }})) $event.preventDefault()"
+     x-on:oceanix-open-image-library.window="$wire.openImageLibrary($event.detail.model)"
+@@ -959,7 +963,7 @@
+                 <flux:error name="courseForm.title" />
+             </div>
+         </div>
+-        <flux:textarea wire:model.blur="courseForm.description" data-editor-authored class="admin-control mt-4" :label="__('Description')" rows="2" />
++        <flux:textarea wire:model.live.blur="courseForm.description" data-editor-authored class="admin-control mt-4" :label="__('Description')" rows="2" />
+     </section>
+ 
+     {{-- Version settings --}}
+@@ -969,7 +973,7 @@
+             <span class="status-pill status-pill--neutral">{{ __('Draft') }}</span>
+         </div>
+         <div class="mt-4">
+-            <flux:textarea wire:model.blur="versionForm.description" data-editor-authored class="admin-control" :label="__('Description shown to the employee')" rows="3" />
++            <flux:textarea wire:model.live.blur="versionForm.description" data-editor-authored class="admin-control" :label="__('Description shown to the employee')" rows="3" />
+             <p class="mt-2 text-xs text-[#8a9298]">{{ __('ui.version_description_note') }}</p>
+         </div>
+         <p class="mt-4 border-t border-[#eef1f4] pt-4 text-xs text-[#8a9298]">{{ __('ui.completion_rule_note') }}</p>
+@@ -1064,13 +1068,13 @@
+                 </div>
+ 
+                 @if (in_array($lesson['id'], $expanded, true))
+-                    <div class="border-t border-[#eef1f4] p-4 sm:p-5">
++                    <div class="border-t border-[#eef1f4] p-4 sm:p-5" wire:key="lesson-fields-{{ $lesson['id'] }}-{{ $lessonIndex }}">
+                         <div class="grid gap-4 lg:grid-cols-2">
+-                            <flux:input wire:model.blur="lessons.{{ $lessonIndex }}.title" data-editor-authored class="admin-control" :label="__('Lesson title')" />
++                            <flux:input wire:model.live.blur="lessons.{{ $lessonIndex }}.title" data-editor-authored class="admin-control" :label="__('Lesson title')" />
+                             <div>
+                                 <flux:field>
+                                     <x-field-label :hint="__('ui.passing_score_help')">{{ __('Passing score (%)') }}</x-field-label>
+-                                    <flux:input type="number" min="1" max="100" wire:model.blur="lessons.{{ $lessonIndex }}.passing_score" data-editor-authored class="admin-control" />
++                                    <flux:input type="number" min="1" max="100" wire:model.live.blur="lessons.{{ $lessonIndex }}.passing_score" data-editor-authored class="admin-control" />
+                                     <flux:error name="lessons.{{ $lessonIndex }}.passing_score" />
+                                 </flux:field>
+                             </div>
+@@ -1078,11 +1082,11 @@
+                         <div class="mt-4 max-w-xs">
+                             <flux:field>
+                                 <x-field-label :hint="__('ui.watch_threshold_help')">{{ __('Watch threshold (%)') }}</x-field-label>
+-                                <flux:input type="number" min="1" max="100" wire:model.blur="lessons.{{ $lessonIndex }}.minimum_watch_percentage" data-editor-authored class="admin-control" />
++                                <flux:input type="number" min="1" max="100" wire:model.live.blur="lessons.{{ $lessonIndex }}.minimum_watch_percentage" data-editor-authored class="admin-control" />
+                                 <flux:error name="lessons.{{ $lessonIndex }}.minimum_watch_percentage" />
+                             </flux:field>
+                         </div>
+-                        <flux:textarea wire:model.blur="lessons.{{ $lessonIndex }}.description" data-editor-authored class="admin-control mt-4" :label="__('Lesson description')" rows="2" />
++                        <flux:textarea wire:model.live.blur="lessons.{{ $lessonIndex }}.description" data-editor-authored class="admin-control mt-4" :label="__('Lesson description')" rows="2" />
+                         <flux:checkbox wire:model.live="lessons.{{ $lessonIndex }}.is_required" data-editor-authored class="mt-4" :label="__('Required to complete the course')" />
+ 
+                         <div class="mt-5">
+@@ -1110,11 +1114,11 @@
+ 
+                             <div class="mt-3 space-y-3">
+                                 @forelse ($lesson['questions'] as $questionIndex => $question)
+-                                    <div class="min-w-0 rounded-[18px] border border-[#e4e9ec] p-4" wire:key="question-{{ $question['id'] }}" x-on:dragover.stop.prevent x-on:drop.stop.prevent="if (drag?.type === 'question' && drag.parent === {{ $lesson['id'] }}) { structuralPending = true; state = 'saving'; $wire.reorderQuestions({{ $lessonIndex }}, moveIds({{ Js::from(array_column($lesson['questions'], 'id')) }}, drag.id, {{ $question['id'] }})); } drag = null">
++                                    <div class="min-w-0 rounded-[18px] border border-[#e4e9ec] p-4" data-editor-question-id="{{ $question['id'] }}" wire:key="question-{{ $question['id'] }}-{{ $lessonIndex }}-{{ $questionIndex }}" x-on:dragover.stop.prevent x-on:drop.stop.prevent="if (drag?.type === 'question' && drag.parent === {{ $lesson['id'] }}) { structuralPending = true; state = 'saving'; $wire.reorderQuestions({{ $lessonIndex }}, moveIds({{ Js::from(array_column($lesson['questions'], 'id')) }}, drag.id, {{ $question['id'] }})); } drag = null">
+                                         <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_140px_auto] lg:items-end">
+                                             <div class="flex min-w-0 items-end gap-2">
+                                                 <button type="button" draggable="true" x-on:dragstart.stop="drag = { type: 'question', parent: {{ $lesson['id'] }}, id: {{ $question['id'] }} }" class="mb-1 cursor-grab rounded-lg p-2 text-[#5f6a71] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3e8ba3]" aria-label="{{ __('ui.drag_question', ['position' => $questionIndex + 1]) }}"><flux:icon.bars-3 class="size-4" /></button>
+-                                                <flux:input wire:model.blur="lessons.{{ $lessonIndex }}.questions.{{ $questionIndex }}.prompt" data-editor-authored class="admin-control min-w-0 flex-1" :label="__('ui.question_position', ['position' => $questionIndex + 1])" />
++                                                <flux:input wire:model.live.blur="lessons.{{ $lessonIndex }}.questions.{{ $questionIndex }}.prompt" data-editor-authored class="admin-control min-w-0 flex-1" :label="__('ui.question_position', ['position' => $questionIndex + 1])" />
+                                             </div>
+                                             <flux:select wire:model.live="lessons.{{ $lessonIndex }}.questions.{{ $questionIndex }}.type" data-editor-authored class="admin-control" :label="__('Type')">
+                                                 @foreach (App\Enums\QuestionType::cases() as $case)
+@@ -1123,7 +1127,7 @@
+                                             </flux:select>
+                                             <flux:field>
+                                                 <x-field-label :hint="__('ui.attempts_help')">{{ __('Attempts') }}</x-field-label>
+-                                                <flux:input type="number" min="1" max="10" wire:model.blur="lessons.{{ $lessonIndex }}.questions.{{ $questionIndex }}.max_attempts" data-editor-authored class="admin-control" />
++                                                <flux:input type="number" min="1" max="10" wire:model.live.blur="lessons.{{ $lessonIndex }}.questions.{{ $questionIndex }}.max_attempts" data-editor-authored class="admin-control" />
+                                                 <flux:error name="lessons.{{ $lessonIndex }}.questions.{{ $questionIndex }}.max_attempts" />
+                                             </flux:field>
+                                             <div class="flex flex-wrap gap-1">
+@@ -1135,7 +1139,7 @@
+ 
+                                         <div class="mt-4 space-y-2">
+                                             @foreach ($question['options'] as $optionIndex => $option)
+-                                                <div class="flex min-w-0 flex-wrap items-end gap-2 sm:flex-nowrap" wire:key="option-{{ $option['id'] }}" x-on:dragover.stop.prevent x-on:drop.stop.prevent="if (drag?.type === 'option' && drag.parent === {{ $question['id'] }}) { structuralPending = true; state = 'saving'; $wire.reorderOptions({{ $lessonIndex }}, {{ $questionIndex }}, moveIds({{ Js::from(array_column($question['options'], 'id')) }}, drag.id, {{ $option['id'] }})); } drag = null">
++                                                <div class="flex min-w-0 flex-wrap items-end gap-2 sm:flex-nowrap" data-editor-option-id="{{ $option['id'] }}" wire:key="option-{{ $option['id'] }}-{{ $lessonIndex }}-{{ $questionIndex }}-{{ $optionIndex }}" x-on:dragover.stop.prevent x-on:drop.stop.prevent="if (drag?.type === 'option' && drag.parent === {{ $question['id'] }}) { structuralPending = true; state = 'saving'; $wire.reorderOptions({{ $lessonIndex }}, {{ $questionIndex }}, moveIds({{ Js::from(array_column($question['options'], 'id')) }}, drag.id, {{ $option['id'] }})); } drag = null">
+                                                     <button type="button" draggable="true" x-on:dragstart.stop="drag = { type: 'option', parent: {{ $question['id'] }}, id: {{ $option['id'] }} }" class="cursor-grab rounded-lg p-2 text-[#5f6a71] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3e8ba3]" aria-label="{{ __('ui.drag_answer', ['position' => $optionIndex + 1]) }}"><flux:icon.bars-3 class="size-4" /></button>
+                                                     @if ($question['type'] === App\Enums\QuestionType::SingleChoice->value)
+                                                         <input type="radio"
+--- a/tests/Feature/Courses/CourseEditorTest.php
++++ b/tests/Feature/Courses/CourseEditorTest.php
+@@ -719,7 +719,50 @@
+         ->assertSet('saveState', 'network-error')
+         ->assertNotDispatched('editor-saved');
+ });
++
++it('settles module outage refusal and retry without clearing an unrelated authored revision', function (): void {
++    $actor = adminUser();
++    $course = draftCourse();
++    $module = Module::factory()->create(['company_id' => $course->company_id]);
++    $moduleVersion = ModuleVersion::factory()->published()->create(['module_id' => $module->id]);
++    $module->update(['current_published_version_id' => $moduleVersion->id]);
++    $component = Livewire::actingAs($actor)->test('courses.editor', ['course' => $course])
++        ->set('clientModuleNetworkError', true);
+ 
++    $moduleVersion->update(['lineage_archived_at' => now()]);
++    $component->call('addModule', $moduleVersion->id)
++        ->assertHasErrors('modules')
++        ->assertSet('selectedModuleVersionIds', [])
++        ->assertSet('clientModuleNetworkError', true)
++        ->assertSet('saveState', 'validation-error');
++
++    $moduleVersion->update(['lineage_archived_at' => null]);
++    $component->call('addModule', $moduleVersion->id)
++        ->assertHasNoErrors()
++        ->assertSet('clientModuleNetworkError', false)
++        ->assertSet('clientHasUnsavedChanges', false)
++        ->assertSet('saveState', 'saved');
++
++    $component->set('clientModuleNetworkError', true)
++        ->set('clientFieldRevisions', [['property' => 'courseForm.title', 'revision' => 91]])
++        ->set('clientHasUnsavedChanges', true)
++        ->call('removeModule', 0)
++        ->assertSet('clientModuleNetworkError', false)
++        ->assertSet('clientFieldRevisions', [['property' => 'courseForm.title', 'revision' => 91]])
++        ->assertSet('clientHasUnsavedChanges', true)
++        ->assertSet('saveState', 'dirty');
++});
++
++it('an authored save does not acknowledge a failed module request', function (): void {
++    $course = draftCourse();
++    Livewire::actingAs(adminUser())->test('courses.editor', ['course' => $course])
++        ->set('clientModuleNetworkError', true)
++        ->set('courseForm.title', 'A persisted authored edit')
++        ->assertSet('clientModuleNetworkError', true)
++        ->assertSet('clientHasUnsavedChanges', true)
++        ->assertSet('saveState', 'network-error');
++});
++
+ it('propagates unrelated module composition exceptions', function (): void {
+     $actor = adminUser();
+     $course = draftCourse();
+--- /dev/null
++++ b/tests/JavaScript/course-editor.test.mjs
+@@ -0,0 +1,182 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { readFileSync } from 'node:fs';
++
++// Execute the exact production Alpine state machine, replacing only Blade's initial data.
++const blade = readFileSync(new URL('../../resources/views/components/courses/⚡editor.blade.php', import.meta.url), 'utf8');
++const expression = blade.match(/x-data="(\{ state: [^\n]+)"/)[1]
++    .replace(/@js\(\$saveState\)/g, "'clean'")
++    .replace(/@js\(\$clientRevision\)/g, '0')
++    .replace(/@js\(\$clientFieldRevisions\)/g, '[]')
++    .replace(/@js\(\$client(?:HasNetworkError|ModuleNetworkError)\)/g, 'false');
++
++function editor() {
++    const hooks = {}, interceptors = [];
++    const wire = { saveState: 'clean', clientHasUnsavedChanges: false,
++        $get(property) { return property.endsWith('is_required') ? false : 'Before'; },
++        $set(key, value) { this[key] = value; },
++        $hook(name, callback) { hooks[name] = callback; },
++        $interceptAction(callback) { interceptors.push(callback); return () => {}; },
++    };
++    const state = new Function('$wire', `return (${expression})`)(wire);
++    state.init();
++    const request = (name) => {
++        for (const intercept of interceptors) intercept({ action: { name } });
++        const callbacks = {};
++        hooks.request({ succeed: callback => callbacks.succeed = callback, fail: callback => callbacks.fail = callback });
++        return callbacks;
++    };
++    const event = (name, detail = {}) => {
++        const handler = blade.match(new RegExp(`x-on:${name}\\.window="([^"\\n]+)"`))[1];
++        new Function('state', '$wire', '$event', `with (state) { ${handler} }`)(state, wire, { detail });
++    };
++    return { state, wire, request, event };
++}
++function control(property, value, type = 'text') {
++    return { value, type, checked: false, closest() { return this; },
++        getAttributeNames: () => ['wire:model.live'], getAttribute: () => property };
++}
++
++test('a saved live value does not become dirty again on unchanged change/blur', () => {
++    const { state, wire, event } = editor();
++    const input = control('courseForm.title', 'First edit');
++    state.markDirty({ target: input });
++    assert.equal(state.revision, 1);
++    wire.saveState = 'saved'; wire.clientHasUnsavedChanges = false;
++    event('editor-field-saved', { property: 'courseForm.title', revision: 1 });
++    assert.equal(state.dirty, false);
++    state.markDirty({ target: input });
++    assert.equal(state.revision, 1);
++    assert.equal(state.state, 'saved');
++    input.value = 'Second edit'; state.markDirty({ target: input });
++    assert.equal(state.revision, 2);
++    assert.equal(state.dirty, true);
++});
++
++test('checkbox input/change pair counts once but a new checked value counts again', () => {
++    const { state } = editor();
++    const input = control('lessons.0.is_required', 'on', 'checkbox');
++    input.checked = true;
++    state.markDirty({ target: input }); state.markDirty({ target: input });
++    assert.equal(state.revision, 1);
++    input.checked = false; state.markDirty({ target: input });
++    assert.equal(state.revision, 2);
++});
++
++test('saved values remain deduplicated when Livewire replaces the control node', () => {
++    const { state } = editor();
++    state.markDirty({ target: control('courseForm.title', 'Saved value') });
++    state.markDirty({ target: control('courseForm.title', 'Saved value') });
++    assert.equal(state.revision, 1);
++    state.markDirty({ target: control('courseForm.title', 'Changed again') });
++    assert.equal(state.revision, 2);
++});
++
++test('after state remount an unchanged blur uses the current Livewire value as baseline', () => {
++    const { state, wire } = editor();
++    wire.$get = () => 'Saved value';
++    state.state = 'saved';
++    state.markDirty({ target: control('courseForm.title', 'Saved value') });
++    assert.equal(state.revision, 0); assert.equal(state.state, 'saved');
++    state.markDirty({ target: control('courseForm.title', 'Actually changed') });
++    assert.equal(state.revision, 1); assert.equal(state.dirty, true);
++});
++
++test('record identities distinguish fields after reorder while the moved value remains deduplicated', () => {
++    const { state } = editor();
++    function answer(id, index, value) {
++        const input = control(`lessons.${index}.questions.0.options.0.text`, value);
++        input.closest = selector => selector === '[data-editor-authored]' ? input : { dataset: { lessonDropId: id, editorQuestionId: id, editorOptionId: id } };
++        return input;
++    }
++    state.markDirty({ target: answer('alpha', 0, 'Alpha') });
++    state.markDirty({ target: answer('bravo', 1, 'Bravo') });
++    state.markDirty({ target: answer('bravo', 0, 'Bravo') });
++    assert.equal(state.revision, 2);
++    state.markDirty({ target: answer('bravo', 0, 'Alpha') });
++    assert.equal(state.revision, 3);
++});
++
++test('module action enters pending before request and outage is visible from clean state', () => {
++    const { state, wire, request } = editor();
++    const callbacks = request('addModule');
++    assert.equal(state.structuralPending, true);
++    assert.equal(state.state, 'saving');
++    callbacks.fail();
++    assert.equal(state.state, 'network-error');
++    assert.equal(wire.clientModuleNetworkError, true);
++});
++
++test('Flux checkbox revisions follow checked state rather than its fixed generated value', () => {
++    const { state } = editor();
++    const input = control('lessons.0.is_required', 'generated-value', undefined);
++    input.type = undefined; input.localName = 'ui-checkbox'; input.checked = true;
++    state.markDirty({ target: input }); state.markDirty({ target: input });
++    assert.equal(state.revision, 1);
++    input.checked = false; state.markDirty({ target: input });
++    assert.equal(state.revision, 2);
++});
++
++test('search and cancelled confirmation (no dispatched action) stay clean', () => {
++    const { state, request } = editor();
++    request('moduleSearch');
++    assert.equal(state.structuralPending, false);
++    assert.equal(state.state, 'clean');
++});
++
++test('refusal then successful module retry settles while unrelated fields remain dirty', () => {
++    const { state, wire, request, event } = editor();
++    request('addModule').fail();
++    request('addModule');
++    wire.saveState = 'validation-error'; event('editor-validation-error');
++    assert.equal(state.state, 'validation-error');
++    assert.equal(state.structuralPending, false);
++    request('addModule');
++    wire.clientModuleNetworkError = false; wire.saveState = 'saved';
++    event('editor-saved', { revision: 0 });
++    assert.equal(state.state, 'saved'); assert.equal(state.dirty, false);
++
++    state.markDirty({ target: control('courseForm.title', 'Pending edit') });
++    request('removeModule'); wire.saveState = 'dirty';
++    event('editor-structure-saved');
++    assert.equal(state.state, 'dirty'); assert.equal(state.dirty, true);
++    assert.deepEqual(state.fieldRevisions, [{ property: 'courseForm.title', revision: 1 }]);
++});
++
++test('validation recovery and stale acknowledgement cannot clear a newer field revision', () => {
++    const { state, wire, event } = editor();
++    const input = control('courseForm.title', '');
++    state.markDirty({ target: input }); event('editor-validation-error');
++    state.markDirty({ target: input });
++    assert.equal(state.revision, 1); assert.equal(state.state, 'validation-error');
++    input.value = 'Recovered title'; state.markDirty({ target: input });
++    event('editor-field-saved', { property: 'courseForm.title', revision: 1 });
++    assert.equal(state.dirty, true);
++    wire.saveState = 'saved'; wire.clientHasUnsavedChanges = false;
++    event('editor-field-saved', { property: 'courseForm.title', revision: 2 });
++    state.markDirty({ target: input });
++    assert.equal(state.state, 'saved'); assert.equal(state.revision, 2);
++});
++
++test('the lesson title binding sends its changed value on blur through installed Livewire', async () => {
++    const runtime = readFileSync(new URL('../../vendor/livewire/livewire/dist/livewire.js', import.meta.url), 'utf8');
++    const modelDirective = runtime.split('// js/directives/wire-model.js')[1].split('// js/directives/wire-init.js')[0];
++    const modifiers = blade.match(/wire:model([.\w]+)="lessons\.\{\{ \$lessonIndex \}\}\.title"/)[1].slice(1).split('.');
++    async function edit(bindingModifiers) {
++        let directive, bindings, sends = 0;
++        const wire = { lessons: [{ title: 'Before' }], $commit: () => sends++ };
++        const component = { canonical: { lessons: [{ title: 'Before' }] }, $wire: wire };
++        const get = (object, path) => path.split('.').reduce((value, key) => value[key], object);
++        const set = (object, path, value) => { const keys = path.split('.'); get(object, keys.slice(0, -1).join('.'))[keys.at(-1)] = value; };
++        new Function('directive2', 'findComponentByEl', 'module_default', 'dataGet', 'dataSet', 'checkDirty', 'setNextActionOrigin', 'setNextActionMetadata', modelDirective)(
++            (_, callback) => directive = callback, () => component, { bind: (_, value) => bindings = value }, get, set,
++            () => wire.lessons[0].title !== 'Before', () => {}, () => {},
++        );
++        directive({ el: { type: 'text', tagName: 'INPUT' }, directive: { expression: 'lessons.0.title', modifiers: bindingModifiers }, component, cleanup: () => {} });
++        bindings[Object.keys(bindings).find(key => key.startsWith('x-model'))]().set('Persist on blur');
++        bindings['@blur']?.(); await new Promise(resolve => queueMicrotask(resolve));
++        return { sends, value: wire.lessons[0].title };
++    }
++    assert.deepEqual(await edit(['blur']), { sends: 0, value: 'Persist on blur' });
++    assert.deepEqual(await edit(modifiers), { sends: 1, value: 'Persist on blur' });
++});

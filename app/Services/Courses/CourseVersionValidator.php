@@ -6,7 +6,6 @@ use App\Enums\QuestionType;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
 use App\Models\Question;
-use Illuminate\Support\Collection;
 
 /**
  * Publication readiness. Publishing freezes the content forever — assignments and
@@ -15,7 +14,10 @@ use Illuminate\Support\Collection;
  */
 class CourseVersionValidator
 {
-    public function __construct(private readonly LessonContentRenderer $contentRenderer) {}
+    public function __construct(
+        private readonly LessonContentRenderer $contentRenderer,
+        private readonly CourseVersionComposition $composition,
+    ) {}
 
     /**
      * Problems that block publication. An empty list means the version is publishable.
@@ -38,8 +40,21 @@ class CourseVersionValidator
     {
         $problems = [];
 
-        $compositions = $version->moduleCompositions()->with('moduleVersion')->get();
-        foreach ($compositions as $composition) {
+        $state = $this->composition->inspect($version);
+        if ($state['mode'] === CourseVersionComposition::Mixed) {
+            return [__('ui.mixed_composition_error')];
+        }
+
+        if ($state['mode'] === CourseVersionComposition::DirectLessons) {
+            $directIds = $state['directLessons']->pluck('id')->map(fn ($id): int => (int) $id)->sort()->values();
+            $mirrorIds = $state['mirroredDirectRows']->pluck('lesson_id')->map(fn ($id): int => (int) $id)->unique()->sort()->values();
+
+            if ($directIds->all() !== $mirrorIds->all()) {
+                return [__('ui.incomplete_direct_composition_error')];
+            }
+        }
+
+        foreach ($state['reusableRows'] as $composition) {
             $moduleVersion = $composition->moduleVersion;
             $eligibleOwner = $moduleVersion !== null
                 && $moduleVersion->lineage_archived_at === null
@@ -56,7 +71,7 @@ class CourseVersionValidator
             }
         }
 
-        $lessons = $this->lessons($version);
+        $lessons = $this->composition->canonicalLessons($version);
 
         if ($lessons->isEmpty()) {
             return [__('Add at least one lesson before publishing.')];
@@ -67,30 +82,6 @@ class CourseVersionValidator
         }
 
         return $problems;
-    }
-
-    /**
-     * Read through the immutable module snapshot when it is present. The fallback keeps
-     * pre-backfill versions publishable while the staged migration is being deployed.
-     *
-     * @return Collection<int, Lesson>
-     */
-    private function lessons(CourseVersion $version): Collection
-    {
-        if (! method_exists($version, 'moduleCompositions')) {
-            return $version->lessons()->with(['video', 'questions.options'])->get();
-        }
-
-        $compositions = $version->moduleCompositions()->with(['moduleVersion.video', 'moduleVersion.questions.options'])->get();
-
-        if ($compositions->isEmpty()) {
-            return $version->lessons()->with(['video', 'questions.options'])->get();
-        }
-
-        return $compositions
-            ->map(fn ($composition) => $composition->moduleVersion)
-            ->filter()
-            ->values();
     }
 
     public function isPublishable(CourseVersion $version): bool

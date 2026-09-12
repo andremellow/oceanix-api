@@ -27,6 +27,7 @@ use App\Models\SharedContentPropagation;
 use App\Models\SharedContentPropagationItem;
 use App\Models\UserTrainingAssignment;
 use App\Services\Audit\AuditLogger;
+use App\Services\CourseEditor\EditorRevision;
 use App\Services\Courses\LessonContentSanitizer;
 use App\Services\Modules\SharedModuleDraftWriter;
 use App\Services\SharedContent\SharedContentCatalog;
@@ -515,7 +516,7 @@ it('rolls back course fields and preserves composition when the module writer fa
     $writer = Mockery::mock(SharedModuleDraftWriter::class);
     $writer->shouldReceive('prepare')->once()->andReturn(['module' => $module]);
     $writer->shouldReceive('write')->once()->andThrow(new RuntimeException('simulated writer failure'));
-    $action = new SaveSharedCourseEditorDraft($writer);
+    $action = new SaveSharedCourseEditorDraft($writer, app(EditorRevision::class));
     $revision = $action->revision($course, $draft);
     $compositionBefore = $draft->moduleCompositions()->get()->map->only(['id', 'lesson_id', 'position', 'is_required'])->all();
 
@@ -600,17 +601,18 @@ it('rolls back a real first module graph write when the second module writer fai
     }
     $graphBefore = [$first->questions()->with('options')->get()->toArray(), $draft->moduleCompositions()->get()->toArray()];
     $baseWriter = app(SharedModuleDraftWriter::class);
-    $writer = new class(app(LessonContentSanitizer::class)) extends SharedModuleDraftWriter
+    $writer = new class(app(LessonContentSanitizer::class), app(EditorRevision::class)) extends SharedModuleDraftWriter
     {
         private int $writes = 0;
 
-        public function write(array $prepared): void
+        public function write(array $prepared): bool
         {
             $this->writes++;
             if ($this->writes === 2) {
                 throw new RuntimeException('second writer failed');
             }
-            parent::write($prepared);
+
+            return parent::write($prepared);
         }
     };
     $payload = fn (ModuleVersion $module, string $title): array => [
@@ -622,13 +624,19 @@ it('rolls back a real first module graph write when the second module writer fai
         ])->all(),
     ];
     $actor = Account::factory()->platformAdmin()->create();
+    $records = [$payload($first, 'First changed'), $payload($second, 'Second changed')];
+    $courseRevision = app(SaveSharedCourseEditorDraft::class)->revision($course->fresh(), $draft->fresh());
+    $moduleRevisions = [
+        $first->id => $baseWriter->revision($first->fresh()),
+        $second->id => $baseWriter->revision($second->fresh()),
+    ];
 
-    expect(fn () => (new SaveSharedCourseEditorDraft($writer))->handle(
+    expect(fn () => (new SaveSharedCourseEditorDraft($writer, app(EditorRevision::class)))->handle(
         $course, $draft, $actor,
         ['code' => $course->code, 'title' => 'Changed course', 'description' => null], ['description' => null],
-        [$payload($first, 'First changed'), $payload($second, 'Second changed')],
-        app(SaveSharedCourseEditorDraft::class)->revision($course, $draft),
-        [$first->id => $baseWriter->revision($first), $second->id => $baseWriter->revision($second)],
+        $records,
+        $courseRevision,
+        $moduleRevisions,
     ))->toThrow(RuntimeException::class, 'second writer failed')
         ->and($course->fresh()->title)->toBe('Before')
         ->and($first->fresh()->title)->toBe('First before')
@@ -672,37 +680,23 @@ it('fails migration preflight without silently changing duplicate production dra
         ->and($second->fresh()->status)->toBe(CourseVersionStatus::Draft);
 });
 
-it('requires a confirmation reason in the editor and removes only the selected draft association', function (): void {
+it('removes only the selected draft association through the unified editor', function (): void {
     [$course, $published, $module] = sharedPublishedCourseWithAssessment();
     $actor = Account::factory()->platformAdmin()->create();
     $draft = app(CreateDraftFromVersion::class)->handle($published, $actor);
     prepareSharedEditor($course, $actor);
     $this->withSession(['platform_account_id' => $actor->id]);
 
-    $component = Livewire\Livewire::test('platform.shared-courses.editor', ['course' => $course])
-        ->call('confirmModuleRemoval', 0)
+    $record = Livewire\Livewire::test('platform.shared-courses.editor', ['course' => $course])->get('records')[0];
+    Livewire\Livewire::test('platform.shared-courses.editor', ['course' => $course])
+        ->assertSeeHtml('data-editor-structure-action="remove"')
+        ->call('confirmModuleRemoval', $record['id'], $record['composition_id'])
         ->assertSet('confirmingModuleRemoval', true)
-        ->assertSee(__('Remove module from this draft?'))
-        ->assertSee('course-2-module-1')
-        ->assertSee('Fabricação e Montagem')
-        ->assertSee(__('Module version :number · :status', ['number' => 3, 'status' => __('Draft')]))
-        ->assertSee('HA-PO-OPE-002')
-        ->assertSee('Procedimento de Fabricação')
-        ->assertSee(__('Course draft version :number · :status', ['number' => 3, 'status' => __('Draft')]))
-        ->assertSee(__('Removing module…'))
-        ->assertSeeHtml('min-w-0 space-y-3')
-        ->assertSeeHtml('break-words font-bold')
-        ->assertSeeHtml('break-words font-semibold')
-        ->assertSeeHtml('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end')
-        ->assertSeeHtml('wire:loading.attr="disabled" wire:target="removeModule"')
-        ->assertSeeHtml('w-full whitespace-normal sm:w-auto')
-        ->call('removeModule')
-        ->assertHasErrors(['moduleRemovalReason' => 'required'])
-        ->set('moduleRemovalReason', 'Não pertence a esta versão')
-        ->call('removeModule')
-        ->assertHasNoErrors()
-        ->assertSet('confirmingModuleRemoval', false)
-        ->assertSee(__('Module removed from the draft. Its content was not deleted.'));
+        ->assertSeeHtml('data-editor-destructive-confirmation')
+        ->assertSeeHtml('wire:submit="removeConfirmedModule"')
+        ->assertSee(__('This removes only this course association. The shared module and its authored content remain available. The audit reason is required.'))
+        ->set('moduleRemovalReason', 'No longer belongs in this version')
+        ->call('removeConfirmedModule');
 
     expect($draft->fresh()->moduleCompositions()->count())->toBe(0)
         ->and($published->fresh()->moduleCompositions()->count())->toBe(1)
@@ -719,7 +713,7 @@ it('renders the incident-shaped module with all five questions and twenty answer
 
     Livewire\Livewire::test('platform.shared-courses.editor', ['course' => $course])
         ->assertSee(trans_choice('ui.questions_count', 5, ['count' => 5]))
-        ->assertSet('modules.0.questions', function (array $questions): bool {
+        ->assertSet('records.0.questions', function (array $questions): bool {
             return count($questions) === 5
                 && collect($questions)->every(fn (array $question): bool => count($question['options']) === 4)
                 && collect($questions)->sum(fn (array $question): int => count($question['options'])) === 20;
@@ -816,9 +810,14 @@ it('discards through the detail confirmation and revokes both lifecycle actions 
 
     $replacement = app(CreateDraftFromVersion::class)->handle($published, $actor);
     prepareSharedEditor($course, $actor);
-    $editor = Livewire\Livewire::test('platform.shared-courses.editor', ['course' => $course])->call('confirmModuleRemoval', 0);
+    $editor = Livewire\Livewire::test('platform.shared-courses.editor', ['course' => $course]);
+    $record = $editor->get('records')[0];
+    $editor->call('confirmModuleRemoval', $record['id'], $record['composition_id'])
+        ->set('moduleRemovalReason', 'Attempt after revocation');
     $actor->update(['is_platform_admin' => false]);
-    $editor->set('moduleRemovalReason', 'Tentativa após revogação')->call('removeModule')->assertForbidden();
+    $editor
+        ->call('removeConfirmedModule')
+        ->assertForbidden();
 
     expect($replacement->fresh()->moduleCompositions()->count())->toBe(1);
 });
@@ -834,8 +833,8 @@ it('selects only the manual draft when propagation and manual drafts coexist', f
         ->assertSee(__('Edit draft'))
         ->assertSee(__('Discard draft'));
     Livewire\Livewire::test('platform.shared-courses.editor', ['course' => $course])
-        ->assertSet('version.id', $manual->id)
-        ->assertSet('version.id', fn (int $id): bool => $id !== $propagation->id);
+        ->assertSet('versionForm.id', $manual->id)
+        ->assertSet('versionForm.id', fn (int $id): bool => $id !== $propagation->id);
 });
 
 it('uses only the manual draft for assignment impact when propagation and manual drafts coexist', function (): void {
@@ -865,7 +864,7 @@ it('never exposes a propagation-only draft as editable and rejects direct saves'
 
     Livewire\Livewire::test('platform.shared-courses.show', ['course' => $course])
         ->assertSee(__('New draft version'))
-        ->assertDontSee(__('Edit draft'))
+        ->assertDontSeeHtml('href="'.route('platform.shared-courses.editor', ['course' => $course]).'"')
         ->assertSet('discardRevision', '')
         ->assertDontSeeHtml('wire:click="$set(\'confirmingDiscard\', true)"');
     $this->get(route('platform.shared-courses.editor', ['course' => $course]))->assertNotFound();
@@ -1243,7 +1242,7 @@ try {
 PHP,
         $operation, $barrier, $course->company_id, $draft->id, $actor->id,
         $operation === 'compose'
-            ? sprintf('app(App\\Actions\\Courses\\UpdateCourseModuleComposition::class)->handle($draft, [%d], $actor);', $modules[1]->id)
+            ? sprintf('$revision = app(App\\Services\\CourseEditor\\EditorRevision::class)->forCompanyCourse($draft->course()->firstOrFail(), $draft); app(App\\Actions\\Courses\\UpdateCourseModuleComposition::class)->handle($draft, [%d], $actor, $revision);', $modules[1]->id)
             : 'app(App\Actions\Courses\PublishCourseVersion::class)->handle($draft, $actor);',
         $operation,
     );

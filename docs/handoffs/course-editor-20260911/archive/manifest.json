@@ -1,0 +1,169 @@
+{
+  "format": 1,
+  "baseHead": "28c2d7a",
+  "kind": "Historical text snapshots; not executable CI setup or new approvals",
+  "files": [
+    {
+      "source": "tests/JavaScript/course-editor.test.mjs",
+      "snapshot": "archive/tests/course-editor.test.mjs.txt",
+      "sha256Evidence": "037423644c2529082c54872d198591604f1f9fea113fb5257c2dbacc1d9b25e8  tests/JavaScript/course-editor.test.mjs\n037423644c2529082c54872d198591604f1f9fea113fb5257c2dbacc1d9b25e8  docs/handoffs/course-editor-20260911/archive/tests/course-editor.test.mjs.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": "tests/JavaScript/course-editor.browser.test.mjs",
+      "snapshot": "archive/tests/course-editor.browser.test.mjs.txt",
+      "sha256Evidence": "d2a85b0c68af6d6e8874f201b0e96d964b343d4348f03be6d07076165130072b  tests/JavaScript/course-editor.browser.test.mjs\nd2a85b0c68af6d6e8874f201b0e96d964b343d4348f03be6d07076165130072b  docs/handoffs/course-editor-20260911/archive/tests/course-editor.browser.test.mjs.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": "tests/Feature/Courses/CourseEditorTest.php",
+      "snapshot": "archive/tests/CourseEditorTest.php.txt",
+      "sha256Evidence": "2dafcec066eb51e68ca17e95453a1fdc40f86bb54552b63656257487baf20824  tests/Feature/Courses/CourseEditorTest.php\n2dafcec066eb51e68ca17e95453a1fdc40f86bb54552b63656257487baf20824  docs/handoffs/course-editor-20260911/archive/tests/CourseEditorTest.php.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": "/tmp/oceanix-lifecycle-harness.NqSAyE/environment.php",
+      "snapshot": "archive/scripts/environment.php.txt",
+      "sha256Evidence": "7a80a05f6143dcc687eb446b50e58e67978f476e7576785c2135b5126da198de  /tmp/oceanix-lifecycle-harness.NqSAyE/environment.php\n7a80a05f6143dcc687eb446b50e58e67978f476e7576785c2135b5126da198de  docs/handoffs/course-editor-20260911/archive/scripts/environment.php.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": "/tmp/oceanix-lifecycle-harness.NqSAyE/seed.php",
+      "snapshot": "archive/scripts/seed.php.txt",
+      "sha256Evidence": "a584d7c8b97021ba97b6bc12bea0221ef88ca095cde01663c3b2564423c31e1b  /tmp/oceanix-lifecycle-harness.NqSAyE/seed.php\na584d7c8b97021ba97b6bc12bea0221ef88ca095cde01663c3b2564423c31e1b  docs/handoffs/course-editor-20260911/archive/scripts/seed.php.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": "/tmp/oceanix-lifecycle-harness.NqSAyE/fixtures.php",
+      "snapshot": "archive/scripts/fixtures.php.txt",
+      "sha256Evidence": "aa81ee737fb08981dbdc4066ff2cf29737e641a8fc57babccb8815e802ef210e  /tmp/oceanix-lifecycle-harness.NqSAyE/fixtures.php\naa81ee737fb08981dbdc4066ff2cf29737e641a8fc57babccb8815e802ef210e  docs/handoffs/course-editor-20260911/archive/scripts/fixtures.php.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": "/tmp/oceanix-lifecycle-harness.NqSAyE/router.php",
+      "snapshot": "archive/scripts/router.php.txt",
+      "sha256Evidence": "d704f49b477871a6886f4af3ddb037db35864f86c24eaa6463a2d195e3e59b4f  /tmp/oceanix-lifecycle-harness.NqSAyE/router.php\nd704f49b477871a6886f4af3ddb037db35864f86c24eaa6463a2d195e3e59b4f  docs/handoffs/course-editor-20260911/archive/scripts/router.php.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": "/tmp/oceanix-lifecycle-module-fixture.php",
+      "snapshot": "archive/scripts/module-fixture.php.txt",
+      "sha256Evidence": "891df5c3e4b92d42beecf0de6f10ffd24bae42a338604583c18ab73f9e8d297d  /tmp/oceanix-lifecycle-module-fixture.php\n891df5c3e4b92d42beecf0de6f10ffd24bae42a338604583c18ab73f9e8d297d  docs/handoffs/course-editor-20260911/archive/scripts/module-fixture.php.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": "/tmp/oceanix-lifecycle-smoke.cjs",
+      "snapshot": "archive/scripts/direct-smoke.cjs.txt",
+      "sha256Evidence": "6d399d079a45914dfff5b50eef3811e7aedf5cf67b4ef1d7c0ee8eb7d6a8350c  /tmp/oceanix-lifecycle-smoke.cjs\n6d399d079a45914dfff5b50eef3811e7aedf5cf67b4ef1d7c0ee8eb7d6a8350c  docs/handoffs/course-editor-20260911/archive/scripts/direct-smoke.cjs.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": "/tmp/oceanix-lifecycle-module-smoke.cjs",
+      "snapshot": "archive/scripts/module-smoke.cjs.txt",
+      "sha256Evidence": "4cb3ad0b810c99840ef0312574af6251d39f515110191536f87522324c4a28a8  /tmp/oceanix-lifecycle-module-smoke.cjs\n4cb3ad0b810c99840ef0312574af6251d39f515110191536f87522324c4a28a8  docs/handoffs/course-editor-20260911/archive/scripts/module-smoke.cjs.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": "specs/004-fix-course-editor/spec.md",
+      "snapshot": "archive/original-spec/spec.md",
+      "sha256Evidence": "717dba6a757c7725bc4aa6739642de4121dead3753c2f4783127ba44a5a814ef  specs/004-fix-course-editor/spec.md\n717dba6a757c7725bc4aa6739642de4121dead3753c2f4783127ba44a5a814ef  docs/handoffs/course-editor-20260911/archive/original-spec/spec.md",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": "specs/004-fix-course-editor/scenarios.md",
+      "snapshot": "archive/original-spec/scenarios.md",
+      "sha256Evidence": "f27fff05547d77bbfababe08676df1a921217fe0504fbc6ee5367bfdc57399c4  specs/004-fix-course-editor/scenarios.md\nf27fff05547d77bbfababe08676df1a921217fe0504fbc6ee5367bfdc57399c4  docs/handoffs/course-editor-20260911/archive/original-spec/scenarios.md",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": ".toscanini/runtime/runs/course-editor-lifecycle-20260911/execution-contract.json",
+      "snapshot": "archive/lifecycle/execution-contract.json.txt",
+      "sha256Evidence": "e444dca476a6879859609f72f9a534f9a78c1b8477a19b8c4041eb553b5eb1ba  .toscanini/runtime/runs/course-editor-lifecycle-20260911/execution-contract.json\ne444dca476a6879859609f72f9a534f9a78c1b8477a19b8c4041eb553b5eb1ba  docs/handoffs/course-editor-20260911/archive/lifecycle/execution-contract.json.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": ".toscanini/runtime/runs/course-editor-lifecycle-20260911/finding-ledger.json",
+      "snapshot": "archive/lifecycle/finding-ledger.json.txt",
+      "sha256Evidence": "9507d48fff2207c51327eee16ab0a22bda250eec70f7f5d0390af9f939ec82b1  .toscanini/runtime/runs/course-editor-lifecycle-20260911/finding-ledger.json\n9507d48fff2207c51327eee16ab0a22bda250eec70f7f5d0390af9f939ec82b1  docs/handoffs/course-editor-20260911/archive/lifecycle/finding-ledger.json.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": ".toscanini/runtime/runs/course-editor-lifecycle-20260911/implementation.md",
+      "snapshot": "archive/lifecycle/implementation.md.txt",
+      "sha256Evidence": "0495b6704caacde21bdb9d80d19fa3f8cf49458e57bbbc37bfb3ea19005db753  .toscanini/runtime/runs/course-editor-lifecycle-20260911/implementation.md\n0495b6704caacde21bdb9d80d19fa3f8cf49458e57bbbc37bfb3ea19005db753  docs/handoffs/course-editor-20260911/archive/lifecycle/implementation.md.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": ".toscanini/runtime/runs/course-editor-lifecycle-20260911/remediation.md",
+      "snapshot": "archive/lifecycle/remediation.md.txt",
+      "sha256Evidence": "57d790c462c3ce04fb7049a64330de85af7f958cd3f1744c0014b6bf8143ca53  .toscanini/runtime/runs/course-editor-lifecycle-20260911/remediation.md\n57d790c462c3ce04fb7049a64330de85af7f958cd3f1744c0014b6bf8143ca53  docs/handoffs/course-editor-20260911/archive/lifecycle/remediation.md.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": ".toscanini/runtime/runs/course-editor-lifecycle-20260911/qa.md",
+      "snapshot": "archive/lifecycle/qa.md.txt",
+      "sha256Evidence": "e93b030fd611f6b6cbebd80e03224133d9e8c38f5cbe079c3f28f34adf758648  .toscanini/runtime/runs/course-editor-lifecycle-20260911/qa.md\ne93b030fd611f6b6cbebd80e03224133d9e8c38f5cbe079c3f28f34adf758648  docs/handoffs/course-editor-20260911/archive/lifecycle/qa.md.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": ".toscanini/runtime/runs/course-editor-lifecycle-20260911/design-review.md",
+      "snapshot": "archive/lifecycle/design-review.md.txt",
+      "sha256Evidence": "320ae7ad138503a53e2e8a17afb5ca5caa2eda734a55e4734710a9ddf2ea8862  .toscanini/runtime/runs/course-editor-lifecycle-20260911/design-review.md\n320ae7ad138503a53e2e8a17afb5ca5caa2eda734a55e4734710a9ddf2ea8862  docs/handoffs/course-editor-20260911/archive/lifecycle/design-review.md.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": ".toscanini/runtime/runs/course-editor-lifecycle-20260911/code-review.md",
+      "snapshot": "archive/lifecycle/code-review.md.txt",
+      "sha256Evidence": "ac001e496b0acbd9e99c81518d4abeb7147c85b2585fa190abd171a08166ef62  .toscanini/runtime/runs/course-editor-lifecycle-20260911/code-review.md\nac001e496b0acbd9e99c81518d4abeb7147c85b2585fa190abd171a08166ef62  docs/handoffs/course-editor-20260911/archive/lifecycle/code-review.md.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": ".toscanini/runtime/runs/course-editor-lifecycle-20260911/test-review.md",
+      "snapshot": "archive/lifecycle/test-review.md.txt",
+      "sha256Evidence": "e9388c17997bf62bb090e86d372bcf574add04f3679140b74a96002377c419ae  .toscanini/runtime/runs/course-editor-lifecycle-20260911/test-review.md\ne9388c17997bf62bb090e86d372bcf574add04f3679140b74a96002377c419ae  docs/handoffs/course-editor-20260911/archive/lifecycle/test-review.md.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": ".toscanini/runtime/runs/course-editor-lifecycle-20260911/directed-code-review.md",
+      "snapshot": "archive/lifecycle/directed-code-review.md.txt",
+      "sha256Evidence": "9c6f057a8616ddb3f34795a742c7ada6fd70cbb15bd6b627c1b48e5e11ec36a8  .toscanini/runtime/runs/course-editor-lifecycle-20260911/directed-code-review.md\n9c6f057a8616ddb3f34795a742c7ada6fd70cbb15bd6b627c1b48e5e11ec36a8  docs/handoffs/course-editor-20260911/archive/lifecycle/directed-code-review.md.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": ".toscanini/runtime/runs/course-editor-lifecycle-20260911/directed-test-review.md",
+      "snapshot": "archive/lifecycle/directed-test-review.md.txt",
+      "sha256Evidence": "62c98779f3750676e813fcdabb609ee2dc9e4aea06fc1e642eaf5eca3d47412d  .toscanini/runtime/runs/course-editor-lifecycle-20260911/directed-test-review.md\n62c98779f3750676e813fcdabb609ee2dc9e4aea06fc1e642eaf5eca3d47412d  docs/handoffs/course-editor-20260911/archive/lifecycle/directed-test-review.md.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": ".toscanini/runtime/runs/course-editor-lifecycle-20260911/gate-compatibility.md",
+      "snapshot": "archive/lifecycle/gate-compatibility.md.txt",
+      "sha256Evidence": "913f1a1c049b6071fe7aa8f5dc68ce37ecd420fce94837120fb169d58140a34a  .toscanini/runtime/runs/course-editor-lifecycle-20260911/gate-compatibility.md\n913f1a1c049b6071fe7aa8f5dc68ce37ecd420fce94837120fb169d58140a34a  docs/handoffs/course-editor-20260911/archive/lifecycle/gate-compatibility.md.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": ".toscanini/runtime/runs/course-editor-lifecycle-20260911/visible-verification.md",
+      "snapshot": "archive/lifecycle/visible-verification.md.txt",
+      "sha256Evidence": "7cdc12d38b4da25b459e7dcacbf927a7cc5aaf0d3c164a678d89267f793f5cf0  .toscanini/runtime/runs/course-editor-lifecycle-20260911/visible-verification.md\n7cdc12d38b4da25b459e7dcacbf927a7cc5aaf0d3c164a678d89267f793f5cf0  docs/handoffs/course-editor-20260911/archive/lifecycle/visible-verification.md.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": ".toscanini/runtime/runs/course-editor-lifecycle-20260911/execution-report.md",
+      "snapshot": "archive/lifecycle/execution-report.md.txt",
+      "sha256Evidence": "72771466592213622c3dc7bbcbc8753e81aee5c1f43527c3b7d9070e43d8ebf5  .toscanini/runtime/runs/course-editor-lifecycle-20260911/execution-report.md\n72771466592213622c3dc7bbcbc8753e81aee5c1f43527c3b7d9070e43d8ebf5  docs/handoffs/course-editor-20260911/archive/lifecycle/execution-report.md.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": ".toscanini/runtime/runs/course-editor-lifecycle-20260911/worker-delta.patch",
+      "snapshot": "archive/lifecycle/worker-delta.patch.txt",
+      "sha256Evidence": "7f6f6d82d8f208c593b8e7b8fe88708e3abec44a2969d12a5eb9f9ca2991b1b3  .toscanini/runtime/runs/course-editor-lifecycle-20260911/worker-delta.patch\n7f6f6d82d8f208c593b8e7b8fe88708e3abec44a2969d12a5eb9f9ca2991b1b3  docs/handoffs/course-editor-20260911/archive/lifecycle/worker-delta.patch.txt",
+      "sourceBytesPreserved": true
+    },
+    {
+      "source": ".toscanini/runtime/runs/course-editor-lifecycle-20260911/remediation-delta.patch",
+      "snapshot": "archive/lifecycle/remediation-delta.patch.txt",
+      "sha256Evidence": "73488bb3e74699155400b535d4c31d54239eb8514b6b6128633a9f99bba94eb2  .toscanini/runtime/runs/course-editor-lifecycle-20260911/remediation-delta.patch\n73488bb3e74699155400b535d4c31d54239eb8514b6b6128633a9f99bba94eb2  docs/handoffs/course-editor-20260911/archive/lifecycle/remediation-delta.patch.txt",
+      "sourceBytesPreserved": true
+    }
+  ]
+}

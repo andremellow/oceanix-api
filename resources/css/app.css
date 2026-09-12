@@ -60,6 +60,23 @@
         color: #838c92;
         opacity: 1;
     }
+
+    [data-editor-root] :where(button, a[href], input:not([type='hidden']), textarea, select, [contenteditable='true']):focus-visible,
+    [data-course-preview-panel] :where(button, a[href], input:not([type='hidden']), textarea, select, [contenteditable='true']):focus-visible {
+        outline: 2px solid var(--ds-focus-ring);
+        outline-offset: 2px;
+    }
+
+    [data-editor-root] [contenteditable='true'][data-slot='content']:focus,
+    [data-editor-root] [contenteditable='true'][data-slot='content'].ProseMirror-focused {
+        outline: 2px solid var(--ds-focus-ring) !important;
+        outline-offset: 2px !important;
+    }
+
+    [data-editor-root][data-editor-hydration-state='loading'] :where([data-editor-structure-action], [data-editor-media-action], [data-editor-publish-action]) {
+        cursor: wait;
+        pointer-events: none;
+    }
 }
 
 @layer components {
@@ -79,7 +96,7 @@
     select[data-flux-select-native],
     textarea[data-flux-control],
     [data-flux-textarea] {
-        @apply !border-[#c6ced4] !bg-white !text-[#262d33] !shadow-sm hover:!border-[#aab4bb] focus:!border-[#3e8ba3] focus:!ring-2 focus:!ring-[#d3e9f1];
+        @apply !border-[#c6ced4] !bg-white !text-[#262d33] !shadow-sm hover:!border-[#aab4bb] focus:!border-[var(--ds-focus-ring)] focus:!ring-2 focus:!ring-[var(--ds-focus-ring)];
     }
 
     input[data-flux-control]:disabled,
@@ -100,7 +117,11 @@
     }
 
     [data-flux-button] {
-        @apply focus-visible:!outline-2 focus-visible:!outline-offset-2 focus-visible:!outline-[#3e8ba3];
+        @apply focus-visible:!outline-2 focus-visible:!outline-offset-2;
+    }
+
+    [data-flux-button]:focus-visible {
+        outline-color: var(--ds-focus-ring) !important;
     }
 
     [data-flux-link] {
@@ -224,11 +245,11 @@
 
     .admin-page .admin-control,
     .admin-page select[data-flux-select-native] {
-        @apply !min-h-11 !border-[#ccd4d9] !bg-white !text-[#262d33] !shadow-sm hover:!border-[#aab4bb] focus:!border-[#3e8ba3] focus:!ring-2 focus:!ring-[#d3e9f1];
+        @apply !min-h-11 !border-[#ccd4d9] !bg-white !text-[#262d33] !shadow-sm hover:!border-[#aab4bb] focus:!border-[var(--ds-focus-ring)] focus:!ring-2 focus:!ring-[var(--ds-focus-ring)];
     }
 
     .admin-page .admin-primary-action {
-        @apply !min-h-11 !border-[#1b2328] !bg-[#1b2328] !px-5 !font-bold !text-white !shadow-sm hover:!bg-[#2f3a41] focus:!ring-2 focus:!ring-[#7cb6c9] focus:!ring-offset-2;
+        @apply !min-h-11 !border-[#1b2328] !bg-[#1b2328] !px-5 !font-bold !text-white !shadow-sm hover:!bg-[#2f3a41] focus:!ring-2 focus:!ring-[var(--ds-focus-ring)] focus:!ring-offset-2;
     }
 
     .admin-page [data-flux-button]:not(.admin-primary-action) {
@@ -321,7 +342,7 @@
 
     .visual-markdown-editor { @apply overflow-hidden rounded-[18px] border border-[#d8e0e4] bg-white shadow-sm; }
     .visual-markdown-toolbar { @apply flex flex-wrap items-center gap-1 border-b border-[#e2e7ea] bg-[#f7f9fa] p-2; }
-    .visual-markdown-toolbar button { @apply min-h-9 rounded-lg border border-transparent px-2.5 text-xs font-semibold text-[#465159] transition hover:border-[#cbd8de] hover:bg-white hover:text-[#1c6b84] focus:outline-none focus:ring-2 focus:ring-[#77b6ca]; }
+    .visual-markdown-toolbar button { @apply min-h-9 rounded-lg border border-transparent px-2.5 text-xs font-semibold text-[#465159] transition hover:border-[#cbd8de] hover:bg-white hover:text-[#1c6b84] focus:outline-none focus:ring-2 focus:ring-[var(--ds-focus-ring)]; }
     .visual-markdown-surface { @apply min-h-80 px-6 py-5 text-sm leading-7 text-[#364047] outline-none; }
     .visual-markdown-surface p:first-child { @apply mt-0; }
     .visual-markdown-surface img { @apply my-4 h-auto max-w-full cursor-pointer rounded-[16px] border border-[#dce3e7] shadow-sm; width: 50%; }
@@ -385,5 +406,9 @@
 
     @media (max-width: 639px) {
         .lesson-media { width: 100%; @apply mx-0 float-none; }
+        [data-flux-editor].oceanix-content-editor > ui-toolbar { @apply min-w-0 overflow-x-visible; }
+        [data-flux-editor].oceanix-content-editor > ui-toolbar > div {
+            @apply h-auto min-h-10 min-w-0 flex-wrap;
+        }
     }
 }

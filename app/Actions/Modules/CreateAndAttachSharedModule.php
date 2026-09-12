@@ -10,6 +10,7 @@ use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
 use App\Models\Module;
 use App\Services\Audit\AuditLogger;
+use App\Services\CourseEditor\EditorRevision;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -17,13 +18,17 @@ use LogicException;
 
 class CreateAndAttachSharedModule
 {
-    public function __construct(private readonly CreateModule $createModule, private readonly AuditLogger $audit) {}
+    public function __construct(
+        private readonly CreateModule $createModule,
+        private readonly AuditLogger $audit,
+        private readonly EditorRevision $revisions,
+    ) {}
 
-    public function handle(CourseVersion $version, Account $actor, string $code, string $title, ?string $description = null): Module
+    public function handle(CourseVersion $version, Account $actor, string $code, string $title, ?string $description = null, ?string $expectedRevision = null): Module
     {
         $normalizedCode = strtoupper(trim($code));
 
-        return DB::transaction(function () use ($version, $actor, $normalizedCode, $title, $description): Module {
+        return DB::transaction(function () use ($version, $actor, $normalizedCode, $title, $description, $expectedRevision): Module {
             $authorizedActor = Account::query()
                 ->whereKey($actor->id)
                 ->where('is_platform_admin', true)
@@ -50,6 +55,11 @@ class CreateAndAttachSharedModule
                 throw new LogicException('New shared modules can only be added to shared courses.');
             }
 
+            $compositions = $lockedVersion->moduleCompositions()->orderBy('position')->orderBy('id')->lockForUpdate()->get();
+            if ($expectedRevision !== null && ! hash_equals($this->revisions->forSharedCourse($course, $lockedVersion, $compositions), $expectedRevision)) {
+                throw ValidationException::withMessages(['revision' => __('This course changed elsewhere. Reload the page before trying again.')]);
+            }
+
             if (Module::query()->where('is_shared', true)->whereNull('company_id')->whereRaw('UPPER(code) = ?', [$normalizedCode])->exists()) {
                 throw ValidationException::withMessages(['code' => __('A shared module with this code already exists.')]);
             }
@@ -60,7 +70,7 @@ class CreateAndAttachSharedModule
                 CourseVersionModule::query()->create([
                     'course_version_id' => $lockedVersion->id,
                     'module_version_id' => $module->id,
-                    'position' => ((int) $lockedVersion->moduleCompositions()->max('position')) + 1,
+                    'position' => ((int) $compositions->max('position')) + 1,
                     'is_required' => true,
                 ]);
                 $this->audit->log('shared_module.attached', $module, after: ['course_version_id' => $lockedVersion->id], platformActor: $authorizedActor);

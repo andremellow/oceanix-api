@@ -1,0 +1,55 @@
+const {chromium}=require('/Users/andrepiresdemello/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const assert=require('node:assert/strict');
+const [base,slug,courseId]=process.argv.slice(2); const token=Date.now();
+(async()=>{
+ const browser=await chromium.launch({headless:true,channel:'chrome'});
+ const page=await browser.newPage({viewport:{width:1440,height:1000}}); const errors=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ await page.goto(`${base}/c/${slug}`); await page.goto(`${base}/auth/local`);
+ await page.goto(`${base}/courses/${courseId}/editor`);
+ await page.waitForSelector('[data-lesson-drop-id]');
+ const root=()=>page.locator('.admin-page[x-data]').first();
+ const saved=async()=>{try {await page.waitForFunction(()=>document.querySelector('.admin-page[x-data]')._x_dataStack[0].state==='saved',{},{timeout:8000});}catch(e){console.log(await page.evaluate(()=>{const r=document.querySelector('.admin-page[x-data]'),s=r._x_dataStack[0],w=Livewire.find(r.getAttribute('wire:id'));return {state:s.state,dirty:s.dirty,revision:s.revision,pending:s.fieldRevisions,serverState:w.saveState,serverPending:w.clientFieldRevisions,lessons:w.lessons.map(l=>({id:l.id,title:l.title})),body:document.body.innerText.slice(-1200)}}));throw e;}};
+ const state=()=>root().evaluate(el=>({state:el._x_dataStack[0].state,dirty:el._x_dataStack[0].dirty,revision:el._x_dataStack[0].revision}));
+ const rows=page.locator('[data-lesson-drop-id]');
+ const ids=await rows.evaluateAll(els=>els.map(el=>el.dataset.lessonDropId));
+ for(const id of ids){ const row=page.locator(`[data-lesson-drop-id="${id}"]`); if(await row.locator('input[wire\\:model\\.live\\.blur$=".title"]').count()===0) await row.locator('button[wire\\:click^="toggleLesson"]').first().click(); }
+ await page.waitForFunction(()=>document.querySelectorAll('input[wire\\:model\\.live\\.blur$=".title"]').length>=3);
+ const snapshot=()=>rows.evaluateAll(els=>Object.fromEntries(els.map(el=>[el.dataset.lessonDropId,Array.from(el.querySelectorAll('[data-editor-authored]')).filter(c=>c.getAttributeNames().some(n=>n.startsWith('wire:model'))).map(c=>({path:c.getAttribute(c.getAttributeNames().find(n=>n.startsWith('wire:model'))).replace(/^lessons\.\d+\./,''),value:c.matches('ui-checkbox')?c.getAttribute('aria-checked'):c.type==='checkbox'?c.checked:c.value}))])));
+ const initial=await snapshot(); assert.equal(ids.length,3);
+ const moved=ids[1];
+ await page.locator(`[data-lesson-focus-id="${moved}"][data-lesson-focus-direction="up"]`).click(); await saved();
+ assert.deepEqual(await snapshot(),initial);
+ assert.equal(await page.evaluate(()=>document.activeElement.dataset.lessonFocusId),moved);
+ for(const width of [320,1440]){
+  await page.setViewportSize({width,height:1000});
+  await page.locator(`[data-lesson-focus-id="${moved}"][data-lesson-focus-direction="down"]`).click(); await saved(); assert.deepEqual(await snapshot(),initial);
+  await page.locator(`[data-lesson-focus-id="${moved}"][data-lesson-focus-direction="up"]`).click(); await saved(); assert.deepEqual(await snapshot(),initial);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ }
+ const movedRow=page.locator(`[data-lesson-drop-id="${moved}"]`);
+ const title=movedRow.locator('input[wire\\:model\\.live\\.blur$=".title"]');
+ await title.fill(`Moved lesson authored smoke ${token}`); await title.press('Tab'); await saved();
+ await page.evaluate(()=>{window.editEvents=[];const s=document.querySelector('.admin-page[x-data]')._x_dataStack[0],old=s.markDirty;s.markDirty=function(event){const c=event.target.closest('[data-editor-authored]');window.editEvents.push({type:event.type,value:c.value,binding:c.getAttributeNames().filter(n=>n.startsWith('wire:model')).map(n=>[n,c.getAttribute(n)]),seen:JSON.stringify(this.observedValues),revision:this.revision});return old.call(this,event)}});
+ const answer=movedRow.locator('input[wire\\:model\\.live\\.debounce\\.500ms$=".text"]').first();
+ await answer.fill(`Moved answer live smoke ${token}`); await saved(); const before=await state(); await answer.press('Tab');
+ await page.waitForTimeout(700); console.log(await page.evaluate(()=>window.editEvents)); assert.deepEqual(await state(),before);
+ await answer.fill(`Moved answer second smoke ${token}`); await saved(); const after=await state(); assert.ok(after.revision>before.revision); await answer.press('Tab'); await page.waitForTimeout(700); assert.deepEqual(await state(),after);
+ await page.reload();
+ if(await page.locator(`[data-lesson-drop-id="${moved}"] input[wire\\:model\\.live\\.blur$=".title"]`).count()===0) await page.locator(`[data-lesson-drop-id="${moved}"] button[wire\\:click^="toggleLesson"]`).first().click();
+ await page.waitForSelector(`[data-lesson-drop-id="${moved}"] input[wire\\:model\\.live\\.blur$=".title"]`);
+ assert.equal(await page.locator(`[data-lesson-drop-id="${moved}"] input[wire\\:model\\.live\\.blur$=".title"]`).inputValue(),`Moved lesson authored smoke ${token}`);
+ assert.equal(await page.locator(`[data-lesson-drop-id="${moved}"] input[wire\\:model\\.live\\.debounce\\.500ms$=".text"]`).first().inputValue(),`Moved answer second smoke ${token}`);
+ for(const id of ids.filter(id=>id!==moved)){const row=page.locator(`[data-lesson-drop-id="${id}"]`);if(await row.locator('input[wire\\:model\\.live\\.blur$=".title"]').count()===0){await row.locator('button[wire\\:click^="toggleLesson"]').first().click();await row.locator('input[wire\\:model\\.live\\.blur$=".title"]').waitFor();}}
+ const expected=structuredClone(initial);expected[moved].find(c=>c.path==='title').value=`Moved lesson authored smoke ${token}`;expected[moved].find(c=>c.path==='questions.0.options.0.text').value=`Moved answer second smoke ${token}`;
+ assert.deepEqual(await snapshot(),expected);
+ const courseTitle=page.locator('input[wire\\:model\\.live\\.debounce\\.500ms="courseForm.title"]');
+ await courseTitle.fill('');await page.waitForFunction(()=>document.querySelector('.admin-page[x-data]')._x_dataStack[0].state==='validation-error');
+ const invalid=await state();await courseTitle.press('Tab');await page.waitForTimeout(700);assert.deepEqual(await state(),invalid);
+ await courseTitle.fill(`Recovered course ${token}`);await saved();const recovered=await state();await courseTitle.press('Tab');await page.waitForTimeout(700);assert.deepEqual(await state(),recovered);
+ page.once('dialog',dialog=>dialog.dismiss());await page.locator(`[data-lesson-drop-id="${moved}"] button[wire\\:click^="removeLesson"]`).click();
+ assert.deepEqual(await state(),recovered);
+ assert.deepEqual(errors,[]);
+ console.log(JSON.stringify({directSmoke:'pass',ids,moved,revisionBefore:before.revision,revisionAfter:after.revision}));
+ await browser.close();
+})().catch(e=>{console.error(e);process.exit(1)});

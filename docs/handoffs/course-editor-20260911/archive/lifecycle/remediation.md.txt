@@ -1,0 +1,38 @@
+# Directed remediation evidence
+
+Run: course-editor-lifecycle-20260911. Round 2, phase remediation, directed Worker.
+Scope: course-editor-lifecycle-20260911-scope-v1.
+Assigned findings: CR-LIFECYCLE-01, TA-01, TA-02.
+Stable checkpoint: course-editor-lifecycle-remediation-43372bcbc810.
+
+## Changes
+
+CR-LIFECYCLE-01: Failed requests now send the unsaved flag with their failure provenance. Search and unrelated structural request start/success preserve unresolved module failure visibility. Server structural acknowledgement preserves the module failure, and a client Saved event cannot override it. Module retry remains the resolution boundary. The new JavaScript regression failed before correction (false unsaved state); it passes afterward. A Pest regression verifies actual unrelated search and addLesson persistence while the module error remains and no editor-saved event is emitted.
+
+TA-01: Added tests/JavaScript/course-editor.browser.test.mjs, executing the installed Livewire/Alpine runtime through real Chrome against explicitly selected disposable localhost fixtures. It expands three distinct lessons with nested questions/options, compares all authored displayed controls by stable lesson/question/option identity, reorders both directions at 1440px and 320px, checks contextual focus and overflow, leaves the moved lesson at a different index, edits its title and one answer, reloads, and verifies the full snapshot changes only those intended records.
+
+Its mandatory negative control transforms only responses delivered to a separate browser page: it removes the lesson-fields key and restores the old stable-only question/option keys. The same browser assertion then fails with “displayed controls must retain their stable record values after reorder.” The test requires that precise failure, then runs the production response path successfully. No production file, server response to another client, or vendor file is changed for this experiment.
+
+TA-02: The browser regression clicks the existing confirmed lesson removal. Dismissing the real native dialog produces zero removal requests and identical revision/dirty/pending/save state. Accepting it produces exactly one removal request and Saving/pending before the response. The accepted request is held and aborted, preserving the fixture's lesson data. The previous search-only JavaScript test is renamed accurately.
+
+## Verification
+
+- node --test tests/JavaScript/course-editor.test.mjs: 12 passed, zero failed.
+- php -d memory_limit=512M vendor/bin/pest tests/Feature/Courses/CourseEditorTest.php --compact: 58 passed, 471 assertions.
+- Browser integration: 1 passed, zero skipped; includes required failing negative control, successful production flow and reject/accept controls. Command: EDITOR_TEST_URL=http://127.0.0.1:18891 EDITOR_TEST_TENANT=oceanix-demo EDITOR_TEST_COURSE=5 PLAYWRIGHT_MODULE=/Users/andrepiresdemello/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright node --test tests/JavaScript/course-editor.browser.test.mjs.
+- PHPRC=/private/tmp/oceanix-course-editor-readiness.ZO6Qay/php.ini composer verify: exit 0; 715 passed, 13 skipped, 3528 assertions; 25 preview JavaScript checks pass, Pint passes, build passes with existing large-chunk advisory. Log: /private/tmp/course-editor-lifecycle-remediation-verify.log.
+
+Chrome required the approved sandbox escalation after the sandbox launch failed. Only disposable course 5 was mutated by this batch's browser test; accepted removal was not sent to the server. The parent-owned server remains running. These are Worker checks, not independent QA or directed-review approval. No ledger findings have been marked resolved by the Worker, and no tooling/policy changes were made.
+
+## Checkpoint and delta
+
+remediation-delta.patch contains only this batch's changes. Production and JavaScript pre-edit snapshots were retained in /private/tmp/oceanix-lifecycle-remediation-baseline. The PHP before state is reconstructed by removing exactly the single added Pest test from the final file; the new browser test has an empty before state.
+
+SHA-256 values:
+
+- resources/views/components/courses/⚡editor.blade.php: 63be9fb6185e4207021c27d003c871450b5d4ace78970e4bcd88b6c2b984131b
+- tests/Feature/Courses/CourseEditorTest.php: 2dafcec066eb51e68ca17e95453a1fdc40f86bb54552b63656257487baf20824
+- tests/JavaScript/course-editor.test.mjs: 037423644c2529082c54872d198591604f1f9fea113fb5257c2dbacc1d9b25e8
+- tests/JavaScript/course-editor.browser.test.mjs: d2a85b0c68af6d6e8874f201b0e96d964b343d4348f03be6d07076165130072b
+
+Combined checkpoint digest is SHA-256 of each listed relative path, NUL, its bytes, NUL, concatenated in the above order: 43372bcbc810a90b3df6e79be77d1b33df8ec1498996cab233c1cd45945127c8. This supersedes the earlier implementation checkpoint for affected directed gates.

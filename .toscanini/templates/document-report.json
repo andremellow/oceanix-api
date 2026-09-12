@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "reportId": "feature-name",
+  "project": "Project name",
+  "title": "Feature title",
+  "version": 1,
+  "documents": [
+    {"id": "specification", "title": "Specification", "path": "specs/feature-name/spec.md"},
+    {"id": "scenarios", "title": "Scenarios", "path": "specs/feature-name/scenarios.md"}
+  ]
+}

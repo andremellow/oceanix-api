@@ -40,13 +40,15 @@ new class extends Component
     {
         $this->authorize('create', Course::class);
 
+        $this->code = mb_strtoupper(trim($this->code));
+
         $validated = $this->validate([
-            'code' => ['required', 'string', 'max:40', Rule::unique('courses', 'code')],
+            'code' => ['required', 'string', 'max:40', Rule::unique('courses', 'code')->where(fn ($query) => $query->where('company_id', $this->company->id)->where('is_shared', false))],
             'title' => ['required', 'string', 'max:200'],
             'description' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $course = $action->handle($validated['code'], $validated['title'], $validated['description'] ?: null);
+        $course = $action->handle($validated['code'], $validated['title'], $validated['description'] ?: null, actor: auth()->user());
 
         $this->redirect(route('courses.editor', ['course' => $course]), navigate: true);
     }
@@ -59,6 +61,13 @@ new class extends Component
     public function updatedStatus(): void
     {
         $this->resetPage();
+    }
+
+    public function cancelCreate(): void
+    {
+        $this->creating = false;
+        $this->reset('code', 'title', 'description');
+        $this->resetValidation();
     }
 
     public function with(CompanyCourseLibrary $library): array
@@ -165,9 +174,12 @@ new class extends Component
             </div>
             <flux:textarea wire:model="description" class="admin-control" :label="__('Description')" rows="2" />
 
-            <div class="flex justify-end gap-2">
-                <flux:button x-on:click="$wire.creating = false" variant="ghost" type="button">{{ __('Cancel') }}</flux:button>
-                <flux:button type="submit" variant="primary" class="admin-primary-action">{{ __('Create and open editor') }}</flux:button>
+            <div class="flex flex-wrap justify-end gap-2">
+                <flux:button wire:click="cancelCreate" wire:loading.attr="disabled" wire:target="create,cancelCreate" variant="ghost" type="button">{{ __('Cancel') }}</flux:button>
+                <flux:button type="submit" variant="primary" class="admin-primary-action" wire:loading.attr="disabled" wire:target="create">
+                    <span wire:loading.remove wire:target="create">{{ __('Create and open editor') }}</span>
+                    <span wire:loading wire:target="create" role="status">{{ __('ui.creating_course') }}</span>
+                </flux:button>
             </div>
         </form>
     </flux:modal>

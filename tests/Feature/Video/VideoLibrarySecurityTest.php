@@ -7,9 +7,12 @@ use App\Exceptions\VideoProviderException;
 use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Company;
+use App\Models\Course;
+use App\Models\CourseVersion;
 use App\Models\Lesson;
 use App\Models\ModuleVersion;
 use App\Models\Video;
+use App\Services\CourseEditor\EditorRevision;
 use App\Services\Modules\ModuleVersionValidator;
 use App\Services\Video\CloudflareStreamProvider;
 use App\Tenancy\TenantContext;
@@ -56,13 +59,17 @@ it('lists videos from every owner for the platform administration library', func
 it('rejects unsigned and cross-company assets before linking', function (bool $signed, string $owner): void {
     $company = currentCompany();
     $owner = $owner === 'current' ? 'company:'.$company->id : $owner;
-    $lesson = Lesson::factory()->create(['company_id' => $company->id]);
+    $course = Course::factory()->draft()->create(['company_id' => $company->id]);
+    $version = CourseVersion::factory()->create(['course_id' => $course]);
+    $lesson = Lesson::factory()->create(['company_id' => $company->id, 'course_version_id' => $version]);
+    $actor = adminUser();
     Http::fake(['api.cloudflare.com/*' => Http::response(['result' => [
         'uid' => 'unsafe-asset', 'status' => ['state' => 'ready'], 'requireSignedURLs' => $signed,
         'meta' => ['oceanix_owner' => $owner],
     ]])]);
 
-    expect(fn () => app(LinkExistingVideo::class)->handle($lesson, 'unsafe-asset'))
+    $revision = app(EditorRevision::class)->forCompanyCourse($course, $version);
+    expect(fn () => app(LinkExistingVideo::class)->forCompanyEditor($lesson, 'unsafe-asset', $actor, $revision))
         ->toThrow(ValidationException::class);
     expect($lesson->fresh()->video)->toBeNull();
 })->with([
@@ -81,7 +88,7 @@ it('allows platform administration to link a ready signed company video', functi
         'meta' => ['oceanix_owner' => 'company:99'],
     ]])]);
 
-    app(LinkExistingVideo::class)->handle($lesson, 'company-asset', allowAnyOwner: true, platformActor: $actor);
+    app(LinkExistingVideo::class)->forPlatformEditor($lesson, 'company-asset', $actor, app(EditorRevision::class)->forSharedModule(ModuleVersion::query()->findOrFail($lesson->id)));
 
     expect($lesson->fresh()->video?->provider_asset_id)->toBe('company-asset');
     $audit = AuditLog::query()->withoutGlobalScopes()->where('action', 'lesson.video_linked')->sole();
@@ -99,7 +106,7 @@ it('records platform video upload requests without requiring a tenant', function
         'uploadURL' => 'https://upload.cloudflarestream.com/platform-upload',
     ]])]);
 
-    app(RequestVideoUpload::class)->handle($lesson, platformActor: $actor);
+    app(RequestVideoUpload::class)->forPlatformEditor($lesson, $actor, app(EditorRevision::class)->forSharedModule(ModuleVersion::query()->findOrFail($lesson->id)));
 
     expect($lesson->fresh()->video?->provider_asset_id)->toBe('platform-upload');
     $audit = AuditLog::query()->withoutGlobalScopes()->where('action', 'lesson.video_upload_requested')->sole();
@@ -125,13 +132,13 @@ it('never lets an older ready candidate replace a newer requested video', functi
         return Http::response(['result' => ['uid' => $asset, 'status' => ['state' => 'ready'], 'requireSignedURLs' => true, 'playback' => ['hls' => "https://video.example/{$asset}.m3u8"], 'meta' => ['oceanix_owner' => 'platform']]]);
     });
 
-    $first = app(RequestVideoUpload::class)->handle($lesson, platformActor: $actor);
-    $second = app(RequestVideoUpload::class)->handle($lesson, platformActor: $actor);
+    $first = app(RequestVideoUpload::class)->forPlatformEditor($lesson, $actor, app(EditorRevision::class)->forSharedModule(ModuleVersion::query()->findOrFail($lesson->id)));
+    $second = app(RequestVideoUpload::class)->forPlatformEditor($lesson, $actor, app(EditorRevision::class)->forSharedModule(ModuleVersion::query()->findOrFail($lesson->id)));
     $a = Video::query()->findOrFail($first->videoId);
     $b = Video::query()->findOrFail($second->videoId);
 
-    app(SyncVideoAsset::class)->handle($b);
-    app(SyncVideoAsset::class)->handle($a);
+    app(SyncVideoAsset::class)->reconcileScheduled($b);
+    app(SyncVideoAsset::class)->reconcileScheduled($a);
 
     expect($lesson->fresh()->video?->id)->toBe($b->id)
         ->and($a->fresh()->is_current)->toBeFalse()

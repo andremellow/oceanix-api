@@ -1,0 +1,11 @@
+# Independent design review
+
+APPROVE — zero material findings. Fresh independent review, round 2, current checkpoint course-editor-lifecycle-remediation-43372bcbc810 and scope course-editor-lifecycle-20260911-scope-v1. References: approved AC-01–03/invariants and Control Center design system; no separate design artifact applies.
+
+- Desktop and 320px expanded moves preserved control values by record identity and contextual button focus, without horizontal overflow.
+- Lesson15 and nested answer edits persisted after reload; lessons14/16 remained unchanged.
+- Unchanged blur kept saved feedback settled. Required-title validation displayed actionable feedback.
+- Actual server outage produced one network-error message. Unavailable-module retry displayed recovery instructions and preserved empty composition. Valid retry settled to Saved and reusable-module composition.
+- Screenshots inspected for desktop/mobile, validation, network error and refusal. Browser error/warning log empty.
+
+Reviewer closed its browser and reset viewport, retained root-owned server, emitted successful started/completed telemetry, and made no file edits. Orchestrator transcribed this complete evidence from the reviewer verdict.

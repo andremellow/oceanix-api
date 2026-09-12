@@ -27,6 +27,7 @@
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.6",
         "pestphp/pest": "^4.7",
+        "pestphp/pest-plugin-browser": "^4.3",
         "pestphp/pest-plugin-laravel": "^4.1",
         "phpunit/phpunit": "^12.5"
     },
@@ -57,7 +58,11 @@
         ],
         "test": [
             "@php artisan config:clear --ansi",
-            "@php artisan test"
+            "@php artisan test --exclude-group=browser"
+        ],
+        "test:browser": [
+            "@php vendor/bin/pest tests/Browser/UnifiedCourseEditorBrowserTest.php --compact",
+            "@php vendor/bin/pest tests/Browser/BrowserEnvironmentSmokeTest.php tests/Browser/CourseDetailWidthTest.php tests/Browser/EditorFixtureCompatibilityTest.php tests/Browser/UnifiedCourseEditorLayoutTest.php --compact"
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
@@ -78,9 +83,11 @@
         ],
         "verify": [
             "@test",
+            "npm run test:editor:unit",
+            "npm run build",
+            "@test:browser",
             "npm run test:preview",
-            "vendor/bin/pint --dirty --format agent",
-            "npm run build"
+            "vendor/bin/pint --dirty --format agent"
         ]
     },
     "extra": {

@@ -1,0 +1,26 @@
+# Directed test remediation review
+
+Verdict: APPROVE for assigned findings TA-01, TA-02 and the test implications of CR-LIFECYCLE-01.
+
+Run: `course-editor-lifecycle-20260911`; round 2; phase remediation; review-mode directed; context-mode inherited.
+Scope: `course-editor-lifecycle-20260911-scope-v1`.
+Checkpoint: `course-editor-lifecycle-remediation-43372bcbc810`.
+
+This is directed remediation verification, not a new independent gate. The original review remains the complete-scope evidence. Inspection was limited to the assigned findings, linked AC-02/AC-03 and INV-01/INV-02, the corrected raw remediation delta, and affected final tests/runtime behavior. The initially malformed delta was replaced with a valid patch and inspected before this verdict. No production code or tests were edited.
+
+| Finding | Revalidation and result |
+| --- | --- |
+| TA-01 | Closed. The new `tests/JavaScript/course-editor.browser.test.mjs` runs real Chrome and the installed application runtime against an explicitly selected disposable fixture. Three distinct expanded lesson/answer records are asserted as a prerequisite. Both reorder directions execute at 1440px and 320px; actual control snapshots are compared by stable lesson/question/option identity, active focus is checked against the moved lesson, and overflow is checked. The moved lesson is then left at a different index, its title and nested answer are edited through controls, and a full reload must show only those intended identities changed. The response-local old-key negative control must reject specifically at the displayed-control identity assertion; a timeout or unrelated error cannot satisfy it. This negative control and fixed positive path both executed successfully. |
+| TA-02 | Closed. The same browser regression dismisses the real removal confirmation, asserts zero matching mutation requests and an unchanged state/revision/pending snapshot, then accepts the dialog as a positive control and asserts exactly one mutation request with pending/saving state. The accepted request is held and aborted before server deletion, preserving the fixture. No confirmation behavior is mocked. |
+| CR-LIFECYCLE-01, test implications | Closed. The new client test executes a failed module request, a successful unrelated search, and an unrelated structural acknowledgement, asserting retained network-error state/provenance. The PHP regression executes the real `addLesson` persistence path with an unresolved module outage, asserting the error and unsaved flag survive, only a structural acknowledgement is emitted, and a lesson actually exists afterward. A read-only in-memory negative control restored the pre-remediation client state/acknowledgement handlers: the new provenance regression failed, with 11 other tests passing. The current client suite passes all 12 tests. |
+
+Executed evidence:
+
+- `EDITOR_TEST_URL=http://127.0.0.1:18891 EDITOR_TEST_TENANT=oceanix-demo EDITOR_TEST_COURSE=5 PLAYWRIGHT_MODULE=/Users/andrepiresdemello/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright node --test tests/JavaScript/course-editor.browser.test.mjs`: 1 passed, 0 skipped, about 6.2 seconds. The first sandboxed launch failed before browser execution; the authorized outside-sandbox retry completed successfully. Course 5 was the assigned disposable fixture; courses 7–10 were not touched.
+- `node --test tests/JavaScript/course-editor.test.mjs`: 12 passed.
+- `php -d memory_limit=512M vendor/bin/pest tests/Feature/Courses/CourseEditorTest.php --filter='preserves a module outage through unrelated search and structural saves' --compact`: 1 passed, 6 assertions.
+- Read-only old-client-state negative control: 11 passed, 1 failed, exit 1; the failure was the new unresolved-module-outage regression. No repository files were changed by the negative control.
+
+The browser test's writes and reload exercise the disposable SQLite-backed application. No PostgreSQL-specific behavior is implicated. Its explicit fixture/runtime setup is documented, and it skips without that setup; the passing run above supplied all required inputs. This targeted execution does not replace the separate complete QA gate.
+
+No unresolved assigned test findings and no new causal regression findings. Finding-count: 0. APPROVE.

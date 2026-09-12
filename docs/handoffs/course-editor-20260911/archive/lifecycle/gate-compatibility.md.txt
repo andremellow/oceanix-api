@@ -1,0 +1,15 @@
+# Installed completion-gate compatibility observation
+
+Read-only inspection of `.toscanini/bin/toscanini-gate.py` identifies an inconsistency relevant after directed remediation:
+
+- Lines 117–123 accept directed closure of an initial request-changes review with resolved finding IDs.
+- Lines 151–160 require an independent approve at the first QA checkpoint, ignoring the accepted directed closure.
+- Project policy requires directed revalidation after remediation and prohibits repeating whole-scope audits.
+
+The installed CLI reports 0.9.0. No gate, policy, telemetry verdict, approval, or historical checkpoint was changed to work around this observation.
+
+Actual final execution with --require-contract --require-design exited 1 with only: QA started before approved code-reviewer; QA started before approved test-analyst. Both directed approvals preceded QA, and all product findings are resolved. Full independent QA and design passed; visible toscanini verify exited 0. The formal completion gate remains blocked; no completed delivery is claimed.
+
+Proposed reusable learning: prerequisite ordering should resolve the same valid independent-plus-directed evidence chain as final approval validation. Target: Toscanini gate implementation/tests. Decision pending; applied false. This would be a separate tooling change, not a bypass or retroactive alteration of evidence.
+
+Root stopped the disposable HTTP service after QA. Temporary SQLite/fixture scripts remain local for reproducibility; QA restored its authored fixture edits and closed its browser. No production data or environment file was changed by the harness.

@@ -144,12 +144,13 @@ it('opens the complete course and module editor on one continuous screen', funct
         ->assertSee(__('Shared'))
         ->assertSee(__('Managed by platform'))
         ->assertSeeHtml('aria-expanded="true"')
-        ->assertSeeHtml('aria-controls="shared-course-module-panel-')
-        ->assertDontSee(__('Replace video'))
-        ->assertDontSee(__('Watch threshold (%)'))
+        ->assertSeeHtml('aria-controls="editor-record-panel-')
+        ->assertSee('data-editor-media-action="open-library"', escape: false)
+        ->assertSee('data-editor-action-detail="open-video-library"', escape: false)
+        ->assertSee(__('Watch threshold (%)'))
         ->assertSee(__('Assessment'))
         ->set('courseForm.title', 'Updated shared course')
-        ->set('modules.0.title', 'Updated shared module')
+        ->set('records.0.title', 'Updated shared module')
         ->set('versionForm.description', 'Employee wording')
         ->set('courseForm.description', 'Catalog wording')
         ->set('editorDirty', true)
@@ -207,7 +208,9 @@ it('creates a shared module in the course editor and attaches it last', function
         ->and($composition->position)->toBe(5)
         ->and(CourseVersionModule::query()->where('lesson_id', $existing->id)->exists())->toBeTrue();
 
-    $editor->assertSet('expanded', fn (array $expanded): bool => in_array($created->id, $expanded, true));
+    $editor->assertSet('records', fn (array $records): bool => collect($records)->contains(
+        fn (array $record): bool => $record['id'] === $created->id && $record['key'] === 'module-version:'.$created->id,
+    ));
 });
 
 it('keeps the new module form open and retryable after an unexpected failure', function (): void {
@@ -339,7 +342,7 @@ it('validates shared module fields before writing them', function (): void {
     $this->withSession(['platform_account_id' => $account->id]);
 
     Livewire\Livewire::test('platform.shared-courses.editor', ['course' => $course])
-        ->set('modules.0.minimum_watch_percentage', 0)
+        ->set('records.0.minimum_watch_percentage', 0)
         ->set('editorDirty', true)
         ->call('saveDraft', false)
         ->assertSet('saveError', fn (?string $error): bool => filled($error));
