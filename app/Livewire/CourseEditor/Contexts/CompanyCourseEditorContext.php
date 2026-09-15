@@ -9,6 +9,7 @@ use App\Actions\Courses\RemoveDirectCourseLesson;
 use App\Actions\Courses\ReorderDirectCourseContent;
 use App\Actions\Courses\SaveCompanyCourseEditorDraft;
 use App\Actions\Courses\UpdateCourseModuleComposition;
+use App\Actions\Documents\UploadLessonDocument;
 use App\Actions\Videos\DetachEditorVideo;
 use App\Actions\Videos\FailVideoUpload;
 use App\Actions\Videos\LinkExistingVideo;
@@ -75,6 +76,9 @@ final class CompanyCourseEditorContext implements EditorContext
 
     public function performMedia(int $rootId, string $operation, array $payload): array
     {
+        if ($operation === 'upload-pdf') {
+            return app(UploadLessonDocument::class)->handle($payload['upload'], $this->name(), $rootId, (int) $payload['record_id'], $this->actor(), (string) $payload['revision']);
+        }
         $actor = $this->actor();
         if (in_array($operation, ['list-images', 'select-image', 'upload-image'], true)) {
             return match ($operation) {

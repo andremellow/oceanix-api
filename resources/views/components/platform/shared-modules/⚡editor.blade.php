@@ -76,4 +76,5 @@ new #[Layout('layouts::platform')] class extends EditorCoordinator
     :$previewPanel
     :$imageLibraryOpen
     :$imageLibraryRecordKey
+    :$pdfRecordKey
     :$contentImages />

@@ -13,6 +13,7 @@ use App\Models\Video;
 use App\Services\CourseEditor\EditorRevision;
 use App\Services\CourseEditor\EditorSaveCommand;
 use App\Services\Courses\LessonContentSanitizer;
+use App\Services\Documents\LessonDocumentLinks;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -73,6 +74,7 @@ final class SaveCompanyCourseEditorDraft
                 if ($content !== (string) $lesson->content_markdown) {
                     $content = $this->sanitizer->sanitize($content);
                 }
+                app(LessonDocumentLinks::class)->validate($lesson, $content);
                 $changed = $this->updateIfChanged($lesson, [
                     'title' => trim($recordData['title']),
                     'description' => $recordData['description'],

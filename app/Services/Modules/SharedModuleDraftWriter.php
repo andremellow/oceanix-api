@@ -9,6 +9,7 @@ use App\Models\QuestionOption;
 use App\Models\Video;
 use App\Services\CourseEditor\EditorRevision;
 use App\Services\Courses\LessonContentSanitizer;
+use App\Services\Documents\LessonDocumentLinks;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -70,6 +71,10 @@ class SharedModuleDraftWriter
 
         if ($data['id'] !== $module->id) {
             throw ValidationException::withMessages(['modules' => __('One or more modules are unavailable.')]);
+        }
+
+        if ($data['content_dirty']) {
+            app(LessonDocumentLinks::class)->validate($module, (string) ($data['content_markdown'] ?? ''));
         }
 
         $submitted = collect($data['questions']);

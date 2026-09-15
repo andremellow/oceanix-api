@@ -27,5 +27,5 @@ new #[Layout('layouts::platform')] class extends Component
     <x-page-hero :kicker="__('Content preview')" :title="$version->title" :description="$version->description">
         <flux:button href="#" onclick="window.close(); return false;" variant="ghost">{{ __('Close preview') }}</flux:button>
     </x-page-hero>
-    <article class="mx-auto mt-7 max-w-5xl rounded-[24px] border border-[#dce3e7] bg-white px-6 py-8 shadow-sm sm:px-10 sm:py-12"><x-lesson-content :lesson="$version" /></article>
+    <article class="mx-auto mt-7 max-w-5xl rounded-[24px] border border-[#dce3e7] bg-white px-6 py-8 shadow-sm sm:px-10 sm:py-12"><x-lesson-content :lesson="$version" :document-url="fn ($document) => route('platform.shared-modules.documents', ['module' => $module, 'document' => $document])" /></article>
 </div>

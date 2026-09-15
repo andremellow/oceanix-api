@@ -10,6 +10,10 @@
                 $renderer = app(App\Services\Courses\LessonContentRenderer::class);
                 $parts = $renderer->splitAtVideo((string) $lesson->content_markdown);
                 $body = $parts === null ? $renderer->editorContent((string) $lesson->content_markdown) : $parts[0];
+                $documentLinks = app(App\Services\Documents\LessonDocumentLinks::class);
+                $documentUrl = fn ($document) => route('platform.shared-courses.documents', ['course' => $course, 'version' => $version, 'kind' => $kind, 'item' => $item, 'document' => $document]);
+                $body = $documentLinks->map((string) $body, $documentUrl);
+                $parts = $parts === null ? null : array_map(fn ($part) => $documentLinks->map((string) $part, $documentUrl), $parts);
             @endphp
             @if(trim($body) !== '')
                 <article class="detail-card"><div class="lesson-content flow-root break-words text-[15px] leading-7 text-[#3d464c]">{!! $body !!}</div></article>

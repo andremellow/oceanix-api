@@ -2,6 +2,7 @@
 
 namespace App\Livewire\CourseEditor\Contexts;
 
+use App\Actions\Documents\UploadLessonDocument;
 use App\Actions\Modules\DiscardModuleDraft;
 use App\Actions\Modules\MutateSharedModuleAssessmentStructure;
 use App\Actions\Modules\PublishModuleVersion;
@@ -78,6 +79,9 @@ final class SharedModuleEditorContext implements EditorContext
 
     public function performMedia(int $rootId, string $operation, array $payload): array
     {
+        if ($operation === 'upload-pdf') {
+            return app(UploadLessonDocument::class)->handle($payload['upload'], $this->name(), $rootId, (int) $payload['record_id'], $this->actor(), (string) $payload['revision']);
+        }
         if (in_array($operation, ['list-images', 'select-image', 'upload-image'], true)) {
             $actor = $this->actor();
             $this->snapshots->sharedModuleVersion($rootId, $actor);

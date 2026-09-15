@@ -115,6 +115,18 @@ abstract class EditorCoordinator extends Component
 
     public $contentImageUpload;
 
+    public bool $pdfModalOpen = false;
+
+    #[Locked]
+    public ?string $pdfRecordKey = null;
+
+    #[Locked]
+    public ?string $pdfOperationToken = null;
+
+    public string $pdfLinkText = '';
+
+    public $pdfUpload;
+
     /** @var array<string, array{state: string, error: ?string, retry_token?: string, record_id?: int}> */
     public array $operations = [];
 
@@ -998,6 +1010,52 @@ abstract class EditorCoordinator extends Component
         $this->contentImages = $this->editorContext()->performMedia($this->editorRootId, 'list-images', [])['items'];
         $this->imageLibraryOpen = true;
         $this->resetValidation('contentImageUpload');
+    }
+
+    public function openPdfModal(string $model, string $text, string $token): void
+    {
+        abort_unless(preg_match('/^records\.(\d+)\.content_markdown$/', $model, $matches) === 1, 422);
+        $record = $this->records[(int) $matches[1]] ?? abort(404);
+        $this->editorContext()->open($this->editorRootId);
+        $this->guardCanonicalReplacement('upload-pdf', ['record_id' => $record['id']], 'pdf');
+        $this->reset('pdfUpload');
+        $this->resetValidation('pdfUpload');
+        $this->pdfRecordKey = $record['key'];
+        $this->pdfOperationToken = $token;
+        $this->pdfLinkText = $text;
+        $this->pdfModalOpen = true;
+    }
+
+    public function uploadPdf(): void
+    {
+        abort_unless($this->pdfModalOpen && $this->pdfRecordKey && $this->pdfOperationToken, 422);
+        $index = collect($this->records)->search(fn ($record) => $record['key'] === $this->pdfRecordKey);
+        abort_if($index === false, 409);
+        $record = $this->records[$index];
+        $operationKey = 'media:upload-pdf:'.$this->pdfRecordKey;
+        $this->operationPending($operationKey, $this->operationMetadata('upload-pdf', ['record_key' => $this->pdfRecordKey], 'media'));
+        $this->resetValidation('pdfUpload');
+        try {
+            $this->guardCanonicalReplacement('upload-pdf', ['record_id' => $record['id']], 'pdf');
+            $this->validate(['pdfUpload' => ['required', 'file', 'mimetypes:application/pdf', 'max:10240'], 'pdfLinkText' => ['nullable', 'string', 'max:100000']]);
+            $document = $this->editorContext()->performMedia($this->editorRootId, 'upload-pdf', [
+                'upload' => $this->pdfUpload, 'record_id' => $record['id'],
+                'revision' => $this->revisions['record:'.$record['id']] ?? $this->revisions['root'] ?? '',
+            ]);
+            $this->dispatch('oceanix:insert-pdf', model: 'records.'.$index.'.content_markdown', recordKey: $this->pdfRecordKey, token: $this->pdfOperationToken, reference: $document['reference'], label: $this->pdfLinkText === '' ? $document['name'] : $this->pdfLinkText);
+            $this->operationSucceeded($operationKey);
+        } catch (ValidationException $exception) {
+            $message = collect($exception->errors())->flatten()->first();
+            $this->addError('pdfUpload', $message);
+            $this->operationFailed($operationKey, $message);
+        } catch (AuthorizationException|HttpExceptionInterface $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            report($exception);
+            $message = __('The PDF upload could not be completed. Try again.');
+            $this->addError('pdfUpload', $message);
+            $this->operationFailed($operationKey, $message);
+        }
     }
 
     public function uploadContentImage(): void

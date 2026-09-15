@@ -61,6 +61,7 @@
     'imageLibraryOpen' => false,
     'imageLibraryRecordKey' => null,
     'contentImages' => [],
+    'pdfRecordKey' => null,
 ])
 
 @php
@@ -119,6 +120,7 @@
     })"
     x-on:input.capture="if ($event.isTrusted && $event.target.closest('[data-editor-field]')) markDirty($event)"
     x-on:change.capture="if ($event.isTrusted && $event.target.closest('[data-editor-field]')) markDirty($event)"
+    x-on:oceanix:pdf-inserted="markDirty($event); $wire.pdfModalOpen = false"
     x-on:click.capture="if (handleOperationalClick($event)) rememberFocus($event)"
     x-on:editor-saved.window="finishSave($event.detail)"
     x-on:editor-save-finished.window="if ($event.detail.state !== 'saved') finishSave($event.detail)"
@@ -130,6 +132,7 @@
     x-effect="state; dirty; ready; uploadInProgress; synchronizeOperationalControls(); $dispatch('oceanix:editor-state-changed', { state, dirty }); if (state === 'permission-lost') disableOperationalControls(); if ($wire.focusInvalidGeneration > 0) restoreInvalidFocus($wire.focusInvalidField); if ($wire.focusGeneration > 0) restoreFocus($wire.focusRecordKey, $wire.focusAction, $wire.focusGeneration)"
     x-on:oceanix-open-video-library.window="$wire.openEditorVideoLibrary($event.detail.model)"
     x-on:oceanix-open-image-library.window="$wire.openImageLibrary($event.detail.model)"
+    x-on:oceanix-open-pdf.window="$wire.openPdfModal($event.detail.model, $event.detail.text, $event.detail.token)"
     x-on:livewire:navigate.window="if (shouldWarn() && ! window.confirm({{ Js::from(__('You have unsaved changes. Leave without saving?')) }})) $event.preventDefault()">
 
     <p class="sr-only" data-editor-context-label>{{ $contextLabel }}</p>
@@ -577,6 +580,7 @@
                             <flux:editor
                                 wire:model.defer="records.{{ $recordIndex }}.content_markdown"
                                 data-oceanix-editor-model="records.{{ $recordIndex }}.content_markdown"
+                                data-oceanix-record-key="{{ $record['key'] }}"
                                 data-oceanix-video-preview-url="{{ data_get($record, 'video.preview.preview_url') }}"
                                 data-oceanix-video-poster-url="{{ data_get($record, 'video.preview.poster_url') }}"
                                 data-oceanix-video-title="{{ $record['title'] }}"
@@ -584,7 +588,7 @@
                                 class="oceanix-content-editor min-w-0 max-w-full"
                                 aria-describedby="{{ $recordErrorBase }}-content"
                                 :label="__('Content')"
-                                toolbar="heading | bold italic underline strike | bullet ordered blockquote link | align | image image-left image-center image-right image-size video ~ fullscreen undo redo" />
+                                toolbar="heading | bold italic underline strike | bullet ordered blockquote link pdf | align | image image-left image-center image-right image-size video ~ fullscreen undo redo" />
                             <flux:error id="{{ $recordErrorBase }}-content" name="records.{{ $recordIndex }}.content_markdown" />
                         </div>
 
@@ -834,6 +838,23 @@
                 </div>
             @endif
         </div>
+    </flux:modal>
+
+    <flux:modal wire:model.self="pdfModalOpen" class="w-full max-w-lg" x-on:close="window.oceanixCancelPdf()" x-on:cancel="window.oceanixCancelPdf()">
+        <form wire:submit="uploadPdf" class="space-y-5" x-data="{ uploading: false }" x-on:livewire-upload-start="uploading = true" x-on:livewire-upload-finish="uploading = false" x-on:livewire-upload-error="uploading = false" x-on:livewire-upload-cancel="uploading = false">
+            <flux:heading size="lg">{{ __('Insert PDF') }}</flux:heading>
+            <label class="block text-sm font-medium">{{ __('PDF file') }}
+                <input wire:model="pdfUpload" type="file" accept="application/pdf,.pdf" x-on:change="if ($wire.pdfLinkText === '') $wire.pdfLinkText = $event.target.files[0]?.name || ''" aria-describedby="editor-pdf-help editor-pdf-error" @error('pdfUpload') aria-invalid="true" @enderror class="mt-2 block w-full min-w-0 rounded-xl border border-[#cfd8dd] bg-white p-3 text-sm focus-ring">
+            </label>
+            <p id="editor-pdf-help" class="text-sm text-[#707a80]">{{ __('PDF only, up to 10 MB. Opens in a new tab for people with access to this training.') }}</p>
+            <div id="editor-pdf-error" role="alert">@error('pdfUpload')<p class="text-sm text-red-600">{{ $message }}</p>@enderror</div>
+            <flux:input wire:model="pdfLinkText" :label="__('Link text')" maxlength="100000" />
+            <p x-show="uploading" role="status" class="text-sm">{{ __('Uploading PDF…') }}</p>
+            <div class="flex flex-wrap justify-end gap-3">
+                <flux:button type="button" x-on:click="window.oceanixCancelPdf(); $wire.pdfModalOpen = false">{{ __('Cancel') }}</flux:button>
+                <flux:button type="submit" variant="primary" x-bind:disabled="uploading" wire:loading.attr="disabled" wire:target="pdfUpload,uploadPdf" data-editor-media-action="upload" data-editor-media-family="pdf" data-editor-action-detail="pdf-upload" data-editor-target-key="{{ $pdfRecordKey }}">{{ __('Upload and insert link') }}</flux:button>
+            </div>
+        </form>
     </flux:modal>
 
     <flux:modal wire:model.self="imageLibraryOpen" class="max-w-4xl">
