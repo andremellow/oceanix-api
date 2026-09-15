@@ -502,7 +502,7 @@ export function createCourseEditorState(initial = {}) {
             const wireClick = control.getAttribute('wire:click') || '';
             const opensConfirmation = wireClick.startsWith('confirm');
             const opensPicker = wireClick.startsWith('open') || control.type === 'button' && !wireClick;
-            if (opensPicker && !['open-image-library', 'open-video-library'].includes(control.dataset.editorActionDetail)) return true;
+            if (opensPicker && !['open-image-library', 'open-video-library', 'open-pdf-modal'].includes(control.dataset.editorActionDetail)) return true;
 
             const identity = this.operationIdentity(control);
             identity.label = this.operationLabel(control);
@@ -638,7 +638,10 @@ export function createCourseEditorState(initial = {}) {
                 succeed?.(() => {
                     const droppedRecordKeys = this.latestDroppedRecordKeys;
                     this.clearLocalOperations();
-                    this.$nextTick?.(() => this.reapplyOperationOverlay(operationRequest, droppedRecordKeys));
+                    this.$nextTick?.(() => {
+                        this.reapplyOperationOverlay(operationRequest, droppedRecordKeys);
+                        this.$root.dispatchEvent?.(new CustomEvent('oceanix:editor-overlay-restored', { bubbles: true }));
+                    });
                     this.latestDroppedRecordKeys = [];
                     if (!focus) return;
                     this.pendingFocus = null;

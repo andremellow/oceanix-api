@@ -1,0 +1,25 @@
+# Directed PDF test verification
+
+Verdict: **APPROVE** for closure of TA-01–TA-05 only. Run `pdf-editor-20260914`, round 2, checkpoint `pdf-links-20260914-r2`, scope `pdf-links-v1`. Review mode: directed; context mode: inherited; source role: test-analyst. Revalidation reason: Targeted PDF boundary and browser evidence corrections.
+
+This is targeted remediation verification, not another independent whole-scope audit. The original independent report remains `test-analysis.md`. Inspected its five required outcomes, the raw revised PDF tests and fixtures, the relevant production branches, and `remediation-evidence-r1.md`. No production code, tests or finding ledger were changed.
+
+## Assigned finding outcomes
+
+| ID | Outcome | Effective evidence |
+| --- | --- | --- |
+| TA-01 | CLOSED | `LessonDocumentBoundaryTest.php:57` creates two real lessons/documents with private bytes and valid read controls. A saved foreign anchor without association reaches the association lookup and fails; lesson substitution tests independently reach assignment/course membership checks. Cross-company and anonymous requests deny delivery. The tests at lines 85, 109 and 120 cover all-context author revocation, existing foreign-document rejection in all staged save paths, and a shared document in an authorized company assignment. These complement retained cancellation/expiry controls. |
+| TA-02 | CLOSED | `LessonDocumentBoundaryTest.php:133` renders company, platform course/module, token preview and learner pages with two attached PDFs around a real video marker and asset. It asserts two contextual anchors, new-tab attributes and follows their actual rendered URLs. This reaches the formerly untested callbacks and both split halves. Missing mappings would reduce the anchor count or yield failed delivery. The explicit-route-array callback corrections are exercised directly. |
+| TA-03 | CLOSED | The browser test at line 146 holds an actual multipart request, observes disabled submission, attempts duplicate clicks, releases the real transfer and asserts exactly one new link. It uses a collapsed selection, checks filename fallback, narrow-viewport submit bounds, and saves/reloads filename and custom labels. Earlier dismissal loops assert unchanged HTML and restored editor focus after Cancel, Escape, X and outside click. The locale test at `LessonDocumentBoundaryTest.php:221` renders Portuguese controls and the actual translated failure message. |
+| TA-04 | CLOSED | `pdfEditor()` now provides nonempty formatted text and an ordinary link. Invalid, oversized and storage-error paths compare exact retained content; the browser failure branch also compares HTML before/after. `LessonDocumentBoundaryTest.php:175` invokes the real Action with a valid authorized draft/file and stale revision, reaching failure after storage inside the metadata transaction. Exact remaining file inventory, retained file bytes, HTML and association counts protect cleanup behavior. A real padded PDF at 10240 KB exercises the accepted upper boundary. |
+| TA-05 | CLOSED | `LessonDocumentBoundaryTest.php:191` snapshots each of the three editable contexts with a real attached PDF, then publishes the target and attempts both actual `performMedia('upload-pdf')` and staged adapter save. Rejection is required; each attempt checks unchanged HTML, document/association counts and exact existing bytes. The previous positive draft upload/save cases and PDF-bearing copy checks remain present. |
+
+All closures retain their original AC/INV blocking bases and original `failureStage=test-implementation`. No new product decisions, unrelated scenarios or new blockers are introduced.
+
+## Remediation regression checks and execution attribution
+
+The limited production corrections affect PDF selection/cancellation and preview URL callbacks. The revised browser test still exercises actual insertion and save/reload in all three editors, ordinary links, surrounding formatting and the learner popup. Its additional exact-text and held-completion cases cover selection preservation and cancellation risks caused by those corrections. The new HTTP rendering test exercises the two corrected callback call sites with actual PDF records. No new infrastructure or PostgreSQL requirement is needed.
+
+Worker execution evidence in `remediation-evidence-r1.md` reports 37 focused PDF Pest tests / 282 assertions passed, the expanded real-server browser test passed, and build/format checks passed. Those are attributed execution results, not commands rerun by this reviewer. At report preparation the parent was running canonical verification; I intentionally started no Pest, browser or formatter process to avoid the previously demonstrated shared-storage collision. Canonical execution remains the parent's separate deterministic gate and is not approved by this directed test-effectiveness verdict.
+
+Assigned findings closed: **TA-01, TA-02, TA-03, TA-04, TA-05**. Unresolved assigned findings: **0**. New findings: **0**. **APPROVE**.

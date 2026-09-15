@@ -210,6 +210,10 @@ new class extends Component
         $renderer = app(App\Services\Courses\LessonContentRenderer::class);
         $authoredContent = $renderer->editorContent((string) $lesson->content_markdown);
         $contentParts = $renderer->splitAtVideo((string) $lesson->content_markdown);
+        $documentLinks = app(App\Services\Documents\LessonDocumentLinks::class);
+        $documentUrl = fn ($document) => route('my-training.documents', ['assignment' => $assignment, 'lesson' => $lesson, 'document' => $document]);
+        $authoredContent = $documentLinks->map((string) $authoredContent, $documentUrl);
+        $contentParts = $contentParts === null ? null : array_map(fn ($part) => $documentLinks->map((string) $part, $documentUrl), $contentParts);
     @endphp
 
     @if ($contentParts !== null)

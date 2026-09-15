@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
@@ -65,6 +66,11 @@ class Lesson extends Model
     public function courseVersion(): BelongsTo
     {
         return $this->belongsTo(CourseVersion::class);
+    }
+
+    public function documents(): BelongsToMany
+    {
+        return $this->belongsToMany(LessonDocument::class, 'lesson_document', 'lesson_id', 'lesson_document_id');
     }
 
     /**

@@ -1,4 +1,13 @@
 {
+    "Insert PDF": "Inserir PDF",
+    "PDF file": "Arquivo PDF",
+    "PDF only, up to 10 MB. Opens in a new tab for people with access to this training.": "Somente PDF, até 10 MB. Abre em uma nova aba para pessoas com acesso a este treinamento.",
+    "Link text": "Texto do link",
+    "Uploading PDF…": "Enviando PDF…",
+    "Upload and insert link": "Enviar e inserir link",
+    "The PDF upload could not be completed. Try again.": "Não foi possível enviar o PDF. Tente novamente.",
+    "A PDF link is not attached to this lesson. Upload the PDF here before inserting it.": "Um link de PDF não está vinculado a esta aula. Envie o PDF aqui antes de inseri-lo.",
+    "PDF — opens in a new tab": "PDF — abre em uma nova aba",
     "This video is larger than 200 MB. Select a smaller file.": "Este vídeo tem mais de 200 MB. Selecione um arquivo menor.",
     "Video library": "Biblioteca de vídeos",
     "Select a ready video from Cloudflare Stream to reuse in this lesson.": "Selecione um vídeo pronto do Cloudflare Stream para reutilizar nesta aula.",

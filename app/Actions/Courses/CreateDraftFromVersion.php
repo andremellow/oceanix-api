@@ -15,6 +15,7 @@ use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Video;
 use App\Services\Audit\AuditLogger;
+use App\Services\Documents\LessonDocumentLinks;
 use App\Services\Modules\ModuleLineageLock;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -130,6 +131,7 @@ class CreateDraftFromVersion
                     'passing_score' => $lesson->passing_score,
                 ]);
 
+                app(LessonDocumentLinks::class)->copy($lesson, $copy);
                 if ($lesson->video !== null) {
                     Video::query()->create([
                         'company_id' => $lesson->company_id,

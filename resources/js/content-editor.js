@@ -83,6 +83,84 @@ const OceanixVideo = Node.create({
 
 window.oceanixContentEditors = window.oceanixContentEditors || new Map();
 
+let pendingPdf = null;
+let insertedPdf = null;
+window.oceanixCapturePdf = (button) => {
+    pendingPdf = null;
+    insertedPdf = null;
+    const element = button.closest('[data-oceanix-editor-model]');
+    const model = element?.dataset.oceanixEditorModel;
+    const editor = window.oceanixContentEditors.get(model);
+    if (!editor || editor.isDestroyed) return;
+    const { from, to } = editor.state.selection;
+    pendingPdf = { editor, model, recordKey: element.dataset.oceanixRecordKey, from, to,
+        text: editor.state.doc.textBetween(from, to, ' '), token: crypto.randomUUID() };
+};
+window.oceanixOpenPdf = (button) => {
+    window.oceanixCapturePdf(button);
+    if (!pendingPdf) return;
+    const { model, text, token } = pendingPdf;
+    window.dispatchEvent(new CustomEvent('oceanix-open-pdf', { detail: { model, text, token } }));
+};
+const restoreInsertedPdf = () => {
+    const inserted = insertedPdf;
+    if (inserted?.closed && inserted?.rendered) {
+        insertedPdf = null;
+        // Restore only after the staged overlay and native dialog focus restoration.
+        requestAnimationFrame(() => {
+            const { editor, position } = inserted;
+            if (editor.isDestroyed) return;
+            editor.chain().setTextSelection(position).command(({ tr }) => { tr.setStoredMarks([]); return true; }).run();
+            editor.view.focus();
+            const point = editor.view.domAtPos(position, 1);
+            const range = document.createRange();
+            range.setStart(point.node, point.offset);
+            const anchor = (point.node.nodeType === window.Node.ELEMENT_NODE ? point.node : point.node.parentElement)?.closest('a');
+            if (anchor) {
+                if (position <= editor.view.posAtDOM(anchor, 0)) range.setStartBefore(anchor);
+                else range.setStartAfter(anchor);
+            }
+            range.collapse(true);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+        });
+    }
+};
+document.addEventListener('oceanix:editor-overlay-restored', (event) => {
+    if (!insertedPdf) return;
+    if (!event.target.contains(insertedPdf.editor.view.dom)) return;
+    insertedPdf.rendered = true;
+    restoreInsertedPdf();
+});
+window.oceanixCancelPdf = () => {
+    if (insertedPdf) {
+        insertedPdf.closed = true;
+        restoreInsertedPdf();
+        return;
+    }
+    const pending = pendingPdf;
+    pendingPdf = null;
+    if (pending && !pending.editor.isDestroyed) setTimeout(() => pending.editor.commands.focus(), 50);
+};
+document.addEventListener('oceanix:insert-pdf', (event) => {
+    const pending = pendingPdf;
+    if (!pending || pending.token !== event.detail.token || pending.recordKey !== event.detail.recordKey) return;
+    const editor = window.oceanixContentEditors.get(event.detail.model);
+    if (!editor || editor !== pending.editor || editor.isDestroyed) return;
+    pendingPdf = null;
+    const attrs = { href: event.detail.reference, target: '_blank', rel: 'noopener noreferrer' };
+    const chain = editor.chain().focus().setTextSelection({ from: pending.from, to: pending.to });
+    if (pending.from !== pending.to && event.detail.label === pending.text) {
+        chain.setLink(attrs).setTextSelection(pending.to).command(({ tr }) => { tr.setStoredMarks([]); return true; }).run();
+    } else {
+        chain.insertContent({ type: 'text', text: event.detail.label, marks: [{ type: 'link', attrs }] }).command(({ tr }) => { tr.setStoredMarks([]); return true; }).run();
+    }
+    insertedPdf = { editor, position: pending.from !== pending.to && event.detail.label === pending.text
+        ? pending.to : pending.from + event.detail.label.length };
+    editor.view.dom.dispatchEvent(new CustomEvent('oceanix:pdf-inserted', { bubbles: true, detail: editor.getHTML() }));
+});
+
 const exitEditorFullscreen = (element) => {
     element.classList.remove('is-fullscreen');
     document.documentElement.classList.remove('overflow-hidden');

@@ -11,6 +11,7 @@ use App\Http\Controllers\CertificateVerificationController;
 use App\Http\Controllers\ComplianceExportController;
 use App\Http\Controllers\CoursePreviewController;
 use App\Http\Controllers\DevVideoController;
+use App\Http\Controllers\LessonDocumentController;
 use App\Http\Controllers\PlatformCoursePreviewController;
 use App\Http\Controllers\TrainingPlaybackController;
 use App\Http\Middleware\EnsurePlatformHasPermission;
@@ -128,6 +129,7 @@ Route::prefix('platform')
         Route::livewire('/shared-courses/{course}', 'platform.shared-courses.show')->name('platform.shared-courses.show');
         Route::livewire('/shared-courses/{course}/editor', 'platform.shared-courses.editor')->name('platform.shared-courses.editor');
         Route::prefix('/shared-courses/{course}/versions/{version}/preview')->middleware(EnsurePlatformHasPermission::class.':shared-courses.view')->group(function (): void {
+            Route::get('/items/{kind}/{item}/documents/{document}', [LessonDocumentController::class, 'platformCourse'])->whereUuid('document')->name('platform.shared-courses.documents');
             Route::get('/', [PlatformCoursePreviewController::class, 'show'])->name('platform.shared-courses.preview');
             Route::post('/items/{kind}/{item}/playback', [PlatformCoursePreviewController::class, 'playback'])->middleware('throttle:playback')->name('platform.shared-courses.preview-playback');
             Route::get('/items/{kind}/{item}/media/{asset}', [PlatformCoursePreviewController::class, 'media'])->name('platform.shared-courses.preview-media');
@@ -136,6 +138,7 @@ Route::prefix('platform')
         Route::livewire('/shared-modules/{module}', 'platform.shared-modules.show')->middleware(EnsurePlatformHasPermission::class.':shared-modules.view')->name('platform.shared-modules.show');
         Route::livewire('/shared-modules/{module}/editor', 'platform.shared-modules.editor')->middleware(EnsurePlatformHasPermission::class.':shared-modules.update')->name('platform.shared-modules.editor');
         Route::livewire('/shared-modules/{module}/preview', 'platform.shared-modules.preview')->middleware(EnsurePlatformHasPermission::class.':shared-modules.view')->name('platform.shared-modules.preview');
+        Route::get('/shared-modules/{module}/preview/documents/{document}', [LessonDocumentController::class, 'platformModule'])->middleware(EnsurePlatformHasPermission::class.':shared-modules.view')->whereUuid('document')->name('platform.shared-modules.documents');
         Route::livewire('/companies/{company}', 'platform.company')->name('platform.companies.show');
         Route::livewire('/companies/{company}/courses/{course}', 'platform.shared-courses.show')->name('platform.companies.courses.show');
         Route::post('/companies/{company}/enter', function (Company $company, EnterCompany $action) {
@@ -223,6 +226,7 @@ Route::prefix('c/{company:slug}')
         Route::get('/certificates/{certificate}/download', CertificateDownloadController::class)
             ->name('certificates.download');
         Route::livewire('/my-training/{assignment}/lessons/{lesson}', 'training.lesson')->name('my-training.lesson');
+        Route::get('/my-training/{assignment}/lessons/{lesson}/documents/{document}', [LessonDocumentController::class, 'training'])->whereUuid('document')->name('my-training.documents');
 
         // Playback authorization and event ingestion for the player. Both re-authorize the
         // assignment on every call and are rate limited: they are the two endpoints a client
@@ -235,6 +239,7 @@ Route::prefix('c/{company:slug}')
             ->name('my-training.events');
 
         Route::middleware(EnsureUserCanAccessControlCenter::class)->group(function (): void {
+            Route::get('/courses/{course}/lessons/{lesson}/preview/documents/{document}', [LessonDocumentController::class, 'company'])->middleware(EnsureUserHasPermission::class.':courses.update')->whereUuid('document')->name('courses.lessons.documents');
             Route::livewire('/courses', 'courses.index')
                 ->middleware(EnsureUserHasPermission::class.':courses.view')
                 ->name('courses.index');
@@ -317,6 +322,7 @@ Route::prefix('c/{company:slug}')
 // Capability routes intentionally do not resolve or change the visitor's company.
 Route::prefix('preview/courses/{token}')->withoutMiddleware([IdentifyCompany::class, SetLocale::class])
     ->middleware(PublicCoursePreview::class)->group(function (): void {
+        Route::get('/items/{kind}/{item}/documents/{document}', [LessonDocumentController::class, 'preview'])->whereUuid('document')->name('course-preview.documents');
         Route::get('/', [CoursePreviewController::class, 'show'])->name('course-preview.show');
         Route::get('/items/{kind}/{item}', [CoursePreviewController::class, 'item'])->name('course-preview.item');
         Route::post('/items/{kind}/{item}/playback', [CoursePreviewController::class, 'playback'])->name('course-preview.playback');

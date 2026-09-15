@@ -8,6 +8,7 @@ use App\Models\ModuleVersion;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Video;
+use App\Services\Documents\LessonDocumentLinks;
 use App\Services\Modules\ModuleLineageLock;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -52,6 +53,7 @@ class CreateModuleDraft
                 'published_by_account_id' => $authorized->id,
             ]);
 
+            app(LessonDocumentLinks::class)->copy($source, $draft);
             $source->load(['video', 'questions.options']);
             if ($source->video !== null) {
                 Video::query()->create([

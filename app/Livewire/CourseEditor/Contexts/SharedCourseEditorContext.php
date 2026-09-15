@@ -8,6 +8,7 @@ use App\Actions\Courses\PublishSharedCourseDraft;
 use App\Actions\Courses\RemoveSharedCourseModule;
 use App\Actions\Courses\ReorderSharedCourseModules;
 use App\Actions\Courses\SaveSharedCourseEditorDraft;
+use App\Actions\Documents\UploadLessonDocument;
 use App\Actions\Modules\CreateAndAttachSharedModule;
 use App\Actions\Modules\MutateSharedModuleAssessmentStructure;
 use App\Actions\Modules\ReorderSharedModuleAssessment;
@@ -104,6 +105,9 @@ final class SharedCourseEditorContext implements EditorContext
 
     public function performMedia(int $rootId, string $operation, array $payload): array
     {
+        if ($operation === 'upload-pdf') {
+            return app(UploadLessonDocument::class)->handle($payload['upload'], $this->name(), $rootId, (int) $payload['record_id'], $this->actor(), (string) $payload['revision']);
+        }
         if (in_array($operation, ['list-images', 'select-image', 'upload-image'], true)) {
             $actor = $this->actor();
             $this->snapshots->sharedCourseRoot($rootId, $actor);
