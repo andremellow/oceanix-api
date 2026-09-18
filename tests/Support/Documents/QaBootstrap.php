@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
 // This harness is never loaded by the application. It only boots a disposable local QA database.
@@ -21,3 +22,11 @@ if (is_file($directory.'/fail-storage')) {
 }
 Http::preventStrayRequests();
 Http::fake();
+// Failure injection is confined to this explicitly selected disposable harness.
+DB::connection()->beforeExecuting(function (string $query) use ($directory): void {
+    foreach (['list' => 'from "lesson_documents"', 'archive' => 'insert into "lesson_document_archives"', 'reuse' => 'insert into "lesson_document"'] as $operation => $fragment) {
+        if (is_file($directory.'/fail-'.$operation) && str_contains(strtolower($query), $fragment)) {
+            throw new RuntimeException('Disposable PDF operation failure.');
+        }
+    }
+});

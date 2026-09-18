@@ -5,6 +5,9 @@ namespace App\Enums;
 /** Atomic platform abilities; platform administrators currently receive the complete set. */
 enum PlatformPermission: string
 {
+    case LessonDocumentsView = 'lesson-documents.view';
+    case LessonDocumentsReuse = 'lesson-documents.reuse';
+    case LessonDocumentsArchive = 'lesson-documents.archive';
     case SharedCoursesView = 'shared-courses.view';
     case SharedCoursesUpdate = 'shared-courses.update';
     case SharedCoursesGeneratePreviewLink = 'shared-courses.preview-links.generate';
@@ -20,6 +23,7 @@ enum PlatformPermission: string
     public function prerequisites(): array
     {
         return match ($this) {
+            self::LessonDocumentsReuse, self::LessonDocumentsArchive => [self::LessonDocumentsView],
             self::SharedCoursesGeneratePreviewLink => [self::SharedCoursesView, self::SharedCoursesUpdate],
             self::SharedModulesDiscardDraft => [self::SharedModulesView, self::SharedModulesUpdate],
             self::SharedCoursesUpdate => [self::SharedCoursesView],

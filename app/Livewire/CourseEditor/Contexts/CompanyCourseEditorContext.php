@@ -9,6 +9,8 @@ use App\Actions\Courses\RemoveDirectCourseLesson;
 use App\Actions\Courses\ReorderDirectCourseContent;
 use App\Actions\Courses\SaveCompanyCourseEditorDraft;
 use App\Actions\Courses\UpdateCourseModuleComposition;
+use App\Actions\Documents\ArchiveLessonDocument;
+use App\Actions\Documents\ReuseLessonDocument;
 use App\Actions\Documents\UploadLessonDocument;
 use App\Actions\Videos\DetachEditorVideo;
 use App\Actions\Videos\FailVideoUpload;
@@ -24,6 +26,7 @@ use App\Services\CourseEditor\EditorSnapshot;
 use App\Services\CourseEditor\EditorSnapshotBuilder;
 use App\Services\Courses\CoursePublicationImpact;
 use App\Services\Courses\CourseVersionValidator;
+use App\Services\Documents\LessonDocumentLibrary;
 use App\Services\Modules\EligibleModuleCatalog;
 use App\Services\Video\VideoLibrary;
 use Illuminate\Support\Facades\Gate;
@@ -76,6 +79,20 @@ final class CompanyCourseEditorContext implements EditorContext
 
     public function performMedia(int $rootId, string $operation, array $payload): array
     {
+        if (in_array($operation, ['list-pdfs', 'reuse-pdf', 'archive-pdf'], true)) {
+            $this->open($rootId);
+            $actor = $this->actor();
+
+            return match ($operation) {
+                'list-pdfs' => app(LessonDocumentLibrary::class)->page($actor, (string) ($payload['search'] ?? ''), (int) ($payload['page'] ?? 1)),
+                'reuse-pdf' => app(ReuseLessonDocument::class)->handle((string) $payload['document'], $this->name(), $rootId, (int) $payload['record_id'], $actor, (string) $payload['revision']),
+                'archive-pdf' => (function () use ($payload, $actor): array {
+                    app(ArchiveLessonDocument::class)->handle((string) $payload['document'], $actor);
+
+                    return [];
+                })(),
+            };
+        }
         if ($operation === 'upload-pdf') {
             return app(UploadLessonDocument::class)->handle($payload['upload'], $this->name(), $rootId, (int) $payload['record_id'], $this->actor(), (string) $payload['revision']);
         }

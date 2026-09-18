@@ -11,6 +11,7 @@ use App\Services\CourseEditor\EditorSnapshot;
 use App\Services\CourseEditor\EditorStagedState;
 use App\Services\CourseEditor\EditorStagedStateRebaser;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
@@ -126,6 +127,21 @@ abstract class EditorCoordinator extends Component
     public string $pdfLinkText = '';
 
     public $pdfUpload;
+
+    public string $pdfSearch = '';
+
+    #[Locked]
+    public array $pdfLibrary = [];
+
+    #[Locked]
+    public ?string $pdfLibraryError = null;
+
+    #[Locked]
+    public ?array $pdfArchiveConfirmation = null;
+
+    public bool $pdfArchiveModalOpen = false;
+
+    public string $pdfLibraryNotice = '';
 
     /** @var array<string, array{state: string, error: ?string, retry_token?: string, record_id?: int}> */
     public array $operations = [];
@@ -1024,6 +1040,136 @@ abstract class EditorCoordinator extends Component
         $this->pdfOperationToken = $token;
         $this->pdfLinkText = $text;
         $this->pdfModalOpen = true;
+        $this->pdfSearch = '';
+        $this->pdfArchiveConfirmation = null;
+        $this->pdfLibraryNotice = '';
+        $this->loadPdfLibrary();
+    }
+
+    public function loadPdfLibrary(int $page = 1): void
+    {
+        abort_unless($this->pdfModalOpen, 422);
+        $this->pdfLibraryError = null;
+        $this->resetValidation('pdfLibrary');
+        try {
+            $this->pdfLibrary = $this->editorContext()->performMedia($this->editorRootId, 'list-pdfs', ['search' => $this->pdfSearch, 'page' => $page]);
+        } catch (AuthorizationException|HttpExceptionInterface $exception) {
+            $this->pdfLibrary = [];
+            $this->pdfArchiveConfirmation = null;
+            $this->pdfArchiveModalOpen = false;
+            $this->pdfLibraryError = __('You do not have access to this PDF library.');
+        } catch (Throwable $exception) {
+            report($exception);
+            $this->pdfLibraryError = __('The PDF library could not be loaded. Try again.');
+        }
+    }
+
+    public function searchPdfs(): void
+    {
+        $this->validate(['pdfSearch' => ['string', 'max:240']]);
+        $this->loadPdfLibrary();
+    }
+
+    public function clearPdfSearch(): void
+    {
+        $this->pdfSearch = '';
+        $this->loadPdfLibrary();
+    }
+
+    public function reusePdf(string $publicId): void
+    {
+        abort_unless($this->pdfModalOpen && $this->pdfRecordKey && $this->pdfOperationToken && ! $this->pdfArchiveConfirmation, 422);
+        $index = collect($this->records)->search(fn ($record) => $record['key'] === $this->pdfRecordKey);
+        abort_if($index === false, 409);
+        $record = $this->records[$index];
+        $key = 'media:reuse-pdf:'.$this->pdfRecordKey;
+        $this->operationPending($key, $this->operationMetadata('reuse-pdf', ['record_key' => $this->pdfRecordKey], 'media'));
+        $this->resetValidation('pdfLibrary');
+        try {
+            $this->guardCanonicalReplacement('reuse-pdf', ['record_id' => $record['id']], 'pdf');
+            $this->validate(['pdfLinkText' => ['nullable', 'string', 'max:100000']]);
+            $document = $this->editorContext()->performMedia($this->editorRootId, 'reuse-pdf', [
+                'document' => $publicId, 'record_id' => $record['id'],
+                'revision' => $this->revisions['record:'.$record['id']] ?? $this->revisions['root'] ?? '',
+            ]);
+            $this->dispatch('oceanix:insert-pdf', model: 'records.'.$index.'.content_markdown', recordKey: $this->pdfRecordKey, token: $this->pdfOperationToken, reference: $document['reference'], label: $this->pdfLinkText === '' ? $document['name'] : $this->pdfLinkText);
+            $this->operationSucceeded($key);
+        } catch (Throwable $exception) {
+            $message = $this->pdfFailure($exception, __('The PDF could not be reused. Try again.'));
+            $this->addError('pdfLibrary', $message);
+            $this->operationFailed($key, $message);
+        }
+    }
+
+    public function requestArchivePdf(string $publicId): void
+    {
+        abort_unless($this->pdfModalOpen, 422);
+        $this->loadPdfLibrary($this->pdfLibrary['current_page'] ?? 1);
+        if ($this->pdfLibraryError) {
+            return;
+        }
+        $row = collect($this->pdfLibrary['items'] ?? [])->firstWhere('id', $publicId);
+        if (! $row || ! $row['can_archive']) {
+            $this->pdfArchiveConfirmation = null;
+            $this->pdfArchiveModalOpen = false;
+            $this->addError('pdfLibrary', __('You do not have permission to archive this PDF.'));
+
+            return;
+        }
+        $this->pdfArchiveConfirmation = ['id' => $row['id'], 'name' => $row['name']];
+        $this->pdfArchiveModalOpen = true;
+        $this->resetValidation('pdfArchive');
+    }
+
+    public function cancelArchivePdf(): void
+    {
+        $id = $this->pdfArchiveConfirmation['id'] ?? null;
+        $this->pdfArchiveConfirmation = null;
+        $this->dispatch('oceanix:pdf-archive-cancelled', id: $id);
+        $this->pdfArchiveModalOpen = false;
+    }
+
+    public function archivePdf(): void
+    {
+        abort_unless($this->pdfModalOpen && $this->pdfArchiveConfirmation, 422);
+        $this->resetValidation('pdfArchive');
+        try {
+            $this->editorContext()->performMedia($this->editorRootId, 'archive-pdf', ['document' => $this->pdfArchiveConfirmation['id']]);
+            $items = array_column($this->pdfLibrary['items'] ?? [], 'id');
+            $index = array_search($this->pdfArchiveConfirmation['id'], $items, true);
+            $focus = $items[$index + 1] ?? $items[$index - 1] ?? null;
+            $this->pdfArchiveConfirmation = null;
+            $this->pdfArchiveModalOpen = false;
+            $this->loadPdfLibrary($this->pdfLibrary['current_page'] ?? 1);
+            $this->pdfLibraryNotice = __('PDF archived. Existing links still work.');
+            $this->dispatch('oceanix:pdf-archived', id: $focus);
+        } catch (Throwable $exception) {
+            $this->addError('pdfArchive', $this->pdfFailure($exception, __('The PDF could not be archived. Try again.')));
+            $this->dispatch('oceanix:pdf-archive-failed');
+        }
+    }
+
+    private function pdfFailure(Throwable $exception, string $fallback): string
+    {
+        if ($exception instanceof ValidationException) {
+            return collect($exception->errors())->flatten()->first();
+        }
+        if ($exception instanceof AuthorizationException || ($exception instanceof HttpExceptionInterface && $exception->getStatusCode() === 403)) {
+            $this->pdfArchiveConfirmation = null;
+            $this->pdfArchiveModalOpen = false;
+            $this->loadPdfLibrary($this->pdfLibrary['current_page'] ?? 1);
+            $message = $this->pdfLibraryError ?? __('You do not have permission to perform this PDF action.');
+            $this->addError('pdfLibrary', $message);
+            $this->dispatch('oceanix:pdf-archive-cancelled', id: null);
+
+            return $message;
+        }
+        if ($exception instanceof ModelNotFoundException || $exception instanceof HttpExceptionInterface) {
+            return __('This PDF or lesson is no longer available. Close this dialog and try again.');
+        }
+        report($exception);
+
+        return $fallback;
     }
 
     public function uploadPdf(): void
@@ -1740,6 +1886,8 @@ abstract class EditorCoordinator extends Component
             'remove' => __('Remove video'),
             'upload-image' => __('Upload image'),
             'select-image' => __('Insert image'),
+            'reuse-pdf' => __('Reuse PDF'),
+            'upload-pdf' => __('Upload PDF'),
             default => Str::headline($operation),
         };
     }

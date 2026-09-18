@@ -1,0 +1,53 @@
+{
+  "fromCheckpoint": "pdf-library-20260916-r1",
+  "toCheckpoint": "pdf-library-20260916-r2",
+  "scopeId": "pdf-library-v1",
+  "note": "Exact changed-file hashes. A full r1 source archive was not captured; use assigned findings and final affected functions, not a claimed remediation-only textual diff. Exact byte-matched r2 sources are retained under .toscanini/runtime/runs/pdf-library-20260916/snapshots/r2.",
+  "changes": [
+    {
+      "path": "app/Livewire/CourseEditor/EditorCoordinator.php",
+      "beforeSha256": "dde23593bd2b73751d0f730dc81fe367990da8c28e88df5571412f58f39467f9",
+      "afterSha256": "71cf37e75e20e8c4cb90d9e03a5618d0ba613a682c39da15870545f738bbd5f2"
+    },
+    {
+      "path": "lang/pt_BR.json",
+      "beforeSha256": "6839d5578af0ee923270c94238776a77e6f67b95ccebea020bc77fe68187f4a3",
+      "afterSha256": "912e0472309d95c54b167c5ccf06e5e66c29defd0a512145fcf70c5133281245"
+    },
+    {
+      "path": "resources/js/course-editor.js",
+      "beforeSha256": null,
+      "afterSha256": "0c9a36fb724a263852b3d7bec8f5cbaeb63925d1daf9411df9534d50d991658c"
+    },
+    {
+      "path": "resources/views/components/course-editor/root.blade.php",
+      "beforeSha256": "1a3841955f0fe41f5465d66bbfd64577cdd1dc6cc0bfdfdbb49ba521613d6815",
+      "afterSha256": "69ac8801fe7bd87b26b48c3e3390ec9ff8c941c26ada85c06250eff038f32d9e"
+    },
+    {
+      "path": "tests/Feature/Documents/LessonDocumentArchiveTest.php",
+      "beforeSha256": "4f881d28427f15cba2f91843b9874bdb0136953829b922a75f58305ad5a58221",
+      "afterSha256": "680d9d193f493b69216bf7fe8f4af8fe2874130b3a2785cafb19c2d69c88191a"
+    },
+    {
+      "path": "tests/Feature/Documents/LessonDocumentLibraryAccessTest.php",
+      "beforeSha256": "f7c21d4959a53963a9cf45f6583c842ac67b7cb181b18e27cfc771243e1b1271",
+      "afterSha256": "895a6b9709e4b59b510bca61fa0db18c5fe6ad254ae06aeea40207404c8cddcb"
+    },
+    {
+      "path": "tests/Feature/Documents/LessonDocumentLibraryTest.php",
+      "beforeSha256": "c2020b4e901f350d52ca6bb8daf6bd82dd4ce3b15d4b39afc9f3a67b6c21ab4c",
+      "afterSha256": "7e96c75c8cc888540cea4dae5363886400ae41fbdbc434c8ab2b3a14ed543ffd"
+    },
+    {
+      "path": "tests/JavaScript/lesson-documents.browser.test.mjs",
+      "beforeSha256": "48185b1eca760a8c274d26740a78590f2c835c0536e87572280685d5696c5f0b",
+      "afterSha256": "b456df7c27efc2789cd565b9eaf8ebcb8e433d9f2dbb07ee42d9908616853e40"
+    },
+    {
+      "path": "tests/Support/Documents/QaFixture.php",
+      "beforeSha256": "9b45147d7c2588738a18a9885f3f40d1db90a382d6194ac4b404c95be9445362",
+      "afterSha256": "61ce9a741ea8bf930d3ace7746bf1721afe71c8c83445e6c575560fe2e482157"
+    }
+  ]
+}

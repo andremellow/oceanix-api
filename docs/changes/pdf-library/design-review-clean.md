@@ -1,0 +1,13 @@
+# Independent Design Review — REQUEST_CHANGES
+
+Run pdf-library-20260916; scope pdf-library-v1; checkpoint pdf-library-20260916-r1; round1 review; fresh context. No earlier verdicts/Worker results consulted. No product/tests edited. Started/terminal telemetry recorded. Five blocking IMPLEMENTATION_DEVIATION findings, source design-reviewer, failure stage implementation.
+
+- DES-01 (medium, AC-06/B-14): actual aborted Livewire search POST left20 old rows without error/retry. Provide accessible transport error, stale-result indication and retry preserving authored values. Shared PDF request lifecycle. Evidence /tmp/oceanix-pdf-qa-g5RxGs/network-failure-clean.png.
+- DES-02 (medium, AC-05/06,INV-01): Archive after revoking libraryUser returned403 generic overlay while20 names/actions remained. Same cause as CR-01. Return localized denied modal state clearing metadata while preserving text. EditorCoordinator.php:1101. Evidence /tmp/oceanix-pdf-qa-g5RxGs/archive-revocation.png.
+- DES-03 (medium, AC-06): held archive disabled both buttons but only spinner/no live progress. After server archive failure focus became BODY and Escape failed; pointer Cancel worked. Announce progress and maintain/restore usable child focus for keyboard retry/Cancel/Escape. root.blade.php:908. Evidence /tmp/oceanix-pdf-qa-g5RxGs/archive-pending.png.
+- DES-04 (low, AC-06): denied PT-BR library has English Try again; failed reuse operation shows raw Reuse Pdf. Translate retry and new PDF operation names. Evidence /tmp/oceanix-pdf-qa-g5RxGs/pt-denial.png.
+- DES-05 (medium, AC-06): all3 row controls white/dark despite variants; confirmArchive also neutral. Existing admin-page style overrides variants. Make new Reuse visibly primary and Archive danger treatment through feature-local integration, no global design-system redesign. Evidence /tmp/oceanix-pdf-qa-g5RxGs/desktop.png and pt-confirm.png.
+
+Runtime: three editors, selected-bold reuse, custom/caret, popup launch with unchanged source HTML, search/pages/no-results/clear, nested normal Cancel/Escape/focus, archive success/focus, list/archive failure, denied reuse/archive,390px,EN/PTBR,invalid upload accessibility. Normal selection formatting,caret,archive success,normal nested dismissal and revoked-reuse metadata clear behaved as specified.
+
+Not executed: successful upload/save-reload delivery, missing-byte destination, genuine empty owner, concurrency or all stale targets. Popup PDF bytes were not established. Not independent QA coverage. Disposable evidence remains at /tmp/oceanix-pdf-qa-g5RxGs; PHP/browser servers and inspection session stopped.

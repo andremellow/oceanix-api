@@ -77,4 +77,9 @@ new #[Layout('layouts::platform')] class extends EditorCoordinator
     :$imageLibraryOpen
     :$imageLibraryRecordKey
     :$pdfRecordKey
+    :$pdfLibrary
+    :$pdfLibraryError
+    :$pdfLibraryNotice
+    :$pdfSearch
+    :$pdfArchiveConfirmation
     :$contentImages />

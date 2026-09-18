@@ -1,0 +1,27 @@
+FAILED  Tests\Feature\CourseEditor\UnifiedCourseEditorContract…  Exception   
+  Regular expression cannot be matched: Backtrack limit exhausted
+
+  at tests/Feature/CourseEditor/UnifiedCourseEditorContractTest.php:856
+    852▕         ->assertSet("uploadRows.{$firstToken}.failure_kind", 'transfer')
+    853▕         ->assertSet("uploadRows.{$secondToken}.state", 'uploading')
+    854▕         ->assertSee('Upload failed')
+    855▕         ->assertSee('data-editor-upload-retry="transfer"', escape: false);
+  ➜ 856▕     expect($editor->html())->toMatch('/data-editor-upload[\\s\\S]*data-upload-token="'.preg_quote($firstToken, '/').'"[\\s\\S]*data-upload-state="failed"[\\s\\S]*role="alert"/');
+    857▕ 
+    858▕     $editor->call('uploadCompleted', $secondRecordId, $secondToken)
+    859▕         ->assertSet("uploadRows.{$firstToken}.state", 'failed')
+    860▕         ->assertSet("uploadRows.{$secondToken}.state", 'processing')
+
+  1   tests/Feature/CourseEditor/UnifiedCourseEditorContractTest.php:856
+
+
+  Tests:    1 failed, 16 skipped, 910 passed (5047 assertions)
+  Duration: 129.94s
+
+Script @php artisan test --exclude-group=browser handling the test event returned with error code 2
+Script @test was called via verify
+Laravel: ^13.17
+Laravel Boost: not installed (optional)
+Execution contract gate: validating run pdf-library-20260916
+Execution contract gate: approved
+Running: composer verify

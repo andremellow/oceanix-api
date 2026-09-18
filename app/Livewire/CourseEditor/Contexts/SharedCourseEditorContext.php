@@ -8,6 +8,8 @@ use App\Actions\Courses\PublishSharedCourseDraft;
 use App\Actions\Courses\RemoveSharedCourseModule;
 use App\Actions\Courses\ReorderSharedCourseModules;
 use App\Actions\Courses\SaveSharedCourseEditorDraft;
+use App\Actions\Documents\ArchiveLessonDocument;
+use App\Actions\Documents\ReuseLessonDocument;
 use App\Actions\Documents\UploadLessonDocument;
 use App\Actions\Modules\CreateAndAttachSharedModule;
 use App\Actions\Modules\MutateSharedModuleAssessmentStructure;
@@ -26,6 +28,7 @@ use App\Services\CourseEditor\EditorSaveResult;
 use App\Services\CourseEditor\EditorSnapshot;
 use App\Services\CourseEditor\EditorSnapshotBuilder;
 use App\Services\Courses\CourseVersionValidator;
+use App\Services\Documents\LessonDocumentLibrary;
 use App\Services\Modules\ModuleVersionValidator;
 use App\Services\Platform\PlatformAccess;
 use App\Services\SharedContent\SharedContentCatalog;
@@ -105,6 +108,20 @@ final class SharedCourseEditorContext implements EditorContext
 
     public function performMedia(int $rootId, string $operation, array $payload): array
     {
+        if (in_array($operation, ['list-pdfs', 'reuse-pdf', 'archive-pdf'], true)) {
+            $this->open($rootId);
+            $actor = $this->actor();
+
+            return match ($operation) {
+                'list-pdfs' => app(LessonDocumentLibrary::class)->page($actor, (string) ($payload['search'] ?? ''), (int) ($payload['page'] ?? 1)),
+                'reuse-pdf' => app(ReuseLessonDocument::class)->handle((string) $payload['document'], $this->name(), $rootId, (int) $payload['record_id'], $actor, (string) $payload['revision']),
+                'archive-pdf' => (function () use ($payload, $actor): array {
+                    app(ArchiveLessonDocument::class)->handle((string) $payload['document'], $actor);
+
+                    return [];
+                })(),
+            };
+        }
         if ($operation === 'upload-pdf') {
             return app(UploadLessonDocument::class)->handle($payload['upload'], $this->name(), $rootId, (int) $payload['record_id'], $this->actor(), (string) $payload['revision']);
         }

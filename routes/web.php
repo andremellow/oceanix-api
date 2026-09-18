@@ -12,6 +12,7 @@ use App\Http\Controllers\ComplianceExportController;
 use App\Http\Controllers\CoursePreviewController;
 use App\Http\Controllers\DevVideoController;
 use App\Http\Controllers\LessonDocumentController;
+use App\Http\Controllers\LessonDocumentLibraryController;
 use App\Http\Controllers\PlatformCoursePreviewController;
 use App\Http\Controllers\TrainingPlaybackController;
 use App\Http\Middleware\EnsurePlatformHasPermission;
@@ -122,6 +123,8 @@ Route::middleware('guest')->group(function (): void {
 Route::prefix('platform')
     ->middleware(EnsureUserIsPlatformAdmin::class)
     ->group(function (): void {
+        Route::get('/lesson-document-library/{document}', [LessonDocumentLibraryController::class, 'platform'])
+            ->whereUuid('document')->middleware(EnsurePlatformHasPermission::class.':lesson-documents.view')->name('platform.lesson-documents.library.open');
         Route::livewire('/', 'platform.dashboard')->name('platform.dashboard');
         Route::livewire('/companies', 'platform.companies')->name('platform.companies');
         Route::livewire('/users', 'platform.users')->name('platform.users');
@@ -208,6 +211,8 @@ Route::get('/c/{company:slug}', function (Company $company) {
 Route::prefix('c/{company:slug}')
     ->middleware([IdentifyCompany::class, 'auth'])
     ->group(function (): void {
+        Route::get('/lesson-document-library/{document}', [LessonDocumentLibraryController::class, 'company'])
+            ->whereUuid('document')->middleware(EnsureUserHasPermission::class.':lesson-documents.view')->name('lesson-documents.library.open');
         // Every authenticated person lands here. The component renders the compliance overview
         // for operators and the personal training board for everyone else.
         Route::livewire('/dashboard', 'dashboard')->name('dashboard');

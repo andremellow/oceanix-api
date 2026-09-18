@@ -62,6 +62,11 @@
     'imageLibraryRecordKey' => null,
     'contentImages' => [],
     'pdfRecordKey' => null,
+    'pdfLibrary' => [],
+    'pdfLibraryError' => null,
+    'pdfLibraryNotice' => '',
+    'pdfSearch' => '',
+    'pdfArchiveConfirmation' => null,
 ])
 
 @php
@@ -132,7 +137,7 @@
     x-effect="state; dirty; ready; uploadInProgress; synchronizeOperationalControls(); $dispatch('oceanix:editor-state-changed', { state, dirty }); if (state === 'permission-lost') disableOperationalControls(); if ($wire.focusInvalidGeneration > 0) restoreInvalidFocus($wire.focusInvalidField); if ($wire.focusGeneration > 0) restoreFocus($wire.focusRecordKey, $wire.focusAction, $wire.focusGeneration)"
     x-on:oceanix-open-video-library.window="$wire.openEditorVideoLibrary($event.detail.model)"
     x-on:oceanix-open-image-library.window="$wire.openImageLibrary($event.detail.model)"
-    x-on:oceanix-open-pdf.window="$wire.openPdfModal($event.detail.model, $event.detail.text, $event.detail.token)"
+    x-on:oceanix-open-pdf.window="$wire.openPdfModal($event.detail.model, $event.detail.text, $event.detail.token).catch(() => {})"
     x-on:livewire:navigate.window="if (shouldWarn() && ! window.confirm({{ Js::from(__('You have unsaved changes. Leave without saving?')) }})) $event.preventDefault()">
 
     <p class="sr-only" data-editor-context-label>{{ $contextLabel }}</p>
@@ -179,6 +184,11 @@
         x-bind:class="operationalGuidanceSeverity === 'danger' ? 'border-red-200 bg-red-50 text-red-900' : 'border-amber-200 bg-amber-50 text-amber-900'"
         x-text="operationalGuidance"
         class="rounded-xl border px-4 py-3 text-sm font-semibold"></p>
+
+    <div data-pdf-open-failure x-cloak x-show="pdfTransportFailure?.method === 'openPdfModal'" role="alert" class="rounded-xl border border-[var(--ds-status-negative)] p-3">
+        <p>{{ __('The PDF request was interrupted. Results may be out of date. Your text and selection are preserved.') }}</p>
+        <flux:button type="button" x-on:click="retryPdfRequest()" class="mt-2">{{ __('Try again') }}</flux:button>
+    </div>
 
     <p
         id="editor-upload-close-guidance"
@@ -840,21 +850,84 @@
         </div>
     </flux:modal>
 
-    <flux:modal wire:model.self="pdfModalOpen" class="w-full max-w-lg" x-on:close="window.oceanixCancelPdf()" x-on:cancel="window.oceanixCancelPdf()">
+    <flux:modal wire:model.self="pdfModalOpen" class="w-full max-w-3xl" x-on:close="window.oceanixCancelPdf()" x-on:cancel="window.oceanixCancelPdf()">
+        <div class="min-w-0 space-y-5" x-data="{ restorePdfFocus(id) { this.$nextTick(() => { const row = id && document.querySelector('[data-pdf-row=\u0022' + id + '\u0022]'); (row?.querySelector('[data-pdf-archive]') || document.getElementById('pdf-library-search') || document.getElementById('pdf-link-text'))?.focus(); }); } }" x-on:oceanix:pdf-archive-cancelled.window="restorePdfFocus($event.detail.id)" x-on:oceanix:pdf-archived.window="restorePdfFocus($event.detail.id)">
+        <flux:heading size="lg">{{ __('Insert PDF') }}</flux:heading>
+        <flux:text>{{ $isCompany ? __('Upload or reuse PDFs owned by this company.') : __('Upload or reuse PDFs owned by the platform.') }}</flux:text>
+        <flux:input id="pdf-link-text" wire:model="pdfLinkText" :label="__('Link text')" maxlength="100000" autofocus />
+        <flux:text>{{ __('Leave blank to use the filename.') }}</flux:text>
         <form wire:submit="uploadPdf" class="space-y-5" x-data="{ uploading: false }" x-on:livewire-upload-start="uploading = true" x-on:livewire-upload-finish="uploading = false" x-on:livewire-upload-error="uploading = false" x-on:livewire-upload-cancel="uploading = false">
-            <flux:heading size="lg">{{ __('Insert PDF') }}</flux:heading>
             <label class="block text-sm font-medium">{{ __('PDF file') }}
                 <input wire:model="pdfUpload" type="file" accept="application/pdf,.pdf" x-on:change="if ($wire.pdfLinkText === '') $wire.pdfLinkText = $event.target.files[0]?.name || ''" aria-describedby="editor-pdf-help editor-pdf-error" @error('pdfUpload') aria-invalid="true" @enderror class="mt-2 block w-full min-w-0 rounded-xl border border-[#cfd8dd] bg-white p-3 text-sm focus-ring">
             </label>
             <p id="editor-pdf-help" class="text-sm text-[#707a80]">{{ __('PDF only, up to 10 MB. Opens in a new tab for people with access to this training.') }}</p>
             <div id="editor-pdf-error" role="alert">@error('pdfUpload')<p class="text-sm text-red-600">{{ $message }}</p>@enderror</div>
-            <flux:input wire:model="pdfLinkText" :label="__('Link text')" maxlength="100000" />
             <p x-show="uploading" role="status" class="text-sm">{{ __('Uploading PDF…') }}</p>
             <div class="flex flex-wrap justify-end gap-3">
-                <flux:button type="button" x-on:click="window.oceanixCancelPdf(); $wire.pdfModalOpen = false">{{ __('Cancel') }}</flux:button>
                 <flux:button type="submit" variant="primary" x-bind:disabled="uploading" wire:loading.attr="disabled" wire:target="pdfUpload,uploadPdf" data-editor-media-action="upload" data-editor-media-family="pdf" data-editor-action-detail="pdf-upload" data-editor-target-key="{{ $pdfRecordKey }}">{{ __('Upload and insert link') }}</flux:button>
             </div>
         </form>
+        <section aria-label="{{ __('PDF library') }}" class="space-y-4 border-t border-[var(--ds-border-default)] pt-5">
+            <flux:heading>{{ __('PDF library') }}</flux:heading>
+            <div x-cloak x-show="pdfTransportFailure && pdfTransportFailure.method !== 'archivePdf'" role="alert" class="rounded-xl border border-[var(--ds-status-negative)] p-3">
+                <p>{{ __('The PDF request was interrupted. Results may be out of date. Your text and selection are preserved.') }}</p>
+                <flux:button type="button" x-on:click="retryPdfRequest()" class="mt-2">{{ __('Try again') }}</flux:button>
+            </div>
+            @if($pdfLibraryError)
+                <p role="alert">{{ $pdfLibraryError }}</p>
+                <flux:button type="button" wire:click="loadPdfLibrary" wire:loading.attr="disabled">{{ __('Try again') }}</flux:button>
+            @else
+                <form wire:submit="searchPdfs" class="flex flex-wrap items-end gap-2">
+                    <div class="min-w-0 flex-1"><flux:input id="pdf-library-search" wire:model="pdfSearch" :label="__('Search filenames')" maxlength="240" /></div>
+                    <flux:button type="submit" wire:loading.attr="disabled">{{ __('Search') }}</flux:button>
+                    @if($pdfSearch !== '')<flux:button type="button" wire:click="clearPdfSearch" wire:loading.attr="disabled">{{ __('Clear search') }}</flux:button>@endif
+                </form>
+                <p wire:loading wire:target="loadPdfLibrary,searchPdfs,clearPdfSearch" role="status">{{ __('Loading PDFs…') }}</p>
+                <p wire:loading wire:target="reusePdf" role="status">{{ __('Inserting PDF link…') }}</p>
+                @error('pdfLibrary')<p role="alert" class="text-[var(--ds-status-negative)]">{{ $message }}</p>@enderror
+                <ul class="space-y-3" wire:loading.attr="aria-busy" wire:target="loadPdfLibrary,searchPdfs,clearPdfSearch">
+                    @forelse($pdfLibrary['items'] ?? [] as $pdf)
+                        <li wire:key="library-pdf-{{ $pdf['id'] }}" data-pdf-row="{{ $pdf['id'] }}" class="rounded-xl border border-[var(--ds-border-default)] p-3">
+                            <p class="min-w-0 font-medium [overflow-wrap:anywhere]">{{ $pdf['name'] }}</p>
+                            <p class="mt-1 text-sm text-[var(--ds-text-secondary)]">{{ \Illuminate\Support\Number::fileSize($pdf['size_bytes']) }}</p>
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                <flux:button :href="$pdf['open_url']" target="_blank" rel="noopener noreferrer" :aria-label="__('Open :name (opens in a new tab)', ['name' => $pdf['name']])">{{ __('Open PDF') }}</flux:button>
+                                @if($pdf['can_reuse'])<flux:button type="button" variant="primary" class="admin-primary-action" wire:click="reusePdf('{{ $pdf['id'] }}')" wire:loading.attr="disabled" :aria-label="__('Reuse :name', ['name' => $pdf['name']])" data-editor-media-action="select" data-editor-media-family="pdf" data-editor-action-detail="pdf-reuse" data-editor-target-key="{{ $pdfRecordKey }}">{{ __('Reuse') }}</flux:button>@endif
+                                @if($pdf['can_archive'])<flux:button type="button" variant="ghost" style="color: var(--ds-status-negative) !important" data-pdf-archive wire:click="requestArchivePdf('{{ $pdf['id'] }}')" wire:loading.attr="disabled" :aria-label="__('Archive :name', ['name' => $pdf['name']])">{{ __('Archive') }}</flux:button>@endif
+                            </div>
+                        </li>
+                    @empty
+                        <li><x-empty-state icon="document" :title="$pdfSearch === '' ? __('No PDFs in this library yet') : __('No PDFs match your search')" :description="$pdfSearch === '' ? __('Upload a PDF to make it available here.') : __('Try another filename or clear the search.')" /></li>
+                    @endforelse
+                </ul>
+                @if(($pdfLibrary['last_page'] ?? 1) > 1)
+                    <nav aria-label="{{ __('PDF library pages') }}" class="flex flex-wrap items-center justify-between gap-2">
+                        <flux:button type="button" wire:click="loadPdfLibrary({{ max(1, $pdfLibrary['current_page'] - 1) }})" :disabled="$pdfLibrary['current_page'] === 1" wire:loading.attr="disabled">{{ __('Previous') }}</flux:button>
+                        <span aria-current="page">{{ __('Page :page of :pages', ['page' => $pdfLibrary['current_page'], 'pages' => $pdfLibrary['last_page']]) }}</span>
+                        <flux:button type="button" wire:click="loadPdfLibrary({{ $pdfLibrary['current_page'] + 1 }})" :disabled="$pdfLibrary['current_page'] === $pdfLibrary['last_page']" wire:loading.attr="disabled">{{ __('Next') }}</flux:button>
+                    </nav>
+                @endif
+            @endif
+            <p role="status" aria-live="polite">{{ $pdfLibraryNotice }}</p>
+        </section>
+        <div class="flex justify-end"><flux:button type="button" x-on:click="window.oceanixCancelPdf(); $wire.pdfModalOpen = false">{{ __('Cancel') }}</flux:button></div>
+        </div>
+    </flux:modal>
+
+    <flux:modal wire:model.self="pdfArchiveModalOpen" class="w-full max-w-lg" :dismissible="false" :closable="false" :escapable="false" x-on:keydown.escape.stop.prevent="if (!$el.querySelector('[data-pdf-confirm]')?.disabled) $wire.cancelArchivePdf()">
+        @if($pdfArchiveConfirmation)
+            <div class="space-y-5" x-data="{ focusCancel() { setTimeout(() => this.$refs.cancel?.focus(), 100) } }" x-init="focusCancel()" x-on:oceanix:pdf-archive-failed.window="focusCancel()">
+                <flux:heading size="lg" class="[overflow-wrap:anywhere]">{{ __('Archive ‘:name’?', ['name' => $pdfArchiveConfirmation['name']]) }}</flux:heading>
+                <flux:text>{{ __('This PDF will no longer appear in the library or be available for new reuse. Existing lesson links will continue to work.') }}</flux:text>
+                @error('pdfArchive')<p role="alert">{{ $message }}</p>@enderror
+                <p wire:loading wire:target="archivePdf" role="status" aria-live="polite">{{ __('Archiving PDF…') }}</p>
+                <p x-cloak x-show="pdfTransportFailure?.method === 'archivePdf'" role="alert">{{ __('The archive response was interrupted. Try Archive PDF again to confirm the result. Existing links still work.') }}</p>
+                <div class="flex flex-wrap justify-end gap-2">
+                    <flux:button type="button" x-ref="cancel" wire:click="cancelArchivePdf" wire:loading.attr="disabled" wire:target="archivePdf">{{ __('Cancel') }}</flux:button>
+                    <flux:button type="button" variant="danger" style="background: var(--ds-status-negative) !important; border-color: var(--ds-status-negative) !important; color: white !important" data-pdf-confirm wire:click="archivePdf" wire:loading.attr="disabled" wire:target="archivePdf">{{ __('Archive PDF') }}</flux:button>
+                </div>
+            </div>
+        @endif
     </flux:modal>
 
     <flux:modal wire:model.self="imageLibraryOpen" class="max-w-4xl">

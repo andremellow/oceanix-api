@@ -4,11 +4,17 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use LogicException;
 
 #[Fillable(['public_id', 'company_id', 'is_shared', 'name', 'disk', 'path', 'mime_type', 'size_bytes'])]
 class LessonDocument extends Model
 {
+    public function archive(): HasOne
+    {
+        return $this->hasOne(LessonDocumentArchive::class);
+    }
+
     protected static function booted(): void
     {
         static::updating(fn () => throw new LogicException('Lesson documents are immutable.'));

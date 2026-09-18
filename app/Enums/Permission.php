@@ -24,6 +24,9 @@ enum Permission: string
     case CoursesPublish = 'courses.publish';
     case CoursesRetire = 'courses.retire';
     case CoursesGeneratePreviewLink = 'courses.preview-links.generate';
+    case LessonDocumentsView = 'lesson-documents.view';
+    case LessonDocumentsReuse = 'lesson-documents.reuse';
+    case LessonDocumentsArchive = 'lesson-documents.archive';
 
     // Shared training library
     case SharedCoursesView = 'shared-courses.view';
@@ -71,6 +74,7 @@ enum Permission: string
             str_starts_with($this->value, 'compliance-reports.') => 'compliance-reports',
             str_starts_with($this->value, 'compliance-events.') => 'compliance-events',
             str_starts_with($this->value, 'courses.') => 'courses',
+            str_starts_with($this->value, 'lesson-documents.') => 'lesson-documents',
             str_starts_with($this->value, 'shared-courses.') => 'shared-courses',
             str_starts_with($this->value, 'shared-modules.') => 'shared-modules',
             str_starts_with($this->value, 'training-requirements.') => 'training-requirements',
@@ -91,6 +95,7 @@ enum Permission: string
             'compliance-reports' => 'Compliance reports',
             'compliance-events' => 'Compliance evidence',
             'courses' => 'Courses',
+            'lesson-documents' => 'PDF library',
             'shared-courses' => 'Shared courses',
             'shared-modules' => 'Shared modules',
             'training-requirements' => 'Training requirements',
@@ -111,6 +116,9 @@ enum Permission: string
             self::ComplianceReportsExport => 'Export compliance reports',
             self::ComplianceEventsView => 'View the compliance evidence trail',
             self::CoursesView => 'View courses',
+            self::LessonDocumentsView => 'View the PDF library',
+            self::LessonDocumentsReuse => 'Reuse library PDFs',
+            self::LessonDocumentsArchive => 'Archive library PDFs',
             self::CoursesCreate => 'Create courses',
             self::CoursesUpdate => 'Edit course drafts',
             self::CoursesPublish => 'Publish course versions',
@@ -153,6 +161,9 @@ enum Permission: string
             self::ComplianceReportsExport => 'Download compliance data for the people you are allowed to oversee.',
             self::ComplianceEventsView => 'Inspect the evidence recorded while an accessible person completes training.',
             self::CoursesView => 'Browse published courses and their content.',
+            self::LessonDocumentsView => 'Browse and open PDFs owned by this company.',
+            self::LessonDocumentsReuse => 'Insert company library PDFs into editable lessons.',
+            self::LessonDocumentsArchive => 'Remove PDFs from future reuse while retaining existing lesson links.',
             self::CoursesCreate => 'Create new courses and their first draft.',
             self::CoursesUpdate => 'Change course content while it is still a draft.',
             self::CoursesPublish => 'Publish immutable course versions for assignment.',
@@ -199,6 +210,7 @@ enum Permission: string
         return match ($this) {
             self::ComplianceDashboardView,
             self::CoursesView,
+            self::LessonDocumentsView,
             self::SharedCoursesView,
             self::SharedModulesView,
             self::RequirementsView,
@@ -217,6 +229,8 @@ enum Permission: string
             self::CoursesUpdate,
             self::CoursesRetire => [self::CoursesView],
             self::CoursesPublish, self::CoursesGeneratePreviewLink => [self::CoursesView, self::CoursesUpdate],
+            self::LessonDocumentsReuse => [self::LessonDocumentsView, self::CoursesUpdate],
+            self::LessonDocumentsArchive => [self::LessonDocumentsView],
 
             self::SharedCoursesAdd,
             self::SharedCoursesRemove => [self::SharedCoursesView, self::CoursesView],

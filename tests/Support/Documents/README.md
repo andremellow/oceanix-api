@@ -1,5 +1,13 @@
 # Disposable PDF QA
 
+## PDF library extension (2026-09-16)
+
+The fixture includes 65 active PDFs per company/platform owner, a second company, duplicate/long names, and a separately grantable `libraryUser`. `manifest.json` provides actual identities and owner-specific UUID lists. The existing `author` is an administrator for the original company and platform; `authorB` belongs only to the second company. No production fixtures or `.env` changes are involved.
+
+`revoke-library` and `restore-library` detach/restore only the disposable library profile, retaining course editing access. `fail-list`, `fail-reuse`, `fail-archive` and corresponding `restore-*` commands toggle test-only query faults in `QaBootstrap.php`. These are never loaded by production. The browser suite exercises actual modal updates, scoped private routes, selection/caret after settled updates, confirmation cancellation, revocation, failures and held late completion. Screenshots and fixtures are retained in its reported directory.
+
+Run `PostgresRace.php` with a fresh `OCEANIX_PDF_QA_DIR=/tmp/oceanix-pdf-qa-XXXXXX`. It accepts only loopback PostgreSQL and exact run-owned database `oceanix_pdf_library_qa_20260916_085729b9`, verifies `current_database()` before additive migrations, and never resets a schema. Provisioning evidence: `docs/changes/pdf-library/postgres-readiness.md`. Two child processes execute actual Archive/Reuse Actions, a query listener holds the first acquired document lock, and the parent observes the opposing backend waiting in `pg_stat_activity` before releasing the barrier. Both commit orders, idempotency, bytes/metadata and actual pending `SaveCompanyCourseEditorDraft` are asserted with bounded waits/timeouts. Requires local PostgreSQL access; SQLite is not concurrency evidence. Records remain for independent validation.
+
 This standalone harness is loaded only when explicitly selected as the PHP development-server router. It has no production route/provider registration. It rejects any directory outside `/tmp/oceanix-pdf-qa-*`, boots `testing`, overrides SQLite/session/upload/private-file locations into that directory and prevents external HTTP calls. It never changes `.env` or development database rows.
 
 Create a unique directory with `mktemp -d /tmp/oceanix-pdf-qa-XXXXXX`. Set `OCEANIX_PDF_QA_DIR` to the returned absolute path when running:
