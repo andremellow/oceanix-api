@@ -62,7 +62,7 @@
         ],
         "test:browser": [
             "@php vendor/bin/pest tests/Browser/UnifiedCourseEditorBrowserTest.php --compact",
-            "@php vendor/bin/pest tests/Browser/BrowserEnvironmentSmokeTest.php tests/Browser/CourseDetailWidthTest.php tests/Browser/EditorFixtureCompatibilityTest.php tests/Browser/UnifiedCourseEditorLayoutTest.php --compact"
+            "@php vendor/bin/pest tests/Browser/BrowserEnvironmentSmokeTest.php tests/Browser/RequirementTargetModalTest.php tests/Browser/CourseDetailWidthTest.php tests/Browser/EditorFixtureCompatibilityTest.php tests/Browser/UnifiedCourseEditorLayoutTest.php --compact"
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",

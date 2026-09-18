@@ -29,6 +29,8 @@ new class extends Component
     /** @var array<string, mixed> */
     public array $form = [];
 
+    public bool $targeting = false;
+
     public ?int $targetingId = null;
 
     public ?int $scheduleRequirementId = null;
@@ -138,8 +140,18 @@ new class extends Component
 
         $this->authorize('update', $requirement);
 
+        $this->resetValidation(['targetForm.department_id', 'targetForm.job_function_id']);
         $this->targetingId = $requirement->id;
+        $this->targeting = true;
         $this->targetForm = ['scope_type' => TargetScope::Department->value, 'department_id' => '', 'job_function_id' => ''];
+    }
+
+    public function closeTargeting(): void
+    {
+        $this->targeting = false;
+        $this->targetingId = null;
+        $this->targetForm = [];
+        $this->resetValidation(['targetForm.department_id', 'targetForm.job_function_id']);
     }
 
     public function showSchedule(int $requirementId): void
@@ -180,7 +192,7 @@ new class extends Component
             'target_id' => $target->id,
         ]);
 
-        $this->targetingId = null;
+        $this->closeTargeting();
     }
 
     public function removeTarget(int $targetId, AuditLogger $audit): void
@@ -423,7 +435,7 @@ new class extends Component
     </flux:modal>
 
     {{-- Target form --}}
-    <flux:modal :open="$targetingId !== null" wire:model.self="targetingId" class="max-w-lg">
+    <flux:modal wire:model.self="targeting" @close="closeTargeting" class="max-w-lg">
         <form wire:submit="addTarget" class="space-y-5">
             <div>
                 <flux:heading size="lg">{{ __('Add audience target') }}</flux:heading>
@@ -455,7 +467,7 @@ new class extends Component
             @endif
 
             <div class="flex justify-end gap-2">
-                <flux:button x-on:click="$wire.targetingId = null" variant="ghost" type="button">{{ __('Cancel') }}</flux:button>
+                <flux:button wire:click="closeTargeting" variant="ghost" type="button">{{ __('Cancel') }}</flux:button>
                 <flux:button type="submit" variant="primary" class="admin-primary-action">{{ __('Add target') }}</flux:button>
             </div>
         </form>

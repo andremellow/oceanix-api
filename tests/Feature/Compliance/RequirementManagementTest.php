@@ -3,9 +3,11 @@
 use App\Enums\Permission;
 use App\Enums\RequirementStatus;
 use App\Enums\TargetScope;
+use App\Models\AuditLog;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Department;
+use App\Models\JobFunction;
 use App\Models\TrainingRequirement;
 use App\Models\TrainingRequirementTarget;
 use App\Models\User;
@@ -196,4 +198,66 @@ it('lets an editor edit but not activate', function (): void {
         ->test('compliance.requirements')
         ->call('changeStatus', $requirement->id, 'active')
         ->assertForbidden();
+});
+
+it('validates and saves each audience scope without changing other obligations', function (TargetScope $scope): void {
+    $unselected = TrainingRequirement::factory()->draft()->create(['id' => 21]);
+    $requirement = TrainingRequirement::factory()->draft()->create(['id' => 42]);
+    $existing = TrainingRequirementTarget::factory()->create(['training_requirement_id' => $requirement->id, 'scope_type' => TargetScope::Everyone]);
+    $assignment = UserTrainingAssignment::factory()->create(['training_requirement_id' => $requirement->id]);
+    $existing->refresh();
+    $assignmentBefore = $assignment->refresh()->getAttributes();
+    $department = Department::factory()->create();
+    $job = JobFunction::factory()->create();
+    $admin = adminUser();
+
+    $component = Livewire::actingAs($admin)
+        ->test('compliance.requirements')
+        ->call('startTargeting', $requirement->id)
+        ->assertSet('targeting', true)
+        ->assertSet('targetingId', $requirement->id)
+        ->set('targetForm.scope_type', $scope->value);
+
+    $required = array_filter([
+        $scope->requiresDepartment() ? 'targetForm.department_id' : null,
+        $scope->requiresJobFunction() ? 'targetForm.job_function_id' : null,
+    ]);
+    if ($required !== []) {
+        $component->call('addTarget')->assertHasErrors(array_values($required))
+            ->assertSet('targeting', true)->assertSet('targetingId', $requirement->id);
+        expect($requirement->targets()->count())->toBe(1)
+            ->and(AuditLog::query()->where('action', 'training_requirement.target_added')->count())->toBe(0);
+    }
+
+    $component->set('targetForm.department_id', (string) $department->id)
+        ->set('targetForm.job_function_id', (string) $job->id)
+        ->call('addTarget')->assertHasNoErrors()
+        ->assertSet('targeting', false)->assertSet('targetingId', null);
+
+    $target = $requirement->targets()->whereKeyNot($existing->id)->sole();
+    $audit = AuditLog::query()->where('action', 'training_requirement.target_added')->sole();
+    expect($target->scope_type)->toBe($scope)
+        ->and($target->department_id)->toBe($scope->requiresDepartment() ? $department->id : null)
+        ->and($target->job_function_id)->toBe($scope->requiresJobFunction() ? $job->id : null)
+        ->and($unselected->targets()->count())->toBe(0)
+        ->and($existing->fresh()->getAttributes())->toBe($existing->getAttributes())
+        ->and($assignment->fresh()->getAttributes())->toBe($assignmentBefore)
+        ->and($requirement->fresh()->status)->toBe(RequirementStatus::Draft)
+        ->and($audit->auditable_id)->toBe($requirement->id)
+        ->and($audit->actor_id)->toBe($admin->id)
+        ->and($audit->after)->toBe(['scope_type' => $scope->value, 'target_id' => $target->id]);
+})->with(TargetScope::cases());
+
+it('denies audience changes without update permission', function (): void {
+    $requirement = TrainingRequirement::factory()->draft()->create();
+    $viewer = userWithPermissions([Permission::RequirementsView]);
+
+    Livewire::actingAs($viewer)->test('compliance.requirements')
+        ->call('startTargeting', $requirement->id)->assertForbidden();
+    Livewire::actingAs($viewer)->test('compliance.requirements')
+        ->set('targetingId', $requirement->id)
+        ->set('targetForm.scope_type', 'everyone')
+        ->call('addTarget')->assertForbidden();
+
+    expect($requirement->targets()->count())->toBe(0);
 });
