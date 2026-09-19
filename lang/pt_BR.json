@@ -897,5 +897,13 @@
     "You do not have permission to archive this PDF.": "Você não tem permissão para arquivar este PDF.",
     "You do not have permission to perform this PDF action.": "Você não tem permissão para realizar esta ação com o PDF.",
     "The PDF request was interrupted. Results may be out of date. Your text and selection are preserved.": "A solicitação do PDF foi interrompida. Os resultados podem estar desatualizados. Seu texto e sua seleção foram preservados.",
-    "The archive response was interrupted. Try Archive PDF again to confirm the result. Existing links still work.": "A resposta do arquivamento foi interrompida. Use Arquivar PDF novamente para confirmar o resultado. Os links existentes continuam funcionando."
+    "The archive response was interrupted. Try Archive PDF again to confirm the result. Existing links still work.": "A resposta do arquivamento foi interrompida. Use Arquivar PDF novamente para confirmar o resultado. Os links existentes continuam funcionando.",
+    "Select all": "Selecionar todas",
+    "Select all results": "Selecionar todos os resultados",
+    "Select a valid audience scope.": "Selecione uma abrangência válida.",
+    "Select at least one job function.": "Selecione pelo menos uma função.",
+    "One or more selected job functions are no longer available.": "Uma ou mais funções selecionadas não estão mais disponíveis.",
+    "Search job functions": "Buscar funções",
+    ":count selected": ":count selecionadas",
+    "No job functions found.": "Nenhuma função encontrada."
 }
