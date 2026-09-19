@@ -841,5 +841,13 @@
     "Use the retry control on the matching upload row.": "Use o controle de nova tentativa na linha de envio correspondente.",
     "Percentage tracked for reporting; assessment access remains independent of watch progress.": "Percentual acompanhado para relatórios; o acesso à avaliação permanece independente do progresso de visualização.",
     "Minimum correct-answer percentage required to pass the assessment.": "Percentual mínimo de respostas corretas necessário para aprovação na avaliação.",
-    "Maximum assessment submissions allowed for this question.": "Número máximo de envios da avaliação permitidos para esta pergunta."
+    "Maximum assessment submissions allowed for this question.": "Número máximo de envios da avaliação permitidos para esta pergunta.",
+    "Select all": "Selecionar todas",
+    "Select all results": "Selecionar todos os resultados",
+    "Select a valid audience scope.": "Selecione uma abrangência válida.",
+    "Select at least one job function.": "Selecione pelo menos uma função.",
+    "One or more selected job functions are no longer available.": "Uma ou mais funções selecionadas não estão mais disponíveis.",
+    "Search job functions": "Buscar funções",
+    ":count selected": ":count selecionadas",
+    "No job functions found.": "Nenhuma função encontrada."
 }
