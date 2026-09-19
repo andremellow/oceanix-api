@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Requirements\AddRequirementTargets;
 use App\Actions\Requirements\ChangeRequirementStatus;
 use App\Actions\Requirements\SaveTrainingRequirement;
 use App\Enums\FrequencyType;
@@ -32,6 +33,8 @@ new class extends Component
     public bool $targeting = false;
 
     public ?int $targetingId = null;
+
+    public string $targetSearch = '';
 
     public ?int $scheduleRequirementId = null;
 
@@ -140,10 +143,11 @@ new class extends Component
 
         $this->authorize('update', $requirement);
 
-        $this->resetValidation(['targetForm.department_id', 'targetForm.job_function_id']);
+        $this->resetValidation();
+        $this->targetSearch = '';
         $this->targetingId = $requirement->id;
         $this->targeting = true;
-        $this->targetForm = ['scope_type' => TargetScope::Department->value, 'department_id' => '', 'job_function_id' => ''];
+        $this->targetForm = ['scope_type' => TargetScope::Department->value, 'department_id' => '', 'job_function_ids' => []];
     }
 
     public function closeTargeting(): void
@@ -151,7 +155,8 @@ new class extends Component
         $this->targeting = false;
         $this->targetingId = null;
         $this->targetForm = [];
-        $this->resetValidation(['targetForm.department_id', 'targetForm.job_function_id']);
+        $this->resetValidation();
+        $this->targetSearch = '';
     }
 
     public function showSchedule(int $requirementId): void
@@ -162,35 +167,13 @@ new class extends Component
         $this->resetPage('requirementSchedulePage');
     }
 
-    public function addTarget(AuditLogger $audit): void
+    public function addTarget(AddRequirementTargets $action): void
     {
         $requirement = TrainingRequirement::query()->findOrFail($this->targetingId);
 
         $this->authorize('update', $requirement);
 
-        $scope = TargetScope::from((string) $this->targetForm['scope_type']);
-
-        $this->validate([
-            'targetForm.department_id' => [$scope->requiresDepartment() ? 'required' : 'nullable', 'nullable', 'exists:departments,id'],
-            'targetForm.job_function_id' => [$scope->requiresJobFunction() ? 'required' : 'nullable', 'nullable', 'exists:job_functions,id'],
-        ], [
-            'targetForm.department_id.required' => __('Select a department.'),
-            'targetForm.department_id.exists' => __('The selected department is no longer available.'),
-            'targetForm.job_function_id.required' => __('Select a job function.'),
-            'targetForm.job_function_id.exists' => __('The selected job function is no longer available.'),
-        ]);
-
-        $target = TrainingRequirementTarget::query()->create([
-            'training_requirement_id' => $requirement->id,
-            'scope_type' => $scope,
-            'department_id' => $scope->requiresDepartment() ? (int) $this->targetForm['department_id'] : null,
-            'job_function_id' => $scope->requiresJobFunction() ? (int) $this->targetForm['job_function_id'] : null,
-        ]);
-
-        $audit->log('training_requirement.target_added', $requirement, after: [
-            'scope_type' => $scope->value,
-            'target_id' => $target->id,
-        ]);
+        $action->handle($requirement, $this->targetForm);
 
         $this->closeTargeting();
     }
@@ -458,17 +441,58 @@ new class extends Component
             @endif
 
             @if (in_array($targetForm['scope_type'] ?? '', ['job_function', 'department_job_function'], true))
-                <flux:select wire:model="targetForm.job_function_id" class="admin-control" :label="__('Job function')">
-                    <option value="">{{ __('Select a job function') }}</option>
-                    @foreach ($jobFunctions as $jobFunction)
-                        <option value="{{ $jobFunction->id }}">{{ $jobFunction->name }}</option>
-                    @endforeach
-                </flux:select>
+                <fieldset class="min-w-0 space-y-3" x-data="{
+                    functions: @js($jobFunctions->map(fn ($function) => ['id' => (string) $function->id, 'name' => mb_strtolower($function->name)])->values()),
+                    get search() { return $wire.targetSearch.toLocaleLowerCase().trim() },
+                    get matchingIds() { return this.functions.filter(item => item.name.includes(this.search)).map(item => item.id) },
+                    get selectedIds() { return ($wire.targetForm.job_function_ids ?? []).map(String) },
+                    get allSelected() { return this.matchingIds.length > 0 && this.matchingIds.every(id => this.selectedIds.includes(id)) },
+                    get partiallySelected() { return !this.allSelected && this.matchingIds.some(id => this.selectedIds.includes(id)) },
+                    toggleMatching() {
+                        const matching = this.matchingIds;
+                        if (!matching.length) return;
+                        $wire.$set('targetForm.job_function_ids', this.allSelected
+                            ? this.selectedIds.filter(id => !matching.includes(id))
+                            : [...new Set([...this.selectedIds, ...matching])]);
+                    }
+                }">
+                    <legend class="text-sm font-medium text-[var(--ds-text-primary)]">{{ __('Job functions') }}</legend>
+                    <flux:input id="target-function-search" name="targetSearch" label:for="target-function-search" x-model="$wire.targetSearch" :label="__('Search job functions')" class="admin-control" />
+                    <p class="text-sm text-[var(--ds-text-secondary)]" role="status">{{ __(':count selected', ['count' => count($targetForm['job_function_ids'] ?? [])]) }}</p>
+                    <flux:field variant="inline" class="min-h-11 sm:min-h-8 !grid-cols-[auto_minmax(0,1fr)] items-center">
+                        {{-- Flux protects ARIA attributes; its indeterminate setter updates only the icon. --}}
+                        <flux:checkbox id="target-functions-all" x-bind:disabled="matchingIds.length === 0"
+                            x-bind:aria-disabled="String(matchingIds.length === 0)"
+                            x-effect="$el.checked = allSelected; $el.indeterminate = partiallySelected; $el._durableAttributeObserver.pause(() => $el.setAttribute('aria-checked', partiallySelected ? 'mixed' : String(allSelected)))"
+                            @change="toggleMatching()" aria-describedby="target-functions-error" />
+                        <flux:label class="min-w-0 break-words whitespace-normal">
+                            <span x-text="search ? @js(__('Select all results')) : @js(__('Select all'))">{{ __('Select all') }}</span>
+                        </flux:label>
+                    </flux:field>
+                    <div class="max-h-48 overflow-y-auto rounded-xl border border-[var(--ds-border-default)] p-2">
+                        @foreach ($jobFunctions as $jobFunction)
+                            <div wire:key="target-function-{{ $jobFunction->id }}" data-target-function="{{ $jobFunction->id }}"
+                                x-show="@js(mb_strtolower($jobFunction->name)).includes($wire.targetSearch.toLocaleLowerCase().trim())">
+                                <flux:field variant="inline" class="min-h-11 sm:min-h-8 !grid-cols-[auto_minmax(0,1fr)] items-center">
+                                    <flux:checkbox wire:model.live="targetForm.job_function_ids" value="{{ $jobFunction->id }}"
+                                        aria-describedby="target-functions-error" />
+                                    <flux:label class="min-w-0 break-words whitespace-normal">{{ $jobFunction->name }}</flux:label>
+                                </flux:field>
+                            </div>
+                        @endforeach
+                        <p x-show="! @js($jobFunctions->pluck('name')->map(fn ($name) => mb_strtolower($name))->values()).some(name => name.includes($wire.targetSearch.toLocaleLowerCase().trim()))"
+                            class="text-sm text-[var(--ds-text-secondary)]">{{ __('No job functions found.') }}</p>
+                    </div>
+                    <div id="target-functions-error">
+                        <flux:error name="targetForm.job_function_ids" />
+                        <flux:error name="targetForm.job_function_ids.*" />
+                    </div>
+                </fieldset>
             @endif
 
             <div class="flex justify-end gap-2">
                 <flux:button wire:click="closeTargeting" variant="ghost" type="button">{{ __('Cancel') }}</flux:button>
-                <flux:button type="submit" variant="primary" class="admin-primary-action">{{ __('Add target') }}</flux:button>
+                <flux:button type="submit" wire:loading.attr="disabled" wire:target="addTarget" variant="primary" class="admin-primary-action">{{ __('Add target') }}</flux:button>
             </div>
         </form>
     </flux:modal>
