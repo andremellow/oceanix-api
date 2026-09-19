@@ -33,6 +33,7 @@ final class RemoveDirectCourseLesson
                 throw ValidationException::withMessages(['revision' => __('This draft changed in another session. Reload it before changing the structure.')]);
             }
             $lesson = $lessons->firstWhere('id', $lessonId) ?? abort(404);
+            $lesson->documents()->detach();
             $lesson->delete();
             $lessons->where('id', '!=', $lessonId)->sortBy('position')->values()->each(function (Lesson $lesson, int $index) use ($version): void {
                 if ((int) $lesson->position !== $index + 1) {
