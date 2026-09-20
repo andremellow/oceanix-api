@@ -75,4 +75,10 @@ new class extends EditorCoordinator
     :$previewPanel
     :$imageLibraryOpen
     :$imageLibraryRecordKey
+    :$pdfRecordKey
+    :$pdfLibrary
+    :$pdfLibraryError
+    :$pdfLibraryNotice
+    :$pdfSearch
+    :$pdfArchiveConfirmation
     :$contentImages />

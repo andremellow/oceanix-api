@@ -4,13 +4,14 @@ namespace App\Services\Courses;
 
 use App\Models\CoursePreviewLink;
 use App\Models\Lesson;
+use App\Services\Documents\LessonDocumentLinks;
 use Illuminate\Support\HtmlString;
 
 class CoursePreviewProjection
 {
     public function __construct(private readonly PublicPreviewResolver $resolver, private readonly LessonContentRenderer $renderer) {}
 
-    public function project(CoursePreviewLink $link, ?Lesson $lesson = null): array
+    public function project(CoursePreviewLink $link, ?Lesson $lesson = null, ?callable $documentUrl = null): array
     {
         $parts = $lesson ? $this->renderer->splitAtVideo((string) $lesson->content_markdown) : null;
         $hasVideo = $lesson && $this->resolver->authoredVideo($lesson) !== null;
@@ -25,13 +26,15 @@ class CoursePreviewProjection
             'title' => $link->courseVersion->title, 'description' => $link->courseVersion->description,
             'expires_at' => $link->expires_at,
             'items' => $this->resolver->items($link->courseVersion)->map(fn ($item) => ['kind' => $item['kind'], 'id' => $item['id'], 'title' => $item['lesson']->title])->all(),
-            'selected' => $lesson ? ['title' => $lesson->title, 'body' => $this->body($before), 'after_video' => $this->body($after), 'has_video' => $hasVideo,
+            'selected' => $lesson ? ['title' => $lesson->title, 'body' => $this->body($before, $documentUrl), 'after_video' => $this->body($after, $documentUrl), 'has_video' => $hasVideo,
                 'questions' => $lesson->questions->map(fn ($question) => ['prompt' => $question->prompt, 'choices' => $question->options->pluck('text')->all()])->all()] : null,
         ];
     }
 
-    private function body(string $content): HtmlString
+    private function body(string $content, ?callable $documentUrl = null): HtmlString
     {
-        return new HtmlString(preg_replace('/<(\/?)(h1)\b/i', '<$1h3', (string) $this->renderer->renderContent($content)));
+        $html = preg_replace('/<(\/?)(h1)\b/i', '<$1h3', (string) $this->renderer->renderContent($content));
+
+        return new HtmlString($documentUrl ? app(LessonDocumentLinks::class)->map($html, $documentUrl) : $html);
     }
 }

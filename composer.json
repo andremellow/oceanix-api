@@ -61,6 +61,7 @@
             "@php artisan test --exclude-group=browser"
         ],
         "test:browser": [
+            "node --test tests/JavaScript/lesson-documents.browser.test.mjs",
             "@php vendor/bin/pest tests/Browser/UnifiedCourseEditorBrowserTest.php --compact",
             "@php vendor/bin/pest tests/Browser/BrowserEnvironmentSmokeTest.php tests/Browser/RequirementTargetModalTest.php tests/Browser/CourseDetailWidthTest.php tests/Browser/EditorFixtureCompatibilityTest.php tests/Browser/UnifiedCourseEditorLayoutTest.php --compact"
         ],

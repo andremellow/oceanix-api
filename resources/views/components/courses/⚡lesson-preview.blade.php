@@ -28,6 +28,6 @@ new class extends Component
     </x-page-hero>
 
     <article class="mx-auto mt-7 max-w-5xl rounded-[24px] border border-[#dce3e7] bg-white px-6 py-8 shadow-sm sm:px-10 sm:py-12">
-        <x-lesson-content :lesson="$lesson" />
+        <x-lesson-content :lesson="$lesson" :document-url="fn ($document) => route('courses.lessons.documents', ['company' => $course->company, 'course' => $course, 'lesson' => $lesson, 'document' => $document])" />
     </article>
 </div>

@@ -18,6 +18,12 @@ export function createCourseEditorState(initial = {}) {
         operationalGuidanceAction: '',
         operationalGuidanceSeverity: 'status',
         confirmationFailureActive: false,
+        pdfTransportFailure: null,
+        retryPdfRequest() {
+            const call = this.pdfTransportFailure;
+            // The request failure hook exposes recovery; consume the rejected action promise.
+            if (call) this.$wire[call.method](...call.params).catch(() => {});
+        },
         messages: {
             loading: 'Loading the editor before :action.',
             permission: 'Permission was removed. :action is unavailable; copy any local values you need.',
@@ -502,7 +508,7 @@ export function createCourseEditorState(initial = {}) {
             const wireClick = control.getAttribute('wire:click') || '';
             const opensConfirmation = wireClick.startsWith('confirm');
             const opensPicker = wireClick.startsWith('open') || control.type === 'button' && !wireClick;
-            if (opensPicker && !['open-image-library', 'open-video-library'].includes(control.dataset.editorActionDetail)) return true;
+            if (opensPicker && !['open-image-library', 'open-video-library', 'open-pdf-modal'].includes(control.dataset.editorActionDetail)) return true;
 
             const identity = this.operationIdentity(control);
             identity.label = this.operationLabel(control);
@@ -629,7 +635,13 @@ export function createCourseEditorState(initial = {}) {
                 this.controlsObserver = new MutationObserver(() => this.synchronizeOperationalControls());
                 this.controlsObserver.observe(document.body, { childList: true, subtree: true });
             }
-            this.$wire?.$hook?.('request', ({ succeed, fail }) => {
+            this.$wire?.$hook?.('request', ({ payload, succeed, fail }) => {
+                const body = typeof payload === 'string' ? JSON.parse(payload) : payload;
+                if (body?.components?.some(component => component.calls?.some(call => ['openPdfModal', 'cancelArchivePdf'].includes(call.method)))) this.pdfTransportFailure = null;
+                const calls = body?.components?.flatMap(component => component.calls || []) || [];
+                const pdfMethods = ['openPdfModal', 'loadPdfLibrary', 'searchPdfs', 'clearPdfSearch', 'reusePdf', 'requestArchivePdf', 'archivePdf'];
+                const pdfCall = calls.length === 1 && pdfMethods.includes(calls[0].method) ? calls[0] : null;
+                if (pdfCall) this.pdfTransportFailure = null;
                 const focus = this.pendingFocus;
                 const operationRequest = [...this.activeOperations]
                     .some(key => !this.activeOperationMeta[key]?.external && !this.activeOperationMeta[key]?.readOnly)
@@ -638,13 +650,24 @@ export function createCourseEditorState(initial = {}) {
                 succeed?.(() => {
                     const droppedRecordKeys = this.latestDroppedRecordKeys;
                     this.clearLocalOperations();
-                    this.$nextTick?.(() => this.reapplyOperationOverlay(operationRequest, droppedRecordKeys));
+                    this.$nextTick?.(() => {
+                        this.reapplyOperationOverlay(operationRequest, droppedRecordKeys);
+                        this.$root.dispatchEvent?.(new CustomEvent('oceanix:editor-overlay-restored', { bubbles: true }));
+                    });
                     this.latestDroppedRecordKeys = [];
                     if (!focus) return;
                     this.pendingFocus = null;
                     this.restoreFocus(focus.recordKey, focus.action);
                 });
-                fail?.(({ status } = {}) => {
+                fail?.(({ status, preventDefault } = {}) => {
+                    if (pdfCall && (Number(status) === 0 || Number(status) >= 500)) {
+                        preventDefault?.();
+                        this.pdfTransportFailure = pdfCall;
+                        this.clearLocalOperations(false, false);
+                        this.synchronizeOperationalControls();
+                        this.$dispatch?.('oceanix:pdf-archive-failed');
+                        return;
+                    }
                     if (this.activeOperations.size > 0) {
                         const failedOperation = [...this.activeOperations]
                             .map(key => this.activeOperationMeta[key])

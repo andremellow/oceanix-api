@@ -1,0 +1,21 @@
+Command: toscanini verify --run-id pdf-library-20260916
+Exit: 0. Product hashes unchanged;33-file r2 snapshot retained. Build and contract preflight passed. Optional Boost unavailable, not required.
+  Tests:    16 skipped, 920 passed (5152 assertions)
+  Duration: 129.24s
+# tests 30
+# pass 30
+# fail 0
+# skipped 0
+# tests 3
+# pass 3
+# fail 0
+# skipped 0
+  Tests:    79 passed (811 assertions)
+  Duration: 125.13s
+  Tests:    32 passed (674 assertions)
+  Duration: 22.37s
+# tests 25
+# pass 25
+# fail 0
+# skipped 0
+{"tool":"pint","result":"passed"}Laravel: ^13.17

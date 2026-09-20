@@ -853,7 +853,16 @@ it('keeps concurrent uploads in separate stable rows through uploading failed pr
         ->assertSet("uploadRows.{$secondToken}.state", 'uploading')
         ->assertSee('Upload failed')
         ->assertSee('data-editor-upload-retry="transfer"', escape: false);
-    expect($editor->html())->toMatch('/data-editor-upload[\\s\\S]*data-upload-token="'.preg_quote($firstToken, '/').'"[\\s\\S]*data-upload-state="failed"[\\s\\S]*role="alert"/');
+    $rendered = new DOMDocument;
+    $rendered->loadHTML($editor->html(), LIBXML_NOERROR | LIBXML_NOWARNING);
+    $xpath = new DOMXPath($rendered);
+    $failedRows = $xpath->query('//article[@data-editor-upload and @data-upload-token="'.$firstToken.'"]');
+    expect($failedRows->length)->toBe(1);
+    $failedRow = $failedRows->item(0);
+    expect($failedRow->getAttribute('data-upload-state'))->toBe('failed');
+    $alerts = $xpath->query('.//*[@role="alert"]', $failedRow);
+    expect($alerts->length)->toBe(1)
+        ->and(trim($alerts->item(0)->textContent))->toBe(__('Upload failed'));
 
     $editor->call('uploadCompleted', $secondRecordId, $secondToken)
         ->assertSet("uploadRows.{$firstToken}.state", 'failed')

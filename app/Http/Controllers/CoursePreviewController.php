@@ -35,7 +35,7 @@ class CoursePreviewController extends Controller
     {
         $link = $resolver->resolve($token);
 
-        return view('course-preview.reader', ['preview' => $projection->project($link, $resolver->item($link, $kind, $item)), 'token' => $token, 'kind' => $kind, 'item' => $item]);
+        return view('course-preview.reader', ['preview' => $projection->project($link, $resolver->item($link, $kind, $item), fn ($document) => route('course-preview.documents', ['token' => $token, 'kind' => $kind, 'item' => $item, 'document' => $document])), 'token' => $token, 'kind' => $kind, 'item' => $item]);
     }
 
     public function playback(#[\SensitiveParameter] string $token, string $kind, string $item, PreviewPlaybackService $playback)

@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 3,
+  "runId": "pdf-library-20260916",
+  "assurance": "critical",
+  "goal": "List, open, reuse and archive owner-scoped PDFs in the existing lesson editor modal without breaking existing links.",
+  "scope": {
+    "in": [
+      "Company-owned versus platform-owned PDF library in existing three editor contexts",
+      "Private library open, draft reuse and non-destructive archive",
+      "Feature-local permission integration and focused validation"
+    ],
+    "out": [
+      "Cross-owner library sharing or transfer",
+      "Physical deletion, replacement, restore UI and general file manager",
+      "Unrelated review/QA, auth redesign, tooling repairs, deployment and PR updates"
+    ],
+    "changeBoundary": [
+      "Documents Actions/Services/Models/Policy",
+      "PDF library permissions and private route",
+      "Unified PDF modal and insertion/operation seams",
+      "Additive archival persistence",
+      "Focused PDF tests and disposable harness"
+    ]
+  },
+  "invariants": [
+    {
+      "id": "INV-01",
+      "statement": "Company A, company B and platform catalogs remain separate; every action rechecks current authority."
+    },
+    {
+      "id": "INV-02",
+      "statement": "Original document metadata, bytes, associations and published content are retained; archive does not revoke existing lesson links."
+    },
+    {
+      "id": "INV-03",
+      "statement": "No public storage URL or bare PDF identity grants bytes; learner access never grants library access."
+    },
+    {
+      "id": "INV-04",
+      "statement": "Existing upload, explicit Save, selected text, caret and cancellation remain correct on directly affected PDF paths."
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-01",
+      "statement": "All active own-scope PDFs are searchable and reachable via pagination in three editor contexts (FR-001/002)."
+    },
+    {
+      "id": "AC-02",
+      "statement": "Open shows a private authorized PDF in a new tab without changing the editor (FR-003/004)."
+    },
+    {
+      "id": "AC-03",
+      "statement": "Reuse another lesson's same-owner PDF in a current draft, preserving selection/custom label and saved access without duplicating bytes (FR-005)."
+    },
+    {
+      "id": "AC-04",
+      "statement": "Confirmed archive hides/prevents new reuse, records actor/time and preserves existing saved or already-attached uses (FR-006/007)."
+    },
+    {
+      "id": "AC-05",
+      "statement": "Grant, denial, direct access, prerequisites, scoped admin and revocation follow existing tenant/platform authority boundaries (FR-003)."
+    },
+    {
+      "id": "AC-06",
+      "statement": "Accessible narrow/keyboard/localized modal states preserve text on cancel, failure and stale completion (FR-008/009)."
+    }
+  ],
+  "validationScope": {
+    "scopeId": "pdf-library-v1",
+    "frozen": true,
+    "regressionSurfaces": [
+      "PDF modal selection/insertion and shared operation guard",
+      "Retained PDF lesson associations, draft save/copy and contextual delivery",
+      "Feature-local company/platform permission integration"
+    ],
+    "qaScenarios": [
+      {
+        "id": "QA-01",
+        "description": "Three own-scope catalogs; search, >60 files, pagination, duplicates and empty results (B-01/02/15)",
+        "acceptanceCriteria": [
+          "AC-01"
+        ],
+        "invariants": [
+          "INV-01"
+        ]
+      },
+      {
+        "id": "QA-02",
+        "description": "Open other-lesson PDF in a new tab; editor unchanged (B-03)",
+        "acceptanceCriteria": [
+          "AC-02"
+        ],
+        "invariants": [
+          "INV-03"
+        ]
+      },
+      {
+        "id": "QA-03",
+        "description": "Three editors reuse selected/custom/default labels; exact settled caret, Save/reload and contextual access (B-06/07/08)",
+        "acceptanceCriteria": [
+          "AC-03"
+        ],
+        "invariants": [
+          "INV-04"
+        ]
+      },
+      {
+        "id": "QA-04",
+        "description": "Grant/denial, owner isolation both directions, direct access and revocation (B-04/05)",
+        "acceptanceCriteria": [
+          "AC-05"
+        ],
+        "invariants": [
+          "INV-01",
+          "INV-03"
+        ]
+      },
+      {
+        "id": "QA-05",
+        "description": "Archive cancel/confirm/retry; old published/copied links retained (B-10/11/13)",
+        "acceptanceCriteria": [
+          "AC-04"
+        ],
+        "invariants": [
+          "INV-02"
+        ]
+      },
+      {
+        "id": "QA-06",
+        "description": "Stale reuse after archive; pre-archive attachment Save; stale/cancelled/published target denial (B-09/12)",
+        "acceptanceCriteria": [
+          "AC-03",
+          "AC-04"
+        ],
+        "invariants": [
+          "INV-02",
+          "INV-04"
+        ]
+      },
+      {
+        "id": "QA-07",
+        "description": "Keyboard, 390px, EN/PT-BR, long names, busy/failure/retry (B-14/15)",
+        "acceptanceCriteria": [
+          "AC-06"
+        ],
+        "invariants": [
+          "INV-04"
+        ]
+      },
+      {
+        "id": "QA-08",
+        "description": "Existing upload positive/invalid/cancel path through expanded modal (B-16)",
+        "acceptanceCriteria": [
+          "AC-06"
+        ],
+        "invariants": [
+          "INV-04"
+        ]
+      }
+    ]
+  },
+  "implementationCheckpoint": {
+    "id": "pdf-library-20260916-r2",
+    "recordedAfterImplementation": true
+  },
+  "specification": {
+    "required": true,
+    "status": "approved",
+    "artifact": "specs/007-pdf-library/spec.md",
+    "clarifyStatus": "approved",
+    "planStatus": "approved",
+    "waiverReason": null,
+    "waivedBy": null,
+    "independentReviewRequired": false
+  },
+  "architecture": {
+    "required": true,
+    "status": "approved",
+    "artifact": "specs/007-pdf-library/architecture.md",
+    "sha256": "cc287892d63b48973ea614074fcdf958da8609768fc082156e2133708413a69c",
+    "ownerApproval": {
+      "approvedBy": "product-owner",
+      "decision": "User explicitly replied sim to approval of linked architecture and scope on 2026-09-16; specs/007-pdf-library/approval.md",
+      "artifactSha256": "cc287892d63b48973ea614074fcdf958da8609768fc082156e2133708413a69c",
+      "scopeId": "pdf-library-v1"
+    },
+    "frameworkAlignment": [
+      {
+        "repository": "oceanix-api",
+        "framework": "Laravel / Livewire",
+        "version": "13.26.1 / 4.4.1",
+        "guidance": [
+          "AGENTS.md",
+          "docs/control-center-design-system.md",
+          ".toscanini/manifest.json",
+          "/Users/andrepiresdemello/.nvm/versions/node/v20.20.2/lib/node_modules/toscanini/templates/adapters/laravel.json",
+          "/Users/andrepiresdemello/.nvm/versions/node/v20.20.2/lib/node_modules/toscanini/docs/adapters.md",
+          "https://laravel.com/docs/13.x/authorization",
+          "https://laravel.com/docs/13.x/queries#pessimistic-locking",
+          "https://laravel.com/docs/13.x/database#database-transactions",
+          "https://livewire.laravel.com/docs/4.x/security"
+        ],
+        "referenceAssessment": "No external reference project supplied. Existing upload supplies target-lock integration evidence; contextual delivery and PDF insertion supply compatibility contracts. Image/video libraries do not determine PDF ownership or pagination. Design-system reference supplies UI semantics only. Native Eloquent, small Services, write Actions, company Policy/Gates and existing platform Account authority are sufficient; no repository layering or identity redesign.",
+        "status": "aligned",
+        "boostAssessment": "laravel/boost absent from installed metadata and composer.lock; no available Boost documentation tool. Optional project policy. Official versioned documentation consulted as fallback; no Boost invocation claimed."
+      }
+    ]
+  },
+  "budgets": {
+    "remediationRounds": 2,
+    "specialistRuns": 17
+  },
+  "approved": true,
+  "approvedBy": "product-owner"
+}

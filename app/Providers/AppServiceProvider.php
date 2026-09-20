@@ -9,6 +9,7 @@ use App\Http\Middleware\EnsureUserIsPlatformAdmin;
 use App\Models\Certificate;
 use App\Models\Course;
 use App\Models\CourseVersion;
+use App\Models\LessonDocument;
 use App\Models\Module;
 use App\Models\ModuleVersion;
 use App\Models\PlatformTaskUser;
@@ -18,6 +19,7 @@ use App\Models\User;
 use App\Models\UserTrainingAssignment;
 use App\Policies\CertificatePolicy;
 use App\Policies\CoursePolicy;
+use App\Policies\LessonDocumentPolicy;
 use App\Policies\ModulePolicy;
 use App\Policies\RolePolicy;
 use App\Policies\TrainingRequirementPolicy;
@@ -97,6 +99,7 @@ class AppServiceProvider extends ServiceProvider
             && $user->account->status === 'active');
 
         Gate::policy(Course::class, CoursePolicy::class);
+        Gate::policy(LessonDocument::class, LessonDocumentPolicy::class);
         Gate::policy(CourseVersion::class, CoursePolicy::class);
         Gate::policy(Module::class, ModulePolicy::class);
         Gate::policy(ModuleVersion::class, ModulePolicy::class);
