@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\Platform\TaskApiController;
+use App\Http\Controllers\ControlPlane\ProvisionCompanyController;
 use App\Http\Middleware\EnsurePlatformTaskApiAccess;
+use App\Http\Middleware\EnsureProvisioningPrincipal;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('platform/tasks/v1')
@@ -20,3 +22,7 @@ Route::prefix('platform/tasks/v1')
             ->name('tasks.resolve');
         Route::get('/meta', [TaskApiController::class, 'meta'])->name('meta');
     });
+
+Route::put('/control-plane/v1/companies/{account_company_uuid}', ProvisionCompanyController::class)
+    ->middleware(EnsureProvisioningPrincipal::class)
+    ->name('api.control-plane.companies.provision');
