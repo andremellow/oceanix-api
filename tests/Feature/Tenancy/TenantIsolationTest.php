@@ -3,10 +3,11 @@
 use App\Models\Company;
 use App\Models\Course;
 use App\Models\Department;
-use App\Models\Role;
 use App\Models\User;
 use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 
 it('allows the same email and business codes in different companies', function (): void {
@@ -58,16 +59,19 @@ it('selects the company before resolving an account with a shared email', functi
         ->and($first->id)->not->toBe($second->id);
 });
 
-it('creates a company with its own baseline access profiles', function (): void {
-    $this->artisan('oceanix:create-company', ['name' => 'North Sea Operations'])
-        ->assertSuccessful();
+it('rejects local company creation with Account guidance and no side effects', function (): void {
+    Http::fake();
+    adminUser();
+    $snapshot = fn (): array => collect(['companies', 'users', 'roles', 'permissions', 'role_user', 'account_company_bindings', 'provisioning_receipts', 'audit_logs'])
+        ->mapWithKeys(fn (string $table): array => [$table => DB::table($table)->get()->toJson()])->all();
+    $before = $snapshot();
 
-    $company = Company::query()->where('slug', 'north-sea-operations')->firstOrFail();
-    app(TenantContext::class)->set($company);
+    $this->artisan('oceanix:create-company', ['name' => 'North Sea Operations', '--slug' => 'north-sea-operations'])
+        ->expectsOutput('Create or import companies in Account, then enable Compliance there.')
+        ->assertFailed();
 
-    expect($company->users()->count())->toBe(0)
-        ->and(Role::query()->where('key', 'admin')->exists())->toBeTrue()
-        ->and(Role::query()->where('key', 'employee')->exists())->toBeTrue();
+    expect($snapshot())->toBe($before);
+    Http::assertNothingSent();
 });
 
 it('restores a tenant-scoped user on framework-owned web routes', function (): void {
