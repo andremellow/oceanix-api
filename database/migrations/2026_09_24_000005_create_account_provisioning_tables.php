@@ -35,5 +35,8 @@ return new class extends Migration
         });
     }
 
-    public function down(): void {}
+    public function down(): void
+    {
+        throw new RuntimeException('Account provisioning records cannot be rolled back.');
+    }
 };

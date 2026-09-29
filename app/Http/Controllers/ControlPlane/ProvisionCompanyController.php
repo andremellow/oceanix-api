@@ -19,7 +19,9 @@ class ProvisionCompanyController
             return response()->json((new ProvisionedCompanyResource($receipt->response))->resolve($request), $receipt->response_status);
         } catch (HttpExceptionInterface $error) {
             return response()->json(['error' => $error->getStatusCode() === 409 ? 'company_conflict' : 'provisioning_denied', 'message' => $error->getStatusCode() === 409 ? 'Company identity or operation input conflicts with an existing record.' : 'Provisioning access could not be confirmed.', 'correlation_id' => $request->validated('correlation_id')], $error->getStatusCode());
-        } catch (Throwable) {
+        } catch (Throwable $error) {
+            report($error);
+
             return response()->json(['error' => 'provisioning_unavailable', 'message' => 'Provisioning is temporarily unavailable.', 'correlation_id' => $request->validated('correlation_id')], 503);
         }
     }

@@ -8,6 +8,7 @@ use App\Models\ServicePrincipal;
 use App\Models\User;
 use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
@@ -99,6 +100,30 @@ it('SC-11 rejects invalid identity and idempotency input before any tenant creat
 });
 
 it('SC-09 returns a safe unavailable response if local provisioning fails', function () {
-    $this->mock(EnsureCompany::class)->shouldReceive('handle')->once()->andThrow(new RuntimeException('private database detail'));
+    Exceptions::fake();
+    $failure = new RuntimeException('private database detail');
+    $this->mock(EnsureCompany::class)->shouldReceive('handle')->once()->andThrow($failure);
     $this->withToken(provisionToken())->withHeader('Idempotency-Key', (string) Str::uuid())->putJson(provisionUrl((string) Str::uuid()), provisionPayload())->assertStatus(503)->assertDontSee('private database detail')->assertJsonPath('error', 'provisioning_unavailable');
+    Exceptions::assertReported(fn (RuntimeException $error) => $error === $failure);
+});
+
+it('SC-08 refuses provisioning rollback while retaining migration history and operational records', function () {
+    expect(DB::connection()->getDriverName())->toBe('sqlite');
+    $this->withToken(provisionToken())->withHeader('Idempotency-Key', (string) Str::uuid())
+        ->putJson(provisionUrl((string) Str::uuid()), provisionPayload())->assertCreated();
+    $name = '2026_09_24_000005_create_account_provisioning_tables';
+    $path = database_path('migrations/'.$name.'.php');
+    DB::table('migrations')->where('migration', $name)->update(['batch' => DB::table('migrations')->max('batch') + 1]);
+    $tables = ['service_principals', 'account_company_bindings', 'provisioning_receipts'];
+    $before = collect($tables)->mapWithKeys(fn ($table) => [$table => DB::table($table)->orderBy('id')->get()->toJson()]);
+    $migrationBefore = DB::table('migrations')->where('migration', $name)->first();
+
+    expect(fn () => app('migrator')->rollback([$path], ['step' => 1]))
+        ->toThrow(RuntimeException::class, 'Account provisioning records cannot be rolled back.');
+
+    expect(DB::table('migrations')->where('migration', $name)->first())->toEqual($migrationBefore);
+    foreach ($tables as $table) {
+        expect(DB::table($table)->orderBy('id')->get()->toJson())->toBe($before[$table]);
+    }
+    expect(app('migrator')->run([$path]))->toBe([]);
 });
