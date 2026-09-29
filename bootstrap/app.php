@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureComplianceAccess;
 use App\Http\Middleware\EnsurePlatformTaskApiAccess;
 use App\Http\Middleware\IdentifyCompany;
 use App\Http\Middleware\PublicCoursePreview;
@@ -25,7 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Livewire uploads and component updates use framework-owned routes. Resolve the
         // tenant for every stateful web request so the tenant-scoped User can be restored
         // from the session before Livewire reapplies the route's auth middleware.
-        $middleware->web(append: [IdentifyCompany::class, SetLocale::class]);
+        $middleware->web(append: [IdentifyCompany::class, EnsureComplianceAccess::class, SetLocale::class]);
         $middleware->prependToPriorityList(AuthenticatesRequests::class, IdentifyCompany::class);
         $middleware->prependToPriorityList(SubstituteBindings::class, EnsurePlatformTaskApiAccess::class);
         $middleware->redirectGuestsTo(fn (): string => route('login'));

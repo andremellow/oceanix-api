@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Platform\TaskApiController;
+use App\Http\Controllers\ControlPlane\CompanyComplianceAccessController;
 use App\Http\Controllers\ControlPlane\ProvisionCompanyController;
 use App\Http\Middleware\EnsurePlatformTaskApiAccess;
 use App\Http\Middleware\EnsureProvisioningPrincipal;
@@ -26,3 +27,6 @@ Route::prefix('platform/tasks/v1')
 Route::put('/control-plane/v1/companies/{account_company_uuid}', ProvisionCompanyController::class)
     ->middleware(EnsureProvisioningPrincipal::class)
     ->name('api.control-plane.companies.provision');
+
+Route::put('/control-plane/v1/companies/{account_company_uuid}/compliance-access', CompanyComplianceAccessController::class)
+    ->middleware(EnsureProvisioningPrincipal::class.':companies:access')->name('api.control-plane.companies.compliance-access');

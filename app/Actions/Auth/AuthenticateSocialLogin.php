@@ -7,6 +7,7 @@ use App\Exceptions\SocialLoginProviderException;
 use App\Models\Account;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\Tenancy\CompanyComplianceAccess;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -28,6 +29,8 @@ class AuthenticateSocialLogin
             if ($user === null) {
                 throw SocialLoginProviderException::accountNotProvisioned();
             }
+
+            app(CompanyComplianceAccess::class)->assertEnabled($user->company_id);
 
             if (! $identity->emailVerified) {
                 throw SocialLoginProviderException::emailNotVerified();

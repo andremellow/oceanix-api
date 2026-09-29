@@ -3,7 +3,12 @@
     "name": "oceanix/training-compliance",
     "type": "project",
     "description": "Oceanix Training Compliance — corporate training and compliance platform.",
-    "keywords": ["laravel", "livewire", "compliance", "training"],
+    "keywords": [
+        "laravel",
+        "livewire",
+        "compliance",
+        "training"
+    ],
     "license": "proprietary",
     "require": {
         "php": "^8.3",
@@ -63,7 +68,8 @@
         "test:browser": [
             "node --test tests/JavaScript/lesson-documents.browser.test.mjs",
             "@php vendor/bin/pest tests/Browser/UnifiedCourseEditorBrowserTest.php --compact",
-            "@php vendor/bin/pest tests/Browser/BrowserEnvironmentSmokeTest.php tests/Browser/RequirementTargetModalTest.php tests/Browser/CourseDetailWidthTest.php tests/Browser/EditorFixtureCompatibilityTest.php tests/Browser/UnifiedCourseEditorLayoutTest.php --compact"
+            "@php vendor/bin/pest tests/Browser/BrowserEnvironmentSmokeTest.php tests/Browser/RequirementTargetModalTest.php tests/Browser/CourseDetailWidthTest.php tests/Browser/EditorFixtureCompatibilityTest.php tests/Browser/UnifiedCourseEditorLayoutTest.php --compact",
+            "@php vendor/bin/pest tests/Browser/ComplianceAccessTest.php --compact"
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
