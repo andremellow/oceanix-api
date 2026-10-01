@@ -14,3 +14,11 @@ Budget amendment requested: one additional consolidated correction round and two
 Approval: product owner replied “sim” in this task on 2026-10-01.
 
 Execution record: the existing validator enforces a hard maximum of two correction rounds and seventeen specialist starts per run. The approved additional batch is recorded as linked narrow run `20261001-pr29-review-corrections`, retaining the parent specification and architecture decisions. Its contract preflight passes. No validator changes or parent completion approvals are implied.
+
+## Correction evidence
+
+Implementation checkpoint: `faa85344ec75971b802a09308a612bf2cafdb429`. Both PR29-01 (active membership from accepted identities) and PR29-02 (supplied owner initially Invited) received directed Code Review and Test Analyst approval with no new material findings. The Worker demonstrated the original defects before correction. The three affected Pest suites passed: 57 cases, 331 assertions; directed Test Analyst independently executed the eight changed cases, 73 assertions. Known missing-dotenv warnings persist. Pint and production asset build passed.
+
+`toscanini verify --run-id 20261001-pr29-review-corrections` passed contract preflight and executed canonical `composer verify`. It exited 1 on the sole previously reproduced, owner-deferred SharedCourseDraftIntegrityTest failure (1 failure, 1042 warnings, 5872 assertions). Remaining canonical stages do not run after that failure; production build and Pint were executed separately. The completion gate also remains nonzero, reporting missing gates, including QA/specification and recognition of directed approvals. Existing parent-run full QA/conformance and completion-tool limitations are retained. No full delivery approval or merge is claimed.
+
+Correction-run specialist starts: 3 (one Worker, two directed checks); one consolidated batch. No new learning policy was applied. External PR review detected both implementation omissions; failureStage is implementation, with direct automated regressions added.
