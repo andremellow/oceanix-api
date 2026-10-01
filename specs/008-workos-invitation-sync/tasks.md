@@ -31,8 +31,8 @@ Scope workos-invitation-sync-v1; approved artifacts in approval.md. One Worker o
 
 ## Phase 6 — Evidence and delivery gates
 - [x] T018 Run focused affected suites and deterministic verification; populate scenario named test/result/defect-sensitivity evidence. All SC-001–018; no unexecuted check labelled passed.
-- [ ] T019 Freeze immutable implementation checkpoint in contract after stabilization; record raw diff/checkpoint/scope artifacts for fresh specialists.
-- [ ] T020 Independent complete Code Review and Test Analyst at same checkpoint, then consolidate all findings into ledger/correction batch if needed.
+- [x] T019 Freeze immutable implementation checkpoint in contract after stabilization; record raw diff/checkpoint/scope artifacts for fresh specialists.
+- [x] T020 Independent complete Code Review and Test Analyst at same checkpoint, then consolidate all findings into ledger/correction batch if needed.
 - [ ] T021 Independent executable UI/API QA for all QA-001–018 using safe representative data; independent design review against design.md at stable checkpoint.
 - [ ] T022 Final Architect conformance after full QA; impact-directed revalidation only if corrections affect architecture.
 - [ ] T023 Run final Toscanini contract/gates/verify and create public-safe execution report with directional efficiency deductions, failure-stage attribution and pending learning proposals. Prepare committed reviewable changes; no production sync/email/deployment.
