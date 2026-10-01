@@ -2,6 +2,7 @@
 
 namespace App\Actions\Tenancy;
 
+use App\Actions\Auth\RecordTenantAccess;
 use App\Models\Company;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
@@ -24,12 +25,21 @@ class SwitchCompany
             ->where('account_id', $current->account_id)
             ->firstOrFail();
 
-        abort_unless($target->status->isEligibleForTraining(), 403);
+        abort_unless($target->status->canAccessTenant(), 403);
 
+        $previous = $this->context->get();
         $this->context->set($company);
         session(['company_id' => $company->id]);
         Auth::login($target, remember: true);
         session()->regenerate();
+        try {
+            $target = app(RecordTenantAccess::class)->handle($target);
+        } catch (\Throwable $exception) {
+            Auth::logout();
+            session()->forget('company_id');
+            $previous === null ? $this->context->clear() : $this->context->set($previous);
+            throw $exception;
+        }
 
         $this->audit->log('company.context_switched', $company, metadata: [
             'account_id' => $current->account_id,

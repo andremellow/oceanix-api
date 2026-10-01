@@ -43,7 +43,7 @@ class CreateCompany
                     'provider' => $owner->provider,
                     'provider_id' => $owner->provider_id,
                     'workos_user_id' => $owner->workos_user_id,
-                    'status' => UserStatus::Active,
+                    'status' => UserStatus::Invited,
                 ]);
                 $person->roles()->attach(Role::query()->where('key', 'admin')->firstOrFail());
             }

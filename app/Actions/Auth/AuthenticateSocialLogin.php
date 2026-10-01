@@ -77,7 +77,7 @@ class AuthenticateSocialLogin
             // A terminated or suspended person keeps their historical evidence but cannot
             // sign in — revoking access is part of the compliance boundary, and it applies
             // to administrators too.
-            if (! $user->status->isEligibleForTraining()) {
+            if (! $user->status->canAccessTenant()) {
                 throw SocialLoginProviderException::accountInactive();
             }
 

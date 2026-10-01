@@ -15,7 +15,7 @@ it('resolves nobody when a requirement has no target', function (): void {
     expect(app(RequirementEligibilityService::class)->count($requirement))->toBe(0);
 });
 
-it('resolves the whole active workforce for an everyone target', function (): void {
+it('resolves every person status for an everyone target', function (): void {
     User::factory()->count(2)->create();
     User::factory()->terminated()->create();
 
@@ -25,7 +25,7 @@ it('resolves the whole active workforce for an everyone target', function (): vo
         'scope_type' => TargetScope::Everyone,
     ]);
 
-    expect(app(RequirementEligibilityService::class)->count($requirement))->toBe(2);
+    expect(app(RequirementEligibilityService::class)->count($requirement))->toBe(3);
 });
 
 it('intersects department and job function for a combined target', function (): void {

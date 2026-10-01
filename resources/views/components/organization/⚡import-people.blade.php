@@ -187,7 +187,8 @@ new class extends Component
                     <h2 class="text-base font-bold text-[#262d33]">{{ trans_choice(':count person ready to import|:count people ready to import', count($rows), ['count' => count($rows)]) }}</h2>
                     <p class="mt-1 text-sm text-[#707a80]">{{ __('Existing people are matched by email and are not duplicated.') }}</p>
                     @can(App\Enums\Permission::PeopleInvite->value)
-                        <flux:checkbox wire:model="queueInvitesAfterImport" class="mt-3" :label="__('Queue WorkOS invitations after importing')" />
+                        <flux:checkbox wire:model="queueInvitesAfterImport" class="mt-3" :label="__('Queue company-wide WorkOS invitation recovery after importing')" />
+                    <p class="text-sm text-secondary">{{ __('Includes eligible people already in this company: pending invitations are resent, and expired or missing invitations receive a new invitation. This is not limited to the imported rows.') }}</p>
                     @endcan
                 </div>
                 <flux:button wire:click="import" variant="primary" class="admin-primary-action" :disabled="$previewErrors !== []">

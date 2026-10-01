@@ -1,8 +1,8 @@
 <?php
 
 use App\Enums\Permission;
-use App\Jobs\SendWorkosInvitation;
 use App\Models\User;
+use App\Models\WorkosInvitationAttempt;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 
@@ -17,29 +17,33 @@ it('queues invitations for selected people', function (): void {
         ->test('organization.people')
         ->set('selected', [$first->id, $second->id])
         ->call('inviteSelected')
+        ->assertSet('confirmingInvitations', true)
+        ->call('queueInvitations')
         ->assertHasNoErrors();
 
-    Queue::assertPushed(SendWorkosInvitation::class, 2);
-    Queue::assertPushed(fn (SendWorkosInvitation $job): bool => $job->personId === $first->id
-        && $job->companyId === currentCompany()->id
-        && $job->initiatedBy === $operator->id);
+    expect(WorkosInvitationAttempt::count())->toBe(2);
+    expect(WorkosInvitationAttempt::where('person_id', $first->id)->where('actor_id', $operator->id)->exists())->toBeTrue();
+
 });
 
-it('queues every eligible person who has not already been invited', function (): void {
+it('queues every eligible unaccepted candidate including previously invited people', function (): void {
     currentCompany()->update(['workos_organization_id' => 'org_company']);
     $operator = userWithPermissions([Permission::PeopleInvite]);
     $pending = User::factory()->create();
-    User::factory()->create(['workos_invitation_id' => 'invitation_existing', 'invitation_sent_at' => now()]);
+    $existing = User::factory()->create(['workos_invitation_id' => 'invitation_existing', 'invitation_sent_at' => now()]);
     User::factory()->terminated()->create();
     Queue::fake();
 
     Livewire::actingAs($operator)
         ->test('organization.people')
         ->call('inviteAllPending')
+        ->call('queueInvitations')
         ->assertHasNoErrors();
 
-    Queue::assertPushed(SendWorkosInvitation::class, 2);
-    Queue::assertPushed(fn (SendWorkosInvitation $job): bool => $job->personId === $pending->id);
+    expect(WorkosInvitationAttempt::count())->toBe(3);
+    expect(WorkosInvitationAttempt::where('person_id', $pending->id)->exists())->toBeTrue()
+        ->and(WorkosInvitationAttempt::where('person_id', $existing->id)->exists())->toBeTrue();
+
 });
 
 it('denies bulk invitations without the invitation permission', function (): void {

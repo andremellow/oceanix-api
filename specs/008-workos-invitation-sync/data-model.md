@@ -1,0 +1,4 @@
+# Proposed data model
+User: nullable first_access_at/last_access_at from local server; separate workos_last_sign_in_at; nullable invitation_state, accepted_at/expires_at/revoked_at and last successfully verified at; retain current invitation ID and sent timestamp. Do not persist invitation tokens or acceptance URL. Unknown/missing provider records cannot be asserted pending.
+Sync run: company ID, actor ID, queued/running/completed/partial-failure/failed status and counts/timestamps. Error details remain bounded/sanitized. Company ownership must be explicit; scoped Job restores previous tenant context.
+Additive schema migration and explicit legacy status transition; never invent historical access dates. Preserve protected statuses and all assignments/events. Precise concurrency and rollback decisions are authored in architecture.md.

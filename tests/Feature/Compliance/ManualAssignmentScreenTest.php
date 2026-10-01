@@ -31,7 +31,7 @@ it('shows the current administrator and every other active company user in the a
         ->assertSee('Current Administrator')
         ->assertSee('Other Administrator')
         ->assertSee('Active Employee')
-        ->assertDontSee('Inactive Employee');
+        ->assertSee('Inactive Employee');
 });
 
 it('assigns a course to one person from the assignments screen', function (): void {

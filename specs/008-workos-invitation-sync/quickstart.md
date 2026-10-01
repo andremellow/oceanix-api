@@ -1,0 +1,3 @@
+# Validation quickstart
+Do not copy/edit .env. Install composer and npm lockfile dependencies in the isolated worktree. Use phpunit.xml SQLite in-memory + test WorkOS values and Http::fake. Build assets. Run focused People/Auth/Assignments/Requirements/access Pest suites, then composer verify. UI QA must use a separate temporary SQLite database and process-scoped testing configuration with stub WorkOS. Never seed or migrate production.
+Record test names and results against every SC and QA ID. Run toscanini contract/gates/verify after approval and final implementation; approval is not execution evidence.
