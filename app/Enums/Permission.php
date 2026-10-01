@@ -53,6 +53,7 @@ enum Permission: string
     case PeopleImport = 'people.import';
     case PeopleAssignAccessProfiles = 'people.access-profiles.assign';
     case PeopleInvite = 'people.invite';
+    case PeopleSyncWorkos = 'people.sync-workos';
     case DepartmentsView = 'departments.view';
     case DepartmentsManage = 'departments.manage';
     case JobFunctionsView = 'job-functions.view';
@@ -142,6 +143,7 @@ enum Permission: string
             self::PeopleImport => 'Import people from spreadsheets',
             self::PeopleAssignAccessProfiles => 'Assign access profiles to people',
             self::PeopleInvite => 'Invite people through WorkOS',
+            self::PeopleSyncWorkos => 'Synchronize WorkOS invitations',
             self::DepartmentsView => 'View departments',
             self::DepartmentsManage => 'Manage departments',
             self::JobFunctionsView => 'View job functions',
@@ -187,6 +189,7 @@ enum Permission: string
             self::PeopleImport => 'Add or update people in bulk from a spreadsheet.',
             self::PeopleAssignAccessProfiles => 'Choose what another person is allowed to see and do.',
             self::PeopleInvite => 'Send sign-in invitations to people through WorkOS.',
+            self::PeopleSyncWorkos => 'Refresh invitation evidence for this company without sending emails.',
             self::DepartmentsView => 'Browse the company department structure.',
             self::DepartmentsManage => 'Create and change departments.',
             self::JobFunctionsView => 'Browse the company job functions.',
@@ -249,7 +252,7 @@ enum Permission: string
             self::PeopleManage => [self::PeopleView, self::DepartmentsView, self::JobFunctionsView],
             self::PeopleImport => [self::PeopleView, self::DepartmentsView, self::JobFunctionsView],
             self::PeopleAssignAccessProfiles => [self::PeopleView],
-            self::PeopleInvite => [self::PeopleView],
+            self::PeopleInvite, self::PeopleSyncWorkos => [self::PeopleView],
             self::DepartmentsManage => [self::DepartmentsView],
             self::JobFunctionsManage => [self::JobFunctionsView],
 

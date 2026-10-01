@@ -2,14 +2,15 @@
 
 namespace App\Actions\Platform;
 
-use App\Actions\People\SendWorkosInvitation;
 use App\Enums\UserStatus;
+use App\Enums\WorkosInvitationState;
 use App\Models\Account;
 use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Platform\PlatformAccess;
+use App\Services\Workos\WorkosInvitationService;
 use App\Services\Workos\WorkosOrganizationMembershipService;
 use App\Tenancy\TenantContext;
 use Database\Seeders\PermissionSeeder;
@@ -21,7 +22,7 @@ class InviteCompanyAdministrator
     public function __construct(
         private readonly PlatformAccess $access,
         private readonly TenantContext $context,
-        private readonly SendWorkosInvitation $sendInvitation,
+        private readonly WorkosInvitationService $sendInvitation,
         private readonly AuditLogger $audit,
         private readonly WorkosOrganizationMembershipService $memberships,
     ) {}
@@ -52,7 +53,7 @@ class InviteCompanyAdministrator
                 'provider' => $existingAccount?->provider ?: $person->provider,
                 'provider_id' => $existingAccount?->provider_id ?: $person->provider_id,
                 'workos_user_id' => $existingAccount?->workos_user_id ?: $person->workos_user_id,
-                'status' => UserStatus::Active,
+                'status' => $person->exists ? $person->status : UserStatus::Invited,
             ])->save();
 
             $person->roles()->syncWithoutDetaching(Role::query()->where('key', 'admin')->firstOrFail());
@@ -71,7 +72,13 @@ class InviteCompanyAdministrator
                 return ['person' => $person->fresh(), 'invitation_sent' => false];
             }
 
-            return ['person' => $this->sendInvitation->handle($person), 'invitation_sent' => true];
+            $snapshot = $person->invitation_state === WorkosInvitationState::Pending
+                ? $this->sendInvitation->resend($person)
+                : $this->sendInvitation->create($person);
+            $person->forceFill($snapshot->attributes() + ['invitation_sent_at' => now(), 'invitation_generation' => $person->invitation_generation + 1])->save();
+            $this->audit->log('person.workos_invitation_sent', $person, after: ['state' => $snapshot->state->value]);
+
+            return ['person' => $person->fresh(), 'invitation_sent' => true];
         } finally {
             $previous === null ? $this->context->clear() : $this->context->set($previous);
         }

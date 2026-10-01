@@ -11,8 +11,10 @@ use App\Models\Role;
 use App\Models\TrainingRequirement;
 use App\Models\TrainingRequirementTarget;
 use App\Models\User;
+use App\Models\WorkosInvitationAttempt;
 use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 
 it('allows the dedicated permission to assign an access profile from the person', function (): void {
@@ -181,7 +183,8 @@ it('requires an exact email confirmation before granting or removing administrat
     expect($person->roles()->whereKey($administratorRole->id)->exists())->toBeFalse();
 });
 
-it('sends a WorkOS invitation into the person company organization', function (): void {
+it('queues a WorkOS invitation into the person company organization', function (): void {
+    Queue::fake();
     config()->set('services.workos.api_key', 'sk_test');
     currentCompany()->update(['workos_organization_id' => 'org_company']);
     $operator = userWithPermissions([Permission::PeopleInvite]);
@@ -200,12 +203,10 @@ it('sends a WorkOS invitation into the person company organization', function ()
         ->call('sendInvitation')
         ->assertHasNoErrors();
 
-    expect($person->fresh()->workos_invitation_id)->toBe('invitation_123')
-        ->and($person->fresh()->invitation_sent_at)->not->toBeNull();
+    expect(WorkosInvitationAttempt::where('person_id', $person->id)->where('actor_id', $operator->id)->exists())->toBeTrue()
+        ->and($person->fresh()->invitation_sent_at)->toBeNull();
+    Http::assertNothingSent();
 
-    Http::assertSent(fn ($request): bool => $request['email'] === 'invitee@example.com'
-        && $request['organization_id'] === 'org_company'
-        && $request['locale'] === 'en-US');
 });
 
 it('denies sending invitations without the dedicated permission', function (): void {

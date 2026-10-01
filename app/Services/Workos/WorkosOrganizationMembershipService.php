@@ -11,6 +11,34 @@ use RuntimeException;
 
 class WorkosOrganizationMembershipService
 {
+    public function activeMembership(string $userId, string $organizationId): bool
+    {
+        $after = null;
+        $seen = [];
+        do {
+            $response = $this->client()->retry(3, 100, throw: false)->get('/user_management/organization_memberships', array_filter([
+                'user_id' => $userId, 'organization_id' => $organizationId, 'statuses' => ['active'], 'limit' => 100, 'after' => $after,
+            ], fn ($value) => $value !== null));
+            if (! $response->successful() || ! is_array($response->json('data'))) {
+                throw new RuntimeException('provider_verification_failed');
+            }
+            foreach ($response->json('data') as $membership) {
+                if (($membership['user_id'] ?? null) === $userId && ($membership['organization_id'] ?? null) === $organizationId && ($membership['status'] ?? null) === 'active') {
+                    return true;
+                }
+            }
+            $after = $response->json('list_metadata.after');
+            if ($after !== null && (! is_string($after) || isset($seen[$after]))) {
+                throw new RuntimeException('provider_verification_failed');
+            }
+            if ($after !== null) {
+                $seen[$after] = true;
+            }
+        } while ($after !== null && $after !== '');
+
+        return false;
+    }
+
     public function ensure(User $person, Company $company): string
     {
         $userId = $person->workos_user_id ?: $person->account?->workos_user_id;
@@ -62,6 +90,6 @@ class WorkosOrganizationMembershipService
             ->withToken($apiKey)
             ->acceptJson()
             ->asJson()
-            ->timeout(12);
+            ->connectTimeout(5)->timeout(12);
     }
 }

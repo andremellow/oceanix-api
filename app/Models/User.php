@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\Permission;
 use App\Enums\UserStatus;
+use App\Enums\WorkosInvitationState;
 use App\Models\Concerns\BelongsToCompany;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -36,6 +37,17 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'invitation_sent_at' => 'datetime',
+            'invitation_state' => WorkosInvitationState::class,
+            'invitation_generation' => 'integer',
+            'workos_active_membership' => 'boolean',
+            'first_access_at' => 'datetime',
+            'last_access_at' => 'datetime',
+            'workos_last_sign_in_at' => 'datetime',
+            'invitation_accepted_at' => 'datetime',
+            'invitation_expires_at' => 'datetime',
+            'invitation_revoked_at' => 'datetime',
+            'invitation_verified_at' => 'datetime',
+            'invitation_accepted_history_at' => 'datetime',
             'password' => 'hashed',
             'status' => UserStatus::class,
             'hired_at' => 'date',
@@ -191,6 +203,6 @@ class User extends Authenticatable
 
     public function scopeEligibleForTraining(Builder $query): void
     {
-        $query->where('status', UserStatus::Active->value);
+        $query->whereIn('status', array_column(UserStatus::cases(), 'value'));
     }
 }

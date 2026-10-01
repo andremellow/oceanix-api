@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Actions\Auth\AuthenticatePlatformAccount;
 use App\Actions\Auth\AuthenticateSocialLogin;
+use App\Actions\Auth\RecordTenantAccess;
 use App\Exceptions\SocialLoginProviderException;
 use App\Http\Controllers\Controller;
 use App\Services\SocialLogin\OauthStateSigner;
@@ -96,6 +97,16 @@ class WorkosController extends Controller
 
         Auth::login($user, remember: true);
         $request->session()->regenerate();
+
+        try {
+            app(RecordTenantAccess::class)->handle($user);
+        } catch (\Throwable $exception) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return $this->failedLoginRedirect($mode)->withErrors(['workos' => __('This account is not active. Contact your administrator.')]);
+        }
 
         return redirect()->intended(route('dashboard'));
     }
