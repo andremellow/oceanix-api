@@ -10,15 +10,15 @@ Affected tests142cases654assertions; corrected browser3cases27assertions; fullPi
 
 Canonical toscanini verify after the production correction batch exits1: only pre-existing SharedCourseDraftIntegrityTest failure,1036dotenv warnings5815assertions. Same failure independently reproduced on intact main. Owner chose Deixar para outra tarefa. No filtered/green suite claim. Earlier full browser/editor/preview checks passed; their unchanged surfaces retained.
 
-Independent executable QA completed QA012/013/014; other scenarios partial or unexecuted. CUA refuses loopback with ERR_BLOCKED_BY_CLIENT. Explicit human authorization for local Playwright UI interaction is pending; no alternative driver was used without it. Independent visual DR01–06 closure remains pending despite implemented fixes and passing automated browser checks.
+Independent executable QA completed QA012/013/014; other scenarios partial or unexecuted. CUA visual access is now restored through the secure local Herd address oceanix-invites.test. A local transport wrapper correctly marks forwarded HTTPS so CSS/JavaScript load securely; rendered styles and an error-free browser console were observed. No alternative UI driver was used. Directed visual revalidation is partial; final independent full QA and any remaining visual closure are still pending.
 
 QA008 operator initially failed Kernel bootstrap. In-scope import ordering repaired; prescribed actual PostgreSQL command now passes two competing processes, results0/1 and exactly1openattempt. Independent recheck remains pending; no self-closure.
 
 ## Remaining gates
 
-Complete all frozen QA001–018 and directed visual findings once driver is authorized, independently recheck QA008, then one final Architect conformance. No full QA/conformance approval exists. Actual completion gate exited1, retaining these missing proofs and pre-existing tooling incompatibilities with directed approvals/retained checkpoints/worker remediation events. Owner deferred tooling change; no source or history was altered to manufacture approval.
+Complete all frozen QA001–018 and remaining directed visual findings using the restored CUA access, independently recheck QA008, then one final Architect conformance. No full QA/conformance approval exists. Actual completion gate exited1, retaining these missing proofs and pre-existing tooling incompatibilities with directed approvals/retained checkpoints/worker remediation events. Owner deferred tooling change; no source or history was altered to manufacture approval.
 
-No PR, merge, production synchronization, real email or deployment was performed. Worktree and isolated QA data/services preserved for continuation.
+The product owner requested a ready-for-review PR. It must disclose the known full-suite baseline failure and incomplete QA/conformance/completion gates. Worktree and isolated QA data/services are preserved for continuation.
 
 ## Efficiency and attribution
 
