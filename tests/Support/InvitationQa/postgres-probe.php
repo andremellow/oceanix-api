@@ -1,11 +1,5 @@
 <?php
 
-require dirname(__DIR__, 3).'/vendor/autoload.php';
-$app = require dirname(__DIR__, 3).'/bootstrap/app.php';
-$app->make(Kernel::class)->bootstrap();
-if (getenv('OCEANIX_INVITATION_QA') !== 'isolated' || config('database.default') !== 'pgsql' || config('database.connections.pgsql.database') !== 'oceanix_invitation_probe' || config('database.connections.pgsql.host') !== '/private/tmp/oceanix-invite-pg') {
-    throw new RuntimeException('Disposable PostgreSQL configuration required.');
-}
 use App\Actions\People\QueueWorkosInvitations;
 use App\Models\Company;
 use App\Models\Role;
@@ -18,6 +12,13 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Symfony\Component\Process\Process;
+
+require dirname(__DIR__, 3).'/vendor/autoload.php';
+$app = require dirname(__DIR__, 3).'/bootstrap/app.php';
+$app->make(Kernel::class)->bootstrap();
+if (getenv('OCEANIX_INVITATION_QA') !== 'isolated' || config('database.default') !== 'pgsql' || config('database.connections.pgsql.database') !== 'oceanix_invitation_probe' || config('database.connections.pgsql.host') !== '/private/tmp/oceanix-invite-pg') {
+    throw new RuntimeException('Disposable PostgreSQL configuration required.');
+}
 
 Queue::fake();
 if (($argv[1] ?? '') === 'child') {
