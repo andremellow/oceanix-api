@@ -109,6 +109,10 @@ class ReconcileWorkosInvitations
                 $storedUnavailable = true;
             }
         }
+        $acceptedUserIds = [];
+        if ($stored?->acceptedUserId) {
+            $acceptedUserIds[$stored->acceptedUserId] = true;
+        }
         $current = $stored;
         $acceptedHistory = $stored?->acceptedAt;
         $after = null;
@@ -125,7 +129,7 @@ class ReconcileWorkosInvitations
                     continue;
                 }
                 if ($candidate->acceptedUserId) {
-                    $this->invitations->user($candidate->acceptedUserId, $email);
+                    $acceptedUserIds[$candidate->acceptedUserId] = true;
                 }
                 if ($candidate->state === WorkosInvitationState::Accepted && $candidate->acceptedAt && (! $acceptedHistory || $candidate->acceptedAt->greaterThan($acceptedHistory))) {
                     $acceptedHistory = $candidate->acceptedAt;
@@ -143,14 +147,14 @@ class ReconcileWorkosInvitations
             }
         } while ($after !== null && $after !== '');
         if ($current?->acceptedUserId) {
-            $this->invitations->user($current->acceptedUserId, $email);
+            $acceptedUserIds[$current->acceptedUserId] = true;
         }
         $userId = $person->workos_user_id ?: $person->account?->workos_user_id;
         $external = null;
         $active = false;
         if (filled($userId)) {
             $remote = $this->invitations->user($userId, $email);
-            $active = $this->memberships->activeMembership($userId, $org);
+            $acceptedUserIds[$userId] = true;
             if (filled($remote['last_sign_in_at'] ?? null)) {
                 try {
                     $external = CarbonImmutable::parse($remote['last_sign_in_at'])->utc();
@@ -158,6 +162,14 @@ class ReconcileWorkosInvitations
                     throw new RuntimeException('provider_verification_failed');
                 }
             }
+        }
+
+        foreach (array_keys($acceptedUserIds) as $acceptedUserId) {
+            if ($acceptedUserId !== $userId) {
+                $this->invitations->user($acceptedUserId, $email);
+            }
+            $member = $this->memberships->activeMembership($acceptedUserId, $org);
+            $active = $active || $member;
         }
 
         return ['snapshot' => $current, 'history' => $acceptedHistory, 'membership' => $active, 'external' => $external, 'unavailable' => $storedUnavailable && ! $current];

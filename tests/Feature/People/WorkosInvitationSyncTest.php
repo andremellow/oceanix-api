@@ -227,6 +227,10 @@ it('denies queued revoked sync actors without provider reads or foreign evidence
 it('validates accepted user identity without linking or activating the local person', function ($matched) {
     $person = User::factory()->create(['status' => UserStatus::Invited, 'workos_user_id' => null]);
     Http::fake(function ($r) use ($person, $matched) {
+        if (str_contains($r->url(), '/organization_memberships')) {
+            return Http::response(['data' => []]);
+        }
+
         return Http::response(str_contains($r->url(), '/users/') ? ['id' => 'user_accept', 'email' => $matched ? $person->email : 'different@example.com'] : ['data' => [invitationFixture($person, 'accepted', 'inv_accept', ['accepted_user_id' => 'user_accept'])]]);
     });
     if ($matched) {
@@ -240,3 +244,35 @@ it('validates accepted user identity without linking or activating the local per
     Http::assertSent(fn ($r) => str_contains($r->url(), '/users/user_accept'));
     Http::assertNotSent(fn ($r) => $r->method() === 'POST');
 })->with([true, false]);
+
+it('checks every distinct accepted identity including a stored invitation absent from history', function () {
+    $person = User::factory()->create(['status' => UserStatus::Invited, 'workos_user_id' => null, 'account_id' => null, 'workos_invitation_id' => 'inv_stored']);
+    Http::preventStrayRequests();
+    Http::fake(function ($r) use ($person) {
+        if (str_contains($r->url(), '/users/')) {
+            $id = basename(parse_url($r->url(), PHP_URL_PATH));
+
+            return Http::response(['id' => $id, 'email' => $person->email]);
+        }
+        if (str_contains($r->url(), '/organization_memberships')) {
+            return Http::response(['data' => [['user_id' => $r['user_id'], 'organization_id' => 'org_current', 'status' => $r['user_id'] === 'user_stored' ? 'active' : 'inactive']]]);
+        }
+        if (str_ends_with($r->url(), '/inv_stored')) {
+            return Http::response(invitationFixture($person, 'accepted', 'inv_stored', ['accepted_user_id' => 'user_stored']));
+        }
+
+        return Http::response(['data' => [
+            invitationFixture($person, 'accepted', 'inv_history_one', ['accepted_user_id' => 'user_history']),
+            invitationFixture($person, 'accepted', 'inv_history_two', ['accepted_user_id' => 'user_history']),
+        ]]);
+    });
+    expect(app(ReconcileWorkosInvitations::class)->refresh($person))->toBeTrue();
+    expect($person->fresh()->workos_active_membership)->toBeTrue()->and($person->fresh()->workos_user_id)->toBeNull()
+        ->and($person->fresh()->account_id)->toBeNull()->and($person->fresh()->status)->toBe(UserStatus::Invited)
+        ->and($person->fresh()->first_access_at)->toBeNull();
+    foreach (['user_stored', 'user_history'] as $id) {
+        expect(collect(Http::recorded())->filter(fn ($pair) => str_contains($pair[0]->url(), '/organization_memberships') && $pair[0]['user_id'] === $id))->toHaveCount(1);
+        expect(collect(Http::recorded())->filter(fn ($pair) => str_ends_with($pair[0]->url(), '/users/'.$id)))->toHaveCount(1);
+    }
+    Http::assertNotSent(fn ($r) => $r->method() === 'POST');
+});

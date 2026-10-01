@@ -3,6 +3,7 @@
 use App\Actions\People\QueueWorkosInvitations;
 use App\Actions\People\SendWorkosInvitation;
 use App\Enums\Permission;
+use App\Enums\UserStatus;
 use App\Enums\WorkosInvitationState;
 use App\Enums\WorkosOperationStatus;
 use App\Models\Account;
@@ -245,3 +246,41 @@ it('prevents recovery for a contradictory accepted provider identity', function 
     expect(WorkosInvitationAttempt::first()->reason)->toBe('provider_verification_failed')->and($person->fresh()->first_access_at)->toBeNull()->and($person->fresh()->account_id)->toBeNull()->and($person->fresh()->status->value)->toBe('invited');
     Http::assertNotSent(fn ($r) => $r->method() === 'POST');
 });
+
+it('checks accepted history membership before recovering an unlinked person', function ($state, $outcome) {
+    $person = User::factory()->create(['status' => UserStatus::Invited, 'workos_user_id' => null, 'account_id' => null]);
+    Http::preventStrayRequests();
+    Http::fake(function ($r) use ($person, $state) {
+        if ($r->method() === 'POST') {
+            return Http::response(invitationFixture($person, 'pending', 'inv_recovery'));
+        }
+        if (str_contains($r->url(), '/users/')) {
+            return Http::response(['id' => 'user_history', 'email' => $state === 'mismatch' ? 'other@example.com' : $person->email]);
+        }
+        if (str_contains($r->url(), '/organization_memberships')) {
+            return $state === 'failure' ? Http::response([], 503) : Http::response(['data' => [['user_id' => 'user_history', 'organization_id' => 'org_current', 'status' => $state]]]);
+        }
+        if (($r->data()['after'] ?? null) === 'history-page') {
+            return Http::response(['data' => [invitationFixture($person, 'accepted', 'inv_history', ['accepted_user_id' => 'user_history'])], 'list_metadata' => ['after' => null]]);
+        }
+
+        return Http::response(['data' => [invitationFixture($person, 'expired', 'inv_newer', ['created_at' => '2026-09-10T10:00:00Z'])], 'list_metadata' => ['after' => 'history-page']]);
+    });
+    app(QueueWorkosInvitations::class)->handle([$person->id]);
+    $attempt = WorkosInvitationAttempt::firstOrFail();
+    app(SendWorkosInvitation::class)->execute($attempt);
+    expect($attempt->fresh()->status->value)->toBe($outcome)
+        ->and($person->fresh()->status)->toBe(UserStatus::Invited)
+        ->and($person->fresh()->workos_user_id)->toBeNull()->and($person->fresh()->account_id)->toBeNull()
+        ->and($person->fresh()->first_access_at)->toBeNull()->and($person->fresh()->last_access_at)->toBeNull();
+    if ($state === 'inactive') {
+        Http::assertSent(fn ($r) => $r->method() === 'POST' && str_ends_with($r->url(), '/invitations'));
+        expect($person->fresh()->workos_active_membership)->toBeFalse();
+    } else {
+        Http::assertNotSent(fn ($r) => $r->method() === 'POST');
+        expect($attempt->fresh()->reason)->toBe($state === 'active' ? 'current_member' : 'provider_verification_failed');
+    }
+    if ($state === 'active') {
+        expect($person->fresh()->workos_active_membership)->toBeTrue()->and($person->fresh()->invitation_state)->toBe(WorkosInvitationState::Expired)->and($person->fresh()->invitation_accepted_history_at)->not->toBeNull();
+    }
+})->with([['active', 'skipped'], ['inactive', 'succeeded'], ['failure', 'failed'], ['mismatch', 'failed']]);
