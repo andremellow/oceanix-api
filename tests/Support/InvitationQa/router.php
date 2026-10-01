@@ -5,8 +5,6 @@ use App\Actions\People\QueueWorkosSynchronization;
 use App\Enums\AssignmentStatus;
 use App\Enums\FrequencyType;
 use App\Enums\RenewalBasis;
-use App\Jobs\ReconcileWorkosInvitations;
-use App\Jobs\SendWorkosInvitation;
 use App\Models\Company;
 use App\Models\TrainingRequirement;
 use App\Models\User;
@@ -17,8 +15,10 @@ use App\Services\SocialLogin\OauthStateSigner;
 use App\Tenancy\TenantContext;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Http\Request;
+use Illuminate\Queue\WorkerOptions;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 // This router is an isolated executable QA fixture, never loaded by production routes.
@@ -134,18 +134,16 @@ Route::middleware('web')->group(function () {
         $previous = app(TenantContext::class)->get();
         $company = Company::where('slug', 'invitation-qa')->firstOrFail();
         app(TenantContext::class)->set($company);
-        $runs = WorkosSyncRun::whereIn('status', ['queued', 'running'])->get();
-        foreach ($runs as $run) {
-            (new ReconcileWorkosInvitations($company->id, $run->actor_id, $run->id))->handle(app(App\Actions\People\ReconcileWorkosInvitations::class));
-        }
-        $attempts = WorkosInvitationAttempt::whereIn('status', ['queued', 'running', 'sending'])->get();
-        foreach ($attempts as $attempt) {
-            (new SendWorkosInvitation($company->id, $attempt->person_id, $attempt->actor_id, $attempt->id))->handle(app(App\Actions\People\SendWorkosInvitation::class));
+        $before = DB::table('jobs')->count();
+        $runs = WorkosSyncRun::whereIn('status', ['queued', 'running'])->count();
+        $attempts = WorkosInvitationAttempt::whereIn('status', ['queued', 'running', 'sending'])->count();
+        while ($job = app('queue')->connection('database')->pop()) {
+            app('queue.worker')->process('database', $job, new WorkerOptions(maxTries: 1));
         }
         $restored = app(TenantContext::class)->get()?->id === $company->id;
         $previous === null ? app(TenantContext::class)->clear() : app(TenantContext::class)->set($previous);
 
-        return ['runs' => $runs->count(), 'attempts' => $attempts->count(), 'job_context_restored' => $restored];
+        return ['runs' => $runs, 'attempts' => $attempts, 'queued_jobs_processed' => $before - DB::table('jobs')->count(), 'job_context_restored' => $restored];
     });
     Route::get('/qa/materialize', function () {
         app(TenantContext::class)->set(Company::where('slug', 'invitation-qa')->firstOrFail());

@@ -1,7 +1,10 @@
 <?php
 
+use App\Actions\Auth\RecordTenantAccess;
+use App\Actions\People\QueueWorkosInvitations;
 use App\Actions\People\QueueWorkosSynchronization;
 use App\Actions\People\ReconcileWorkosInvitations;
+use App\Actions\People\SendWorkosInvitation;
 use App\Enums\Permission;
 use App\Enums\UserStatus;
 use App\Enums\WorkosInvitationState;
@@ -10,11 +13,15 @@ use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Company;
 use App\Models\User;
+use App\Models\WorkosInvitationAttempt;
 use App\Models\WorkosSyncRun;
+use App\Services\People\PeopleDirectory;
 use App\Tenancy\TenantContext;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 beforeEach(function () {
     currentCompany()->update(['workos_organization_id' => 'org_current']);
@@ -23,10 +30,11 @@ beforeEach(function () {
 
 it('maps supported invitation states without sending mail', function ($state) {
     $person = User::factory()->create(['workos_user_id' => null, 'workos_invitation_id' => 'inv_current', 'status' => UserStatus::Invited]);
-    $data = invitationFixture($person, $state);
+    $data = invitationFixture($person, $state, 'inv_current', ['expires_at' => '2026-09-03T10:03:00Z', 'revoked_at' => $state === 'revoked' ? '2026-09-04T10:04:00Z' : null]);
     Http::fake(['*/invitations/inv_current' => Http::response($data), '*/invitations?*' => Http::response(['data' => [$data], 'list_metadata' => ['after' => null]])]);
     expect(app(ReconcileWorkosInvitations::class)->refresh($person))->toBeTrue();
     expect($person->fresh()->invitation_state)->toBe(WorkosInvitationState::from($state))->and($person->fresh()->status)->toBe(UserStatus::Invited);
+    expect($person->fresh()->invitation_expires_at->format('Y-m-d H:i:s'))->toBe('2026-09-03 10:03:00')->and($person->fresh()->invitation_accepted_at?->format('Y-m-d H:i:s'))->toBe($state === 'accepted' ? '2026-09-02 10:00:00' : null)->and($person->fresh()->invitation_revoked_at?->format('Y-m-d H:i:s'))->toBe($state === 'revoked' ? '2026-09-04 10:04:00' : null);
     Http::assertNotSent(fn ($request) => $request->method() === 'POST');
 })->with(['pending', 'accepted', 'expired', 'revoked']);
 
@@ -144,4 +152,91 @@ it('rejects malformed snapshots and repeated cursors instead of proving absence'
     Http::fake(['*' => Http::response($malformed ? ['data' => [invitationFixture($person, 'pending', 'inv_current', ['created_at' => 'not-a-date'])]] : ['data' => [], 'list_metadata' => ['after' => 'loop']])]);
     expect(fn () => app(ReconcileWorkosInvitations::class)->refresh($person))->toThrow(RuntimeException::class);
     expect($person->fresh()->invitation_verified_at)->toBeNull();
+})->with([true, false]);
+
+it('fails closed for malformed inventory preserving verified evidence', function ($record) {
+    $person = User::factory()->create(['workos_user_id' => null]);
+    $person->forceFill(['invitation_state' => WorkosInvitationState::Pending, 'invitation_verified_at' => now()->subDay()])->save();
+    $before = $person->invitation_verified_at;
+    Http::fake(['*' => Http::response(['data' => [$record]])]);
+    expect(fn () => app(ReconcileWorkosInvitations::class)->refresh($person))->toThrow(RuntimeException::class);
+    expect($person->fresh()->invitation_state)->toBe(WorkosInvitationState::Pending)->and($person->fresh()->invitation_verified_at->equalTo($before))->toBeTrue();
+})->with([[123], [['email' => 'foreign@example.com', 'organization_id' => 'org_foreign']]]);
+
+it('rejects snapshots after the provider organization changes', function () {
+    $person = User::factory()->create(['workos_user_id' => null]);
+    Http::fake(function () use ($person) {
+        $person->company->update(['workos_organization_id' => 'org_new']);
+
+        return Http::response(['data' => [invitationFixture($person)]]);
+    });
+    expect(app(ReconcileWorkosInvitations::class)->refresh($person))->toBeFalse();
+    expect($person->fresh()->workos_invitation_id)->toBeNull()->and($person->fresh()->invitation_verified_at)->toBeNull()->and($person->fresh()->workos_active_membership)->toBeFalse();
+});
+
+it('commits provider evidence after login-only interleaving without overwriting access', function () {
+    $person = User::factory()->create(['status' => UserStatus::Invited, 'workos_user_id' => null, 'account_id' => Account::factory()->create(['workos_user_id' => null])->id]);
+    $this->travelTo(now()->startOfSecond());
+    $access = now();
+    Http::fake(function () use ($person) {
+        app(RecordTenantAccess::class)->handle($person);
+
+        return Http::response(['data' => [invitationFixture($person)]]);
+    });
+    expect(app(ReconcileWorkosInvitations::class)->refresh($person))->toBeTrue();
+    $fresh = $person->fresh();
+    expect($fresh->status)->toBe(UserStatus::Active)->and($fresh->first_access_at->equalTo($access))->toBeTrue()->and($fresh->last_access_at->equalTo($access))->toBeTrue()->and($fresh->workos_invitation_id)->toBe('inv_current')->and($fresh->invitation_state)->toBe(WorkosInvitationState::Pending);
+});
+
+it('denies queued revoked sync actors without provider reads or foreign evidence leaks', function () {
+    $company = currentCompany();
+    $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
+    $actor->forceFill(['account_id' => Account::factory()->create()->id])->save();
+    $person = User::factory()->create(['workos_user_id' => null]);
+    $run = WorkosSyncRun::create(['actor_id' => $actor->id]);
+    $other = Company::factory()->create();
+    app(TenantContext::class)->set($other);
+    $foreign = User::factory()->create(['name' => 'Foreign Private Recipient']);
+    $foreignRun = WorkosSyncRun::create(['actor_id' => $foreign->id]);
+    $foreignAttempt = WorkosInvitationAttempt::create(['person_id' => $foreign->id, 'actor_id' => $foreign->id, 'mode' => 'selected']);
+    $foreignBefore = $foreign->fresh()->getRawOriginal();
+    app(TenantContext::class)->set($company);
+    $actor->roles()->update(['archived_at' => now()]);
+    Http::fake();
+    app(TenantContext::class)->set($other);
+    (new App\Jobs\ReconcileWorkosInvitations($company->id, $actor->id, $run->id))->handle(app(ReconcileWorkosInvitations::class));
+    expect(app(TenantContext::class)->id())->toBe($other->id);
+    app(TenantContext::class)->set($company);
+    expect($run->fresh()->reason)->toBe('permission_revoked')->and($run->fresh()->status)->toBe(WorkosOperationStatus::Failed)->and($person->fresh()->invitation_verified_at)->toBeNull();
+    $data = app(PeopleDirectory::class)->data();
+    expect($data['people']->pluck('id')->all())->not->toContain($foreign->id)->and($data['invitationAttempts']->pluck('id')->all())->not->toContain($foreignAttempt->id)->and(WorkosSyncRun::find($foreignRun->id))->toBeNull();
+    expect(app(ReconcileWorkosInvitations::class)->authorizedActor($company->id, $foreign->id, Permission::PeopleSyncWorkos))->toBeNull();
+    expect(fn () => (new App\Jobs\ReconcileWorkosInvitations($company->id, $foreign->id, $foreignRun->id))->handle(app(ReconcileWorkosInvitations::class)))->toThrow(ModelNotFoundException::class);
+    expect(app(TenantContext::class)->id())->toBe($company->id);
+    expect(fn () => app(ReconcileWorkosInvitations::class)->handle($foreignRun))->toThrow(HttpException::class);
+    expect(fn () => app(ReconcileWorkosInvitations::class)->refresh($foreign))->toThrow(HttpException::class);
+    expect(fn () => app(SendWorkosInvitation::class)->execute($foreignAttempt))->toThrow(HttpException::class);
+    $this->actingAs($actor);
+    grantPermissions($actor, [Permission::PeopleInvite]);
+    expect(app(QueueWorkosInvitations::class)->handle([$foreign->id]))->toBe(0);
+    Http::assertNothingSent();
+    expect(WorkosInvitationAttempt::withoutGlobalScope('company')->find($foreignAttempt->id)->status)->toBe(WorkosOperationStatus::Queued);
+    expect(User::withoutGlobalScope('company')->find($foreign->id)->getRawOriginal())->toBe($foreignBefore);
+});
+
+it('validates accepted user identity without linking or activating the local person', function ($matched) {
+    $person = User::factory()->create(['status' => UserStatus::Invited, 'workos_user_id' => null]);
+    Http::fake(function ($r) use ($person, $matched) {
+        return Http::response(str_contains($r->url(), '/users/') ? ['id' => 'user_accept', 'email' => $matched ? $person->email : 'different@example.com'] : ['data' => [invitationFixture($person, 'accepted', 'inv_accept', ['accepted_user_id' => 'user_accept'])]]);
+    });
+    if ($matched) {
+        expect(app(ReconcileWorkosInvitations::class)->refresh($person))->toBeTrue();
+        expect($person->fresh()->invitation_state)->toBe(WorkosInvitationState::Accepted);
+    } else {
+        expect(fn () => app(ReconcileWorkosInvitations::class)->refresh($person))->toThrow(RuntimeException::class);
+        expect($person->fresh()->invitation_verified_at)->toBeNull();
+    }
+    expect($person->fresh()->account_id)->toBeNull()->and($person->fresh()->workos_user_id)->toBeNull()->and($person->fresh()->first_access_at)->toBeNull()->and($person->fresh()->status)->toBe(UserStatus::Invited);
+    Http::assertSent(fn ($r) => str_contains($r->url(), '/users/user_accept'));
+    Http::assertNotSent(fn ($r) => $r->method() === 'POST');
 })->with([true, false]);

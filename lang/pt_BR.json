@@ -972,5 +972,11 @@
     "Queue unavailable": "Fila indisponível",
     "Synchronization failed": "A sincronização falhou",
     "No issue recorded": "Nenhum problema registrado",
-    "An invitation is already being processed.": "Um convite já está sendo processado."
+    "An invitation is already being processed.": "Um convite já está sendo processado.",
+    "All recorded invitation attempts in this company": "Todas as tentativas de convite registradas nesta empresa",
+    "Delivery unconfirmed: :count": "Entrega não confirmada: :count",
+    "No people yet": "Nenhuma pessoa cadastrada",
+    "This action covers one person: :name (:email).": "Esta ação abrange uma pessoa: :name (:email).",
+    "Queue company-wide WorkOS invitation recovery after importing": "Agendar recuperação de convites WorkOS de toda a empresa após importar",
+    "Includes eligible people already in this company: pending invitations are resent, and expired or missing invitations receive a new invitation. This is not limited to the imported rows.": "Inclui pessoas elegíveis já cadastradas nesta empresa: convites pendentes são reenviados e convites expirados ou ausentes recebem um novo convite. Não se limita às linhas importadas."
 }

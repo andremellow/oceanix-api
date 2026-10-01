@@ -2,6 +2,7 @@
 
 namespace App\Services\People;
 
+use App\Enums\WorkosInvitationState;
 use App\Models\Department;
 use App\Models\JobFunction;
 use App\Models\User;
@@ -47,14 +48,31 @@ class PeopleDirectory
     {
         $latest = WorkosSyncRun::query()->latest('id')->first();
         $attempts = WorkosInvitationAttempt::query()->latest('id')->limit(20)->get();
+        $counts = WorkosInvitationAttempt::query()->selectRaw('status, count(*) as aggregate')->groupBy('status')->pluck('aggregate', 'status');
+        $summary = ['total' => (int) $counts->sum(), 'processed' => (int) $counts->except(['queued', 'running', 'sending'])->sum(), 'succeeded' => (int) ($counts['succeeded'] ?? 0), 'skipped' => (int) ($counts['skipped'] ?? 0), 'failed' => (int) ($counts['failed'] ?? 0), 'unconfirmed' => (int) ($counts['delivery_unconfirmed'] ?? 0)];
         $names = User::query()->whereKey($attempts->pluck('person_id'))->pluck('name', 'id');
 
-        return ['people' => $this->query($filters)->orderBy('name')->orderBy('id')->paginate(25), 'departments' => Department::query()->active()->orderBy('name')->get(), 'jobFunctions' => JobFunction::query()->active()->orderBy('name')->get(), 'pendingInvitationsCount' => $this->candidates()->count(), 'latestSync' => $latest, 'lastSuccessfulSync' => WorkosSyncRun::query()->where('status', 'completed')->latest('finished_at')->first(), 'invitationAttempts' => $attempts, 'attemptNames' => $names, 'operationsActive' => ($latest?->status->isOpen() ?? false) || WorkosInvitationAttempt::query()->whereIn('status', ['queued', 'running', 'sending'])->exists()];
+        return ['companyPeopleCount' => User::query()->count(), 'invitationSummary' => $summary, 'people' => $this->query($filters)->orderBy('name')->orderBy('id')->paginate(25), 'departments' => Department::query()->active()->orderBy('name')->get(), 'jobFunctions' => JobFunction::query()->active()->orderBy('name')->get(), 'pendingInvitationsCount' => $this->candidates()->count(), 'latestSync' => $latest, 'lastSuccessfulSync' => WorkosSyncRun::query()->where('status', 'completed')->latest('finished_at')->first(), 'invitationAttempts' => $attempts, 'attemptNames' => $names, 'operationsActive' => ($latest?->status->isOpen() ?? false) || WorkosInvitationAttempt::query()->whereIn('status', ['queued', 'running', 'sending'])->exists()];
     }
 
     public function detail(User $person): array
     {
         return ['personAttempt' => WorkosInvitationAttempt::query()->where('person_id', $person->id)->latest('id')->first()];
+    }
+
+    public static function selectionReason(User $person): ?string
+    {
+        if (! $person->status->canAccessTenant()) {
+            return self::reason($person->status->value);
+        }
+        if ($person->workos_active_membership) {
+            return self::reason('current_member');
+        }
+        if ($person->invitation_state === WorkosInvitationState::Accepted) {
+            return self::reason('already_accepted');
+        }
+
+        return null;
     }
 
     public static function reason(?string $reason): string

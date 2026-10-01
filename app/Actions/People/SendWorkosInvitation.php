@@ -6,9 +6,11 @@ use App\Enums\Permission;
 use App\Enums\WorkosInvitationState;
 use App\Enums\WorkosOperationStatus;
 use App\Models\AuditLog;
+use App\Models\Company;
 use App\Models\User;
 use App\Models\WorkosInvitationAttempt;
 use App\Services\Workos\WorkosInvitationService;
+use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
@@ -26,6 +28,7 @@ class SendWorkosInvitation
 
     public function execute(WorkosInvitationAttempt $attempt): void
     {
+        abort_unless($attempt->company_id === app(TenantContext::class)->id(), 403);
         $attempt->refresh();
         if (! $attempt->status->isOpen()) {
             return;
@@ -36,17 +39,17 @@ class SendWorkosInvitation
 
             return;
         }
+        if (! $this->reconcile->authorizedActor($attempt->company_id, $attempt->actor_id, Permission::PeopleInvite)) {
+            $this->finish($attempt, $attempt->send_started_at ? WorkosOperationStatus::DeliveryUnconfirmed : WorkosOperationStatus::Skipped, 'permission_revoked');
+
+            return;
+        }
         if ($attempt->status === WorkosOperationStatus::Sending) {
             try {
                 $this->reconcile->refresh($person, $attempt->actor_id);
             } catch (\Throwable) {
             }
             $this->finish($attempt, WorkosOperationStatus::DeliveryUnconfirmed, 'delivery_unconfirmed');
-
-            return;
-        }
-        if (! $this->reconcile->authorizedActor($attempt->company_id, $attempt->actor_id, Permission::PeopleInvite)) {
-            $this->finish($attempt, WorkosOperationStatus::Skipped, 'permission_revoked');
 
             return;
         }
@@ -90,6 +93,7 @@ class SendWorkosInvitation
         }
         $token = $this->reconcile->token($person);
         $reserved = DB::transaction(function () use ($attempt, $person, $token) {
+            Company::query()->whereKey($person->company_id)->lockForUpdate()->firstOrFail();
             $locked = User::query()->whereKey($person->id)->lockForUpdate()->firstOrFail();
             $intent = WorkosInvitationAttempt::query()->whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             if (! $this->reconcile->authorizedActor($attempt->company_id, $attempt->actor_id, Permission::PeopleInvite)) {
@@ -112,6 +116,7 @@ class SendWorkosInvitation
         try {
             $snapshot = $person->invitation_state === WorkosInvitationState::Pending ? $this->workos->resend($person) : $this->workos->create($person);
             DB::transaction(function () use ($attempt, $person, $snapshot, $token) {
+                Company::query()->whereKey($person->company_id)->lockForUpdate()->firstOrFail();
                 $locked = User::query()->whereKey($person->id)->lockForUpdate()->firstOrFail();
                 if ($this->reconcile->token($locked) !== $token) {
                     $this->finish($attempt, WorkosOperationStatus::DeliveryUnconfirmed, 'delivery_unconfirmed');

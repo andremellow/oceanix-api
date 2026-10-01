@@ -45,14 +45,14 @@ new class extends Component {
     <section class="form-panel space-y-4 p-5 sm:p-6" @if($operationsActive) wire:poll.3s @endif aria-label="{{ __('WorkOS invitations') }}">
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div><h2 class="detail-card-title">{{ __('WorkOS invitations') }}</h2><p class="text-sm text-secondary">{{ __('Synchronization checks this company without sending emails.') }}</p></div>
-            <div class="flex flex-wrap gap-2">
+            <div class="flex min-w-0 max-w-full flex-wrap gap-2">
                 @can(App\Enums\Permission::PeopleSyncWorkos->value)
                     <flux:button wire:click="synchronize" wire:loading.attr="disabled" wire:target="synchronize" :disabled="$latestSync?->status->isOpen() ?? false" variant="ghost">{{ __('Synchronize WorkOS') }}</flux:button>
                 @endcan
                 @can(App\Enums\Permission::PeopleInvite->value)
-                    <flux:button wire:click="inviteAllPending" :disabled="$pendingInvitationsCount === 0" wire:loading.attr="disabled" variant="ghost">{{ __('Invite all pending in this company (:count)', ['count'=>$pendingInvitationsCount]) }}</flux:button>
+                    <flux:button wire:click="inviteAllPending" :disabled="$pendingInvitationsCount === 0" wire:loading.attr="disabled" variant="ghost" class="h-auto min-w-0 max-w-full whitespace-normal py-2 text-left">{{ __('Invite all pending in this company (:count)', ['count'=>$pendingInvitationsCount]) }}</flux:button>
                     @if(count($selected)>0)
-                        <flux:button wire:click="inviteSelected" wire:loading.attr="disabled" variant="primary">{{ __('Send invitations to selected (:count)', ['count'=>count($selected)]) }}</flux:button>
+                        <flux:button wire:click="inviteSelected" wire:loading.attr="disabled" variant="primary" class="h-auto min-w-0 max-w-full whitespace-normal py-2 text-left">{{ __('Send invitations to selected (:count)', ['count'=>count($selected)]) }}</flux:button>
                         <flux:button wire:click="clearSelection" variant="ghost">{{ __('Clear selection') }}</flux:button>
                     @endif
                 @endcan
@@ -70,6 +70,10 @@ new class extends Component {
         @if($pendingInvitationsCount===0)<p class="text-sm text-secondary">{{ __('No eligible invitation candidates in this company.') }}</p>@endif
         @if($invitationAttempts->isNotEmpty())
             <div class="space-y-1 text-sm" role="status" aria-live="polite"><h3 class="font-semibold">{{ __('Invitation outcomes') }}</h3>
+                <p>{{ __('All recorded invitation attempts in this company') }}</p>
+                <p>{{ __('Processed :processed of :total', ['processed'=>$invitationSummary['processed'], 'total'=>$invitationSummary['total']]) }}</p>
+                <p>{{ __('Successful :success, skipped :skipped, failed :failed', ['success'=>$invitationSummary['succeeded'], 'skipped'=>$invitationSummary['skipped'], 'failed'=>$invitationSummary['failed']]) }}</p>
+                <p>{{ __('Delivery unconfirmed: :count', ['count'=>$invitationSummary['unconfirmed']]) }}</p>
                 @foreach($invitationAttempts as $attempt)<p>{{ $attemptNames[$attempt->person_id] ?? __('Person') }}: {{ $attempt->status->label() }}@if($attempt->reason) — {{ App\Services\People\PeopleDirectory::reason($attempt->reason) }}@endif</p>@endforeach
             </div>
         @endif
@@ -114,9 +118,13 @@ new class extends Component {
     @if ($people->isEmpty())
         <x-empty-state
             icon="user-group"
-            :title="__('No people match these filters')"
+            :title="$companyPeopleCount === 0 ? __('No people yet') : __('No people match these filters')"
             :description="__('ui.no_people_help')" />
-        <flux:button wire:click="clearFilters" variant="ghost">{{ __('Clear filters') }}</flux:button>
+        @if($companyPeopleCount > 0)
+            <flux:button wire:click="clearFilters" variant="ghost">{{ __('Clear filters') }}</flux:button>
+        @else
+            @can(App\Enums\Permission::PeopleImport->value)<flux:button href="{{ route('people.import') }}" wire:navigate variant="primary">{{ __('Import people') }}</flux:button>@endcan
+        @endif
     @else
         <div class="overflow-x-auto rounded-[20px] border border-[#dde3e7] shadow-[0_12px_35px_-30px_rgba(20,28,34,.42)]">
             <table class="w-full text-left text-sm">
@@ -134,13 +142,14 @@ new class extends Component {
                 </thead>
                 <tbody>
                     @foreach ($people as $person)
-                        <tr class="border-t">
+                        <tr class="border-t" wire:key="person-row-{{ $person->id }}">
                             @can(App\Enums\Permission::PeopleInvite->value)
-                                <td><flux:checkbox wire:model.live="selected" value="{{ $person->id }}" :disabled="! $person->status->canAccessTenant() || $person->workos_active_membership || $person->invitation_state === WorkosInvitationState::Accepted" :aria-label="__('Select :name', ['name' => $person->name])" /></td>
+                                <td><flux:checkbox wire:key="person-select-{{ $person->id }}" wire:model.live="selected" value="{{ $person->id }}" :disabled="! $person->status->canAccessTenant() || $person->workos_active_membership || $person->invitation_state === WorkosInvitationState::Accepted" :aria-label="__('Select :name', ['name' => $person->name])" /></td>
                             @endcan
                             <td>
                                 <a href="{{ route('people.show', ['company' => app(App\Tenancy\TenantContext::class)->get(), 'user' => $person]) }}" wire:navigate class="font-semibold text-[#262d33] hover:text-[#1c6b84]">{{ $person->name }}</a>
                                 <span class="block text-xs text-[#8a9298]">{{ $person->email }}</span>
+                                @if($exclusion = App\Services\People\PeopleDirectory::selectionReason($person))<span class="block text-xs text-secondary">{{ $exclusion }}</span>@endif
                             </td>
                             <td class="text-[#5f6a71]">{{ $person->departments->pluck('name')->join(', ') ?: '—' }}</td>
                             <td class="text-[#5f6a71]">{{ $person->jobFunctions->pluck('name')->join(', ') ?: '—' }}</td>

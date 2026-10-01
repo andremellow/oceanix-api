@@ -44,7 +44,7 @@ class QueueWorkosInvitations
                 }$count++;
                 DB::afterCommit(function () use ($attempt, $company) {
                     try {
-                        SendWorkosInvitation::dispatch($company->id, $attempt->person_id, $attempt->actor_id, $attempt->id);
+                        app(DispatchWorkosOperation::class)->handle(new SendWorkosInvitation($company->id, $attempt->person_id, $attempt->actor_id, $attempt->id));
                     } catch (\Throwable) {
                         $attempt->update(['status' => WorkosOperationStatus::Failed, 'reason' => 'queue_unavailable', 'finished_at' => now()]);
                     }

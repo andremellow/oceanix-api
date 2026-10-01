@@ -25,6 +25,8 @@ new class extends Component
 
     public string $administratorConfirmation = '';
 
+    public bool $confirmingInvitation = false;
+
     public function boot(): void { $this->authorize(App\Enums\Permission::PeopleView->value); }
 
     public function mount(User $user): void
@@ -100,12 +102,19 @@ new class extends Component
         session()->flash('status', __('Administrator access updated.'));
     }
 
+    public function confirmInvitation(): void
+    {
+        $this->authorize('invite', $this->user);
+        $this->confirmingInvitation = true;
+    }
+
     public function sendInvitation(SendWorkosInvitation $action): void
     {
         $this->authorize('invite', $this->user);
 
         try {
             $this->user = $action->handle($this->user);
+            $this->confirmingInvitation = false;
             session()->flash('status', __('Invitation queued through WorkOS.'));
         } catch (\RuntimeException $exception) {
             $this->addError('invitation', $exception->getMessage());
@@ -128,7 +137,7 @@ new class extends Component
         @endif
         @can('invite', $user)
             @if($user->status->canAccessTenant() && !$user->workos_active_membership && $user->invitation_state !== App\Enums\WorkosInvitationState::Accepted)
-                <flux:button wire:click="sendInvitation" wire:confirm="{{ __('Verify and queue this invitation? Pending invitations are resent; expired or revoked invitations receive a new invitation. Already accepted recipients and current members are skipped.') }}" wire:loading.attr="disabled" :disabled="$personAttempt?->status->isOpen() ?? false" variant="primary" size="sm">
+                <flux:button wire:click="confirmInvitation" wire:loading.attr="disabled" :disabled="$personAttempt?->status->isOpen() ?? false" variant="primary" size="sm">
                     {{ match($user->invitation_state) {App\Enums\WorkosInvitationState::Pending=>__('Resend invitation'),App\Enums\WorkosInvitationState::Expired,App\Enums\WorkosInvitationState::Revoked=>__('Send new invitation'),App\Enums\WorkosInvitationState::NotInvited=>__('Send invitation'),default=>__('Verify and send invitation')} }}
                 </flux:button>
             @else
@@ -138,6 +147,14 @@ new class extends Component
         <flux:button :href="route('people.index', ['company' => app(App\Tenancy\TenantContext::class)->get()])" wire:navigate variant="ghost" size="sm">{{ __('ui.back_to_people') }}</flux:button>
     </x-page-hero>
 
+    <flux:modal wire:model="confirmingInvitation" class="max-w-lg">
+        <div class="space-y-5"><flux:heading size="lg">{{ __('Confirm invitation recovery') }}</flux:heading>
+            <p>{{ __('This action covers one person: :name (:email).', ['name'=>$user->name, 'email'=>$user->email]) }}</p>
+            <p>{{ __('Pending invitations are resent. Expired or missing invitations receive a new invitation. Verification may skip recipients who already accepted, are current members or cannot access this company.') }}</p>
+            @if($user->invitation_state === App\Enums\WorkosInvitationState::Revoked)<p>{{ __('Selected revoked invitations will receive a new invitation after verification.') }}</p>@endif
+            <div class="flex flex-wrap justify-end gap-2"><flux:button wire:click="$set('confirmingInvitation', false)" variant="ghost">{{ __('Cancel') }}</flux:button><flux:button wire:click="sendInvitation" wire:loading.attr="disabled" variant="primary">{{ __('Queue invitations') }}</flux:button></div>
+        </div>
+    </flux:modal>
     <x-status-message />
     @error('invitation') <flux:callout variant="danger" :heading="$message" /> @enderror
 

@@ -7,10 +7,12 @@ use App\Enums\Permission;
 use App\Enums\WorkosInvitationState;
 use App\Enums\WorkosOperationStatus;
 use App\Models\AuditLog;
+use App\Models\Company;
 use App\Models\User;
 use App\Models\WorkosSyncRun;
 use App\Services\Workos\WorkosInvitationService;
 use App\Services\Workos\WorkosOrganizationMembershipService;
+use App\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -32,6 +34,7 @@ class ReconcileWorkosInvitations
 
     public function handle(WorkosSyncRun $run): void
     {
+        abort_unless($run->company_id === app(TenantContext::class)->id(), 403);
         if (! $run->status->isOpen()) {
             return;
         }
@@ -82,7 +85,8 @@ class ReconcileWorkosInvitations
 
     public function read(User $person): array
     {
-        $org = $person->company->workos_organization_id;
+        abort_unless($person->company_id === app(TenantContext::class)->id(), 403);
+        $org = Company::query()->whereKey($person->company_id)->value('workos_organization_id');
         if (blank($org)) {
             throw new RuntimeException('provider_not_configured');
         }
@@ -113,10 +117,13 @@ class ReconcileWorkosInvitations
             $page = $this->invitations->listPage($org, $email, $after);
             foreach ($page['data'] as $data) {
                 // Provider filters are advisory: enforce organization and normalized exact email locally.
-                if (! is_array($data) || ($data['organization_id'] ?? null) !== $org || strtolower(trim($data['email'] ?? '')) !== $email) {
+                if (! is_array($data) || ! is_string($data['organization_id'] ?? null) || ! is_string($data['email'] ?? null)) {
+                    throw new RuntimeException('provider_verification_failed');
+                }
+                $candidate = WorkosInvitationSnapshot::from($data, $data['email'], $data['organization_id']);
+                if ($data['organization_id'] !== $org || strtolower(trim($data['email'])) !== $email) {
                     continue;
                 }
-                $candidate = WorkosInvitationSnapshot::from($data, $email, $org);
                 if ($candidate->acceptedUserId) {
                     $this->invitations->user($candidate->acceptedUserId, $email);
                 }
@@ -158,7 +165,7 @@ class ReconcileWorkosInvitations
 
     public function token(User $person): array
     {
-        return [$person->company_id, $person->email, $person->workos_invitation_id, (int) $person->invitation_generation];
+        return [$person->company_id, $person->email, $person->workos_invitation_id, (int) $person->invitation_generation, Company::query()->whereKey($person->company_id)->value('workos_organization_id')];
     }
 
     public function refresh(User $person, ?int $actorId = null, ?WorkosSyncRun $run = null): bool
@@ -167,6 +174,7 @@ class ReconcileWorkosInvitations
         $read = $this->read($person);
 
         return DB::transaction(function () use ($person, $token, $read, $actorId, $run) {
+            Company::query()->whereKey($person->company_id)->lockForUpdate()->firstOrFail();
             $locked = User::query()->whereKey($person->id)->lockForUpdate()->firstOrFail();
             if ($this->token($locked) !== $token) {
                 return false;

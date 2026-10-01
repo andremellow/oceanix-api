@@ -16,7 +16,7 @@ APP_ENV=testing OCEANIX_INVITATION_QA=isolated DB_CONNECTION=sqlite DB_DATABASE=
 
 `GET /qa/login/QA%20Admin` establishes a fixture administrator session and opens the real People screen. Other fixture actors: `QA Sync Operator` (sync + its PeopleView prerequisite), `QA Invite Operator` (invite + prerequisite), `QA Denied Operator` (view only). Login fixture itself is not successful tenant-access evidence; actual callbacks/entry below prove access.
 
-Click Synchronize on the real UI: queued state remains visible until `GET /qa/drain` executes actual scoped Jobs/Actions. Refresh/wait for polling to observe terminal state. The drain response reports context restoration. Invitations similarly remain queued until drain. Inspect fake-provider request records to distinguish GET from POST. The queue database is disposable; drain calls the real Job handlers, and does not send external requests.
+Click Synchronize on the real UI: queued state remains visible until `GET /qa/drain` executes actual scoped Jobs/Actions. Refresh/wait for polling to observe terminal state. The drain response reports context restoration. Invitations similarly remain queued until drain. Inspect fake-provider request records to distinguish GET from POST. The queue database is disposable; drain consumes actual database queue payloads through the Laravel Worker and reports the number of queued jobs processed; provider requests remain fake.
 
 `GET /qa/control` changes provider fixture conditions: `failure=429`, `failure=503`, `failure=timeout`, or empty to restore; `malformed=yes|no`; `race=login|invitation` (one-shot Race Recipient read interleaving); `uncertain=yes` or empty. Controls never directly declare product results.
 

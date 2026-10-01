@@ -29,7 +29,7 @@ class QueueWorkosSynchronization
             $run = WorkosSyncRun::query()->create(['actor_id' => auth()->id(), 'status' => WorkosOperationStatus::Queued]);
             DB::afterCommit(function () use ($company, $run) {
                 try {
-                    ReconcileWorkosInvitations::dispatch($company->id, $run->actor_id, $run->id);
+                    app(DispatchWorkosOperation::class)->handle(new ReconcileWorkosInvitations($company->id, $run->actor_id, $run->id));
                 } catch (\Throwable) {
                     $run->update(['status' => WorkosOperationStatus::Failed, 'reason' => 'queue_unavailable', 'finished_at' => now()]);
                 }
