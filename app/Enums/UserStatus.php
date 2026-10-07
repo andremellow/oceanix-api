@@ -19,10 +19,15 @@ enum UserStatus: string
         });
     }
 
-    /** Only active people are materialized into new assignments. */
+    /** Every person status may receive an obligation. */
     public function isEligibleForTraining(): bool
     {
-        return $this === self::Active;
+        return true;
+    }
+
+    public function canAccessTenant(): bool
+    {
+        return in_array($this, [self::Invited, self::Active], true);
     }
 
     public function pillModifier(): string

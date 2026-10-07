@@ -548,7 +548,7 @@ it('lets a platform administrator invite another company administrator', functio
     $account = Account::factory()->platformAdmin()->create();
     $this->withSession(['platform_account_id' => $account->id]);
     Http::fake([
-        'api.workos.com/user_management/invitations' => Http::response(['id' => 'inv_admin'], 201),
+        'api.workos.com/user_management/invitations' => Http::response(['id' => 'inv_admin', 'email' => 'tenant-admin@example.com', 'organization_id' => 'org_company', 'state' => 'pending', 'created_at' => '2026-10-01T00:00:00Z'], 201),
     ]);
 
     Livewire\Livewire::test('platform.company', ['company' => $company])

@@ -28,8 +28,13 @@ class UserPolicy
         return $user->hasPermission(Permission::PeopleAssignAccessProfiles);
     }
 
+    public function syncWorkos(User $user, User $subject): bool
+    {
+        return $user->company_id === $subject->company_id && $user->hasPermission(Permission::PeopleSyncWorkos);
+    }
+
     public function invite(User $user, User $subject): bool
     {
-        return $user->hasPermission(Permission::PeopleInvite);
+        return $user->company_id === $subject->company_id && $user->hasPermission(Permission::PeopleInvite);
     }
 }

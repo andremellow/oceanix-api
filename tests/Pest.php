@@ -3,6 +3,8 @@
 use App\Enums\ComplianceEventType;
 use App\Enums\Permission as PermissionEnum;
 use App\Enums\QuestionType;
+use App\Enums\RequirementStatus;
+use App\Enums\TargetScope;
 use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
@@ -14,6 +16,8 @@ use App\Models\Permission;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Role;
+use App\Models\TrainingRequirement;
+use App\Models\TrainingRequirementTarget;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
 use App\Models\Video;
@@ -197,4 +201,21 @@ function fakeCloudflarePlayback(): void
     Http::fake([
         'api.cloudflare.com/*' => Http::response(['success' => true, 'result' => ['token' => 'signed-token']]),
     ]);
+}
+
+/** Representative published requirement for invitation/access assignment regression checks. */
+function invitationRequirementFixture(): TrainingRequirement
+{
+    $course = Course::factory()->create();
+    $version = CourseVersion::factory()->published()->create(['course_id' => $course->id]);
+    $course->update(['current_published_version_id' => $version->id]);
+    $requirement = TrainingRequirement::factory()->create(['course_id' => $course->id, 'status' => RequirementStatus::Active]);
+    TrainingRequirementTarget::factory()->create(['training_requirement_id' => $requirement->id, 'scope_type' => TargetScope::Everyone]);
+
+    return $requirement->fresh();
+}
+
+function invitationFixture(User $person, string $state = 'pending', string $id = 'inv_current', array $extra = []): array
+{
+    return $extra + ['id' => $id, 'email' => $person->email, 'organization_id' => currentCompany()->workos_organization_id, 'state' => $state, 'created_at' => '2026-09-01T10:00:00Z', 'accepted_at' => $state === 'accepted' ? '2026-09-02T10:00:00Z' : null];
 }

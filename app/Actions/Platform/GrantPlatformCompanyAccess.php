@@ -47,7 +47,7 @@ class GrantPlatformCompanyAccess
                 'provider' => $account->provider,
                 'provider_id' => $account->provider_id,
                 'workos_user_id' => $account->workos_user_id,
-                'status' => UserStatus::Active,
+                'status' => $person->exists ? $person->status : UserStatus::Invited,
             ])->save();
 
             $person->roles()->syncWithoutDetaching(Role::query()->where('key', 'admin')->firstOrFail());

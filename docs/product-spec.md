@@ -131,6 +131,18 @@ O WorkOS responde por autenticação e identidade corporativa. O banco Oceanix r
 
 O usuário local deve existir mesmo quando provisionado pelo WorkOS. Regras de negócio não devem depender diretamente dos grupos ou da disponibilidade do provedor de identidade.
 
+### Convites e evidência de acesso por empresa
+
+- A situação do convite (`pending`, `accepted`, `expired`, `revoked`, não convidado ou não verificado) é independente da situação operacional da pessoa. Identidade vinculada e convite aceito não comprovam acesso à Oceanix.
+- A sincronização manual consulta somente a empresa atual, percorre todas as páginas e mostra progresso, totais e falhas parciais. Ela nunca envia e-mails. A última sincronização integral bem-sucedida fica separada da tentativa mais recente; falhas preservam a evidência anterior sem apresentá-la como recém-verificada.
+- Convites são associados pelo identificador armazenado, e-mail normalizado exato e organização. Na descoberta, o convite atual é escolhido deterministicamente e o histórico de aceite é preservado. Dados ausentes, excluídos, contraditórios ou indisponíveis não autorizam envio nem acesso.
+- O operador pode filtrar a situação do convite e a ausência de acesso local, combinando esses filtros com busca, setor, função e situação da pessoa. Os totais de treinamentos são identificados como treinamentos em aberto e atrasados.
+- O envio exige ação explícita e permissão de convite. A execução verifica novamente convite, identidade, membership e autorização: pendentes são reenviados; expirados ou ainda não convidados recebem novo convite. Pessoas com aceite atual, membership ativa, suspensão ou desligamento são ignoradas com motivo visível. Convites revogados ficam fora da ação padrão de todos os pendentes e exigem seleção explícita.
+- Operações e tentativas persistem antes do processamento. Concorrência não sobrescreve um convite mais recente nem rebaixa uma pessoa ativada. Entrega remota incerta é apresentada como não confirmada e não repete automaticamente o envio.
+- Pessoas novas, importadas e administradores de empresa recém-provisionados começam como `invited`. Somente o acesso autorizado e efetivo ao tenant muda a pessoa para `active` e grava primeiro e último acesso com o relógio do servidor. O primeiro acesso é preservado; suspensão, desligamento e conta inativa continuam bloqueando entrada.
+- A transição legada muda pessoas `active` sem primeiro acesso comprovado para `invited`, inclusive identidades já vinculadas, sem inventar datas. Perfis, vínculos, assignments, certificados e eventos permanecem intactos. O último login global do WorkOS é exibido separadamente e não preenche datas locais.
+- Pessoas nos quatro estados podem receber assignments manuais ou automáticos. Público-alvo, vigência, disponibilidade do curso publicado, recorrência, idempotência e versão congelada permanecem obrigatórios. Sincronizar convites não cancela nem recria obrigações.
+
 ### Perfis mínimos
 
 - **Employee:** acessa apenas os próprios assignments, histórico e certificados.

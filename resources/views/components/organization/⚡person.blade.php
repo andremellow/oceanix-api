@@ -25,6 +25,10 @@ new class extends Component
 
     public string $administratorConfirmation = '';
 
+    public bool $confirmingInvitation = false;
+
+    public function boot(): void { $this->authorize(App\Enums\Permission::PeopleView->value); }
+
     public function mount(User $user): void
     {
         $this->authorize('view', $user);
@@ -36,7 +40,9 @@ new class extends Component
 
     public function with(RequirementSchedulePreview $schedulePreview): array
     {
+        $this->user->refresh();
         return [
+            ...app(App\Services\People\PeopleDirectory::class)->detail($this->user),
             'roles' => Role::query()->active()->orderBy('name')->get(),
             'departments' => Department::query()->active()->orderBy('name')->get(),
             'jobFunctions' => JobFunction::query()->active()->orderBy('name')->get(),
@@ -96,13 +102,20 @@ new class extends Component
         session()->flash('status', __('Administrator access updated.'));
     }
 
+    public function confirmInvitation(): void
+    {
+        $this->authorize('invite', $this->user);
+        $this->confirmingInvitation = true;
+    }
+
     public function sendInvitation(SendWorkosInvitation $action): void
     {
         $this->authorize('invite', $this->user);
 
         try {
             $this->user = $action->handle($this->user);
-            session()->flash('status', __('Invitation sent through WorkOS.'));
+            $this->confirmingInvitation = false;
+            session()->flash('status', __('Invitation queued through WorkOS.'));
         } catch (\RuntimeException $exception) {
             $this->addError('invitation', $exception->getMessage());
         }
@@ -123,19 +136,41 @@ new class extends Component
             </form>
         @endif
         @can('invite', $user)
-            <flux:button wire:click="sendInvitation" wire:loading.attr="disabled" variant="primary" size="sm">
-                {{ $user->invitation_sent_at ? __('Resend invitation') : __('Send invitation') }}
-            </flux:button>
+            @if($user->status->canAccessTenant() && !$user->workos_active_membership && $user->invitation_state !== App\Enums\WorkosInvitationState::Accepted)
+                <flux:button wire:click="confirmInvitation" wire:loading.attr="disabled" :disabled="$personAttempt?->status->isOpen() ?? false" variant="primary" size="sm">
+                    {{ match($user->invitation_state) {App\Enums\WorkosInvitationState::Pending=>__('Resend invitation'),App\Enums\WorkosInvitationState::Expired,App\Enums\WorkosInvitationState::Revoked=>__('Send new invitation'),App\Enums\WorkosInvitationState::NotInvited=>__('Send invitation'),default=>__('Verify and send invitation')} }}
+                </flux:button>
+            @else
+                <span class="text-sm text-secondary">{{ App\Services\People\PeopleDirectory::reason(!$user->status->canAccessTenant() ? $user->status->value : ($user->workos_active_membership ? 'current_member' : 'already_accepted')) }}</span>
+            @endif
         @endcan
         <flux:button :href="route('people.index', ['company' => app(App\Tenancy\TenantContext::class)->get()])" wire:navigate variant="ghost" size="sm">{{ __('ui.back_to_people') }}</flux:button>
     </x-page-hero>
 
+    <flux:modal wire:model="confirmingInvitation" class="max-w-lg">
+        <div class="space-y-5"><flux:heading size="lg">{{ __('Confirm invitation recovery') }}</flux:heading>
+            <p>{{ __('This action covers one person: :name (:email).', ['name'=>$user->name, 'email'=>$user->email]) }}</p>
+            <p>{{ __('Pending invitations are resent. Expired or missing invitations receive a new invitation. Verification may skip recipients who already accepted, are current members or cannot access this company.') }}</p>
+            @if($user->invitation_state === App\Enums\WorkosInvitationState::Revoked)<p>{{ __('Selected revoked invitations will receive a new invitation after verification.') }}</p>@endif
+            <div class="flex flex-wrap justify-end gap-2"><flux:button wire:click="$set('confirmingInvitation', false)" variant="ghost">{{ __('Cancel') }}</flux:button><flux:button wire:click="sendInvitation" wire:loading.attr="disabled" variant="primary">{{ __('Queue invitations') }}</flux:button></div>
+        </div>
+    </flux:modal>
     <x-status-message />
     @error('invitation') <flux:callout variant="danger" :heading="$message" /> @enderror
 
-    @if ($user->invitation_sent_at)
-        <p class="text-sm text-[#6f797f]">{{ __('Last invitation sent :date', ['date' => $user->invitation_sent_at->locale(app()->getLocale())->translatedFormat('M j, Y H:i')]) }}</p>
-    @endif
+    <section class="detail-card space-y-4" @if($personAttempt?->status->isOpen()) wire:poll.3s @endif>
+        <h2 class="detail-card-title">{{ __('Invitation and access') }}</h2>
+        @php($state=$user->invitation_state ?? App\Enums\WorkosInvitationState::Unverified)
+        <span class="status-pill {{ $state->pillModifier() }}">{{ $state->label() }}</span>
+        @if($user->invitation_check_error)<p role="alert">{{ __('Latest check failed') }}</p>@endif
+        <dl class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            @foreach(['invitation_sent_at'=>'Last invitation sent','invitation_accepted_at'=>'Invitation accepted','invitation_expires_at'=>'Invitation expires','invitation_revoked_at'=>'Invitation revoked','invitation_verified_at'=>'Last verified','invitation_accepted_history_at'=>'Earlier invitation accepted','first_access_at'=>'First Oceanix access','last_access_at'=>'Last Oceanix access','workos_last_sign_in_at'=>'Last WorkOS sign-in'] as $field=>$label)
+                <div><dt class="text-xs text-muted">{{ __($label) }}</dt><dd class="text-sm text-secondary">{{ $user->$field?->locale(app()->getLocale())->translatedFormat('M j, Y H:i') ?? (in_array($field,['first_access_at','last_access_at']) ? __('No recorded access') : '—') }}</dd></div>
+            @endforeach
+        </dl>
+        <p class="text-sm text-secondary">{{ __('WorkOS sign-in does not prove access to this company.') }}</p>
+        @if($personAttempt)<p role="status">{{ __('Invitation') }}: {{ $personAttempt->status->label() }}@if($personAttempt->reason) — {{ App\Services\People\PeopleDirectory::reason($personAttempt->reason) }}@endif</p>@endif
+    </section>
 
     <div class="grid gap-5 lg:grid-cols-3">
         <section class="detail-card">

@@ -48,8 +48,8 @@ it('creates one assignment per eligible person', function (): void {
 
     $result = app(AssignmentMaterializationService::class)->materializeAll();
 
-    expect($result['created'])->toBe(3)
-        ->and(UserTrainingAssignment::query()->count())->toBe(3)
+    expect($result['created'])->toBe(4)
+        ->and(UserTrainingAssignment::query()->count())->toBe(4)
         ->and(UserTrainingAssignment::query()->first()->origin_type)->toBe(AssignmentOrigin::Requirement);
 });
 

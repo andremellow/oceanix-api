@@ -18,6 +18,7 @@ use App\Models\Role;
 use App\Models\TrainingRequirement;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
+use App\Models\WorkosSyncRun;
 use App\Policies\CertificatePolicy;
 use App\Policies\CoursePolicy;
 use App\Policies\LessonDocumentPolicy;
@@ -26,6 +27,7 @@ use App\Policies\RolePolicy;
 use App\Policies\TrainingRequirementPolicy;
 use App\Policies\UserPolicy;
 use App\Policies\UserTrainingAssignmentPolicy;
+use App\Policies\WorkosSyncRunPolicy;
 use App\Services\Settings\ApplicationSettings;
 use App\Services\SocialLogin\SocialLoginManager;
 use App\Services\SocialLogin\WorkosAuthKitIdentityProvider;
@@ -110,6 +112,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Certificate::class, CertificatePolicy::class);
         Gate::policy(Role::class, RolePolicy::class);
         Gate::policy(User::class, UserPolicy::class);
+        Gate::policy(WorkosSyncRun::class, WorkosSyncRunPolicy::class);
 
         View::addNamespace('layouts', resource_path('views/components/layouts'));
 

@@ -44,7 +44,7 @@ class ImportPeople
                         'name' => $row['name'],
                         'email' => $row['email'],
                         'email_verified_at' => now(),
-                        'status' => UserStatus::Active,
+                        'status' => UserStatus::Invited,
                     ]);
                     $created++;
                 } else {
