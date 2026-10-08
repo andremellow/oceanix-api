@@ -4,7 +4,6 @@ use App\Actions\Courses\MakeCourseShared;
 use App\Actions\Platform\ChangeCompanyStatus;
 use App\Actions\Platform\GrantPlatformCompanyAccess;
 use App\Actions\Platform\InviteCompanyAdministrator;
-use App\Actions\Platform\ProvisionCompanyInWorkos;
 use App\Models\Company;
 use App\Models\Course;
 use App\Models\User;
@@ -96,16 +95,6 @@ new #[Layout('layouts::platform')] class extends Component
         session()->flash('status', __('Company status updated.'));
     }
 
-    public function provisionWorkos(ProvisionCompanyInWorkos $action): void
-    {
-        try {
-            $this->company = $action->handle($this->company);
-            session()->flash('status', __('Company synchronized with WorkOS.'));
-        } catch (RuntimeException $exception) {
-            $this->addError('workos', $exception->getMessage());
-        }
-    }
-
     public function grantMyAccess(GrantPlatformCompanyAccess $action, PlatformAccess $access): void
     {
         $action->handle($this->company);
@@ -165,7 +154,6 @@ new #[Layout('layouts::platform')] class extends Component
     </x-page-hero>
 
     <x-status-message />
-    @error('workos') <flux:callout variant="danger" :heading="$message" /> @enderror
     @error('promotion') <flux:callout variant="danger" :heading="$message" /> @enderror
 
     <section class="detail-card space-y-4">
@@ -210,7 +198,7 @@ new #[Layout('layouts::platform')] class extends Component
                 <div><dt class="text-[#8a9298]">{{ __('External ID') }}</dt><dd class="font-mono text-xs">{{ $company->public_id }}</dd></div>
                 <div><dt class="text-[#8a9298]">{{ __('WorkOS organization') }}</dt><dd class="font-mono text-xs">{{ $company->workos_organization_id ?: '—' }}</dd></div>
             </dl>
-            <flux:button wire:click="provisionWorkos" wire:loading.attr="disabled" variant="ghost">{{ $company->workos_organization_id ? __('Synchronize WorkOS') : __('Provision in WorkOS') }}</flux:button>
+            <p class="text-sm text-[#5f6a71]">{{ __('Create companies and enable Compliance in Account.') }}</p>
         </section>
 
         <section class="detail-card space-y-4">

@@ -127,3 +127,17 @@ it('SC-08 refuses provisioning rollback while retaining migration history and op
     }
     expect(app('migrator')->run([$path]))->toBe([]);
 });
+
+it('SC-15 keeps initial provisioning and old provisioning replays independent of product access', function () {
+    $uuid = (string) Str::uuid();
+    $key = (string) Str::uuid();
+    $payload = provisionPayload('org_access_legacy');
+    $this->withToken(provisionToken())->withHeader('Idempotency-Key', $key);
+    $first = $this->putJson(provisionUrl($uuid), $payload)->assertCreated()->json();
+    $company = Company::where('workos_organization_id', 'org_access_legacy')->sole();
+    expect($company->compliance_access_enabled)->toBeTrue()->and($company->compliance_access_version)->toBe(0);
+    $company->update(['compliance_access_enabled' => false, 'compliance_access_version' => 1]);
+    $this->putJson(provisionUrl($uuid), $payload)->assertExactJson($first);
+    $this->withHeader('Idempotency-Key', (string) Str::uuid())->putJson(provisionUrl($uuid), $payload)->assertOk();
+    expect($company->fresh()->compliance_access_enabled)->toBeFalse()->and($company->fresh()->compliance_access_version)->toBe(1);
+});

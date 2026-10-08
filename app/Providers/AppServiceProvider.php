@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Contracts\VideoProvider;
 use App\Enums\Permission;
 use App\Http\Middleware\AuthenticatePlatformTaskUser;
+use App\Http\Middleware\EnsureComplianceAccess;
 use App\Http\Middleware\EnsureUserIsPlatformAdmin;
 use App\Models\Certificate;
 use App\Models\Course;
@@ -71,6 +72,7 @@ class AppServiceProvider extends ServiceProvider
         // Livewire actions are posted to its own update endpoint. Reapply the
         // platform route's authentication there so task modals keep the same actor.
         Livewire::addPersistentMiddleware([
+            EnsureComplianceAccess::class,
             EnsureUserIsPlatformAdmin::class,
             AuthenticatePlatformTaskUser::class,
         ]);

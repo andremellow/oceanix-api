@@ -6,6 +6,7 @@ use App\Actions\Auth\RecordTenantAccess;
 use App\Models\Company;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
+use App\Services\Tenancy\CompanyComplianceAccess;
 use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Auth;
 
@@ -19,6 +20,8 @@ class SwitchCompany
     public function handle(User $current, Company $company): User
     {
         abort_if($current->account_id === null, 403);
+        app(CompanyComplianceAccess::class)->assertEnabled($company);
+        abort_unless($company->fresh()->status === 'active', 403);
 
         $target = User::withoutGlobalScope('company')
             ->where('company_id', $company->id)

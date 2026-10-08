@@ -16,8 +16,10 @@ use App\Models\User;
 use App\Services\Platform\PlatformOverview;
 use App\Tenancy\TenantContext;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
+use Livewire\Exceptions\MethodNotFoundException;
 use Livewire\Mechanisms\PersistentMiddleware\PersistentMiddleware;
 
 it('denies the platform area to a company administrator', function (): void {
@@ -313,27 +315,63 @@ it('denies platform users to a company administrator', function (): void {
         ->assertForbidden();
 });
 
-it('allows a platform administrator to create a company', function (): void {
+it('keeps company inspection and entry while directing creation to Account', function (): void {
+    Http::fake();
+    $company = currentCompany();
     $user = adminUser();
     $account = Account::factory()->platformAdmin()->create(['email' => $user->email]);
     $user->update(['account_id' => $account->id]);
+    $this->actingAs($user);
 
-    $this->actingAs($user)
-        ->get(route('platform.companies'))
-        ->assertOk();
-
-    Livewire\Livewire::actingAs($user)
-        ->test('platform.companies')
-        ->set('name', 'Hydra Maritime')
-        ->set('slug', 'hydra-maritime')
-        ->call('create')
-        ->assertHasNoErrors();
-
-    $company = Company::query()->where('slug', 'hydra-maritime')->firstOrFail();
-    app(TenantContext::class)->set($company);
-
-    expect(AuditLog::query()->where('action', 'platform.company_created')->exists())->toBeTrue();
+    foreach (['platform.companies' => [], 'platform.company' => ['company' => $company]] as $component => $parameters) {
+        Livewire\Livewire::test($component, $parameters)
+            ->assertSee($company->name)
+            ->assertSee(__('Create companies and enable Compliance in Account.'))
+            ->assertSee(__('Enter company'))
+            ->assertDontSeeHtml('wire:submit="create"')
+            ->assertDontSeeHtml('wire:click="provisionWorkos')
+            ->assertDontSee(__('Create company'))
+            ->assertDontSee(__('Provision in WorkOS'))
+            ->assertDontSee(__('Synchronize'));
+    }
+    $this->post(route('platform.companies.enter', ['company' => $company]))
+        ->assertRedirect(route('dashboard', ['company' => $company]));
+    Http::assertNothingSent();
 });
+
+it('rejects removed company methods without persistence or provider side effects', function (string $component, string $method, bool $revoked): void {
+    config()->set('services.workos.api_key', 'sk_test');
+    Http::fake(['*' => Http::response(['id' => 'org_obsolete'], 201)]);
+    $company = currentCompany();
+    adminUser();
+    $account = Account::factory()->platformAdmin()->create();
+    $this->withSession(['platform_account_id' => $account->id]);
+    $page = Livewire\Livewire::test($component, $component === 'platform.company' ? ['company' => $company] : [])
+        ->assertSee($company->name);
+
+    // A stale browser can retain valid form data from before deployment.
+    if ($method === 'create' && property_exists($page->instance(), 'name')) {
+        $page->set('name', 'Obsolete Maritime')->set('slug', 'obsolete-maritime');
+    }
+    if ($revoked) {
+        $account->update(['is_platform_admin' => false]);
+    }
+    $snapshot = fn (): array => collect(['companies', 'users', 'roles', 'permissions', 'role_user', 'account_company_bindings', 'provisioning_receipts', 'audit_logs'])
+        ->mapWithKeys(fn (string $table): array => [$table => DB::table($table)->get()->toJson()])->all();
+    $before = $snapshot();
+    $arguments = $component === 'platform.companies' && $method === 'provisionWorkos' ? [$company->id] : [];
+
+    expect(fn () => $page->call($method, ...$arguments))->toThrow(MethodNotFoundException::class);
+    expect($snapshot())->toBe($before);
+    Http::assertNothingSent();
+})->with([
+    'list create authorized' => ['platform.companies', 'create', false],
+    'list provision authorized' => ['platform.companies', 'provisionWorkos', false],
+    'detail provision authorized' => ['platform.company', 'provisionWorkos', false],
+    'list create revoked' => ['platform.companies', 'create', true],
+    'list provision revoked' => ['platform.companies', 'provisionWorkos', true],
+    'detail provision revoked' => ['platform.company', 'provisionWorkos', true],
+]);
 
 it('shows only platform-owned metrics on the global dashboard', function (): void {
     $user = adminUser();
@@ -427,28 +465,19 @@ it('redirects an old unscoped tenant URL to its company-scoped equivalent', func
         ->assertRedirect(route('dashboard', ['company' => $company]));
 });
 
-it('creates the first company and its administrator from a session-only platform account', function (): void {
+it('shows Account guidance for an empty company list without a local create form', function (): void {
     Company::query()->delete();
     app(TenantContext::class)->clear();
-    $account = Account::factory()->platformAdmin()->create(['email' => 'bootstrap@example.com']);
+    $account = Account::factory()->platformAdmin()->create();
     $this->withSession(['platform_account_id' => $account->id]);
+    Http::fake();
 
     Livewire\Livewire::test('platform.companies')
-        ->set('name', 'First Company')
-        ->set('slug', 'first-company')
-        ->call('create')
-        ->assertHasNoErrors();
-
-    $company = Company::query()->where('slug', 'first-company')->firstOrFail();
-    app(TenantContext::class)->set($company);
-    $person = User::query()->where('account_id', $account->id)->firstOrFail();
-
-    expect($person->hasRole('admin'))->toBeTrue();
-
-    app(TenantContext::class)->clear();
-    $this->post(route('platform.companies.enter', ['company' => $company]))
-        ->assertRedirect(route('dashboard', ['company' => $company]));
-    expect(auth()->id())->toBe($person->id);
+        ->assertSee(__('No companies'))
+        ->assertSee(__('Create companies and enable Compliance in Account.'))
+        ->assertDontSeeHtml('wire:submit="create"');
+    expect(Company::query()->count())->toBe(0);
+    Http::assertNothingSent();
 });
 
 it('lets a platform administrator explicitly create access to an existing company', function (): void {
@@ -561,59 +590,4 @@ it('lists every administrator for the selected company and no one from another c
         ->assertSee('alpha-admin@example.com')
         ->assertSee('Beta Administrator')
         ->assertDontSee('Foreign Administrator');
-});
-
-it('provisions a company in WorkOS with its stable public id', function (): void {
-    config()->set('services.workos.api_key', 'sk_test');
-    $user = adminUser();
-    $account = Account::factory()->platformAdmin()->create(['email' => $user->email]);
-    $user->update(['account_id' => $account->id]);
-    $company = currentCompany();
-
-    Http::fake([
-        'api.workos.com/organizations/external_id/*' => Http::response([], 404),
-        'api.workos.com/organizations' => Http::response([
-            'id' => 'org_oceanix_demo',
-            'name' => $company->name,
-            'external_id' => $company->public_id,
-        ], 201),
-    ]);
-
-    Livewire\Livewire::actingAs($user)
-        ->test('platform.companies')
-        ->call('provisionWorkos', $company->id)
-        ->assertHasNoErrors();
-
-    expect($company->fresh()->workos_organization_id)->toBe('org_oceanix_demo');
-
-    app(TenantContext::class)->set($company);
-    expect(AuditLog::query()->where('action', 'platform.company_workos_provisioned')->exists())->toBeTrue();
-
-    Http::assertSent(fn ($request): bool => $request->url() === 'https://api.workos.com/organizations'
-        && $request['name'] === $company->name
-        && $request['external_id'] === $company->public_id
-        && $request->hasHeader('Authorization', 'Bearer sk_test'));
-});
-
-it('reconnects an existing WorkOS organization by external id', function (): void {
-    config()->set('services.workos.api_key', 'sk_test');
-    $user = adminUser();
-    $account = Account::factory()->platformAdmin()->create(['email' => $user->email]);
-    $user->update(['account_id' => $account->id]);
-    $company = currentCompany();
-
-    Http::fake([
-        'api.workos.com/organizations/external_id/*' => Http::response([
-            'id' => 'org_existing',
-            'external_id' => $company->public_id,
-        ]),
-    ]);
-
-    Livewire\Livewire::actingAs($user)
-        ->test('platform.companies')
-        ->call('provisionWorkos', $company->id)
-        ->assertHasNoErrors();
-
-    expect($company->fresh()->workos_organization_id)->toBe('org_existing');
-    Http::assertSentCount(1);
 });
