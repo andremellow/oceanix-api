@@ -2,6 +2,7 @@
 
 use App\Actions\People\ImportPeople;
 use App\Enums\Permission;
+use App\Models\AccountCompanyBinding;
 use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\JobFunction;
@@ -9,6 +10,7 @@ use App\Models\User;
 use App\Services\People\PeopleImportPreview;
 use App\Services\People\PeopleSpreadsheetParser;
 use Illuminate\Support\Str;
+use Tests\Support\AccountIntegrationFixture;
 
 function positionalPeopleWorkbook(array $rows): string
 {
@@ -88,6 +90,11 @@ it('matches organization values after safe normalization and leaves new values r
 it('imports new people, reuses existing accounts, creates mappings, and preserves blank links', function (): void {
     seedAccessCatalog();
     $operator = userWithPermissions([Permission::PeopleImport]);
+    $operator->forceFill(['workos_user_id' => 'user_import_operator'])->save();
+    $company = currentCompany();
+    $company->update(['workos_organization_id' => 'org_import']);
+    AccountCompanyBinding::create(['account_company_uuid' => (string) Str::uuid(), 'compliance_company_id' => $company->id, 'workos_organization_id' => $company->workos_organization_id]);
+    AccountIntegrationFixture::fakeAccountConfirmation();
     $existing = User::factory()->create(['email' => 'existing@example.com']);
     $department = Department::factory()->create(['name' => 'Existing department']);
     $this->actingAs($operator);

@@ -5,11 +5,14 @@ use App\Actions\Platform\GrantPlatformCompanyAccess;
 use App\Enums\Permission;
 use App\Enums\UserStatus;
 use App\Models\Account;
+use App\Models\AccountCompanyBinding;
 use App\Models\ComplianceEvent;
+use App\Models\PersonProductAccess;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
 use App\Services\Requirements\AssignmentMaterializationService;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 
 it('preserves obligation evidence during legacy transition', function () {
     $legacy = adminUser();
@@ -29,13 +32,30 @@ it('preserves obligation evidence during legacy transition', function () {
 
 it('imports new people invited without changing existing protected statuses', function () {
     seedAccessCatalog();
-    $this->actingAs(userWithPermissions([Permission::PeopleImport]));
+    $actor = userWithPermissions([Permission::PeopleImport]);
+    $actor->forceFill(['workos_user_id' => 'user_import_status_actor'])->save();
+    $this->actingAs($actor);
+    currentCompany()->update(['workos_organization_id' => 'org_import_status']);
+    AccountCompanyBinding::create(['account_company_uuid' => (string) Str::uuid(), 'compliance_company_id' => currentCompany()->id, 'workos_organization_id' => 'org_import_status']);
+    config(['services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
+    Http::preventStrayRequests();
+    Http::fake(['account.example.test/*' => function ($request) {
+        $data = $request->data();
+        if ($data['kind'] === 'person.register') {
+            PersonProductAccess::where('user_id', $data['payload']['local_person_id'])->update(['confirmed_enabled' => true, 'version' => 1]);
+        }
+
+        return Http::response(array_intersect_key($data, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => ['enabled' => true, 'shared_person_id' => (string) Str::uuid(), 'company_member_id' => (string) Str::uuid()]]);
+    }]);
     $protected = User::factory()->suspended()->create(['email' => 'protected@example.com']);
-    app(ImportPeople::class)->handle([
+    $result = app(ImportPeople::class)->handle([
         ['row' => 2, 'name' => 'New Person', 'email' => 'new@example.com', 'job_function' => '', 'department' => ''],
         ['row' => 3, 'name' => 'Protected', 'email' => 'protected@example.com', 'job_function' => '', 'department' => ''],
     ], [], []);
     expect(User::where('email', 'new@example.com')->first()->status)->toBe(UserStatus::Invited)->and($protected->fresh()->status)->toBe(UserStatus::Suspended);
+    expect($result['created'])->toBe(1)->and($result['existing'])->toBe(1)->and($result['pending'])->toBe(0);
+    Http::assertSentCount(2);
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
 });
 
 it('grants a new tenant administrator invited and preserves existing suspended status', function () {

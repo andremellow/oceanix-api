@@ -94,10 +94,10 @@ it('reports aggregate attempts beyond the bounded recipient outcomes and empty-c
     expect($data['companyPeopleCount'])->toBe(0)->and($data['people'])->toBeEmpty()->and($data['invitationSummary']['total'])->toBe(0);
 });
 
-it('shows one-person Flux confirmation and company-wide import disclosure', function () {
+it('shows explicit one-person confirmation without automatic import invitation', function () {
     $actor = adminUser();
     $person = User::factory()->create(['name' => 'One Recipient']);
     $person->forceFill(['invitation_state' => WorkosInvitationState::Revoked])->save();
     Livewire::actingAs($actor)->test('organization.person', ['user' => $person])->call('confirmInvitation')->assertSet('confirmingInvitation', true)->assertSee('This action covers one person: One Recipient ('.$person->email.').')->assertSee('Selected revoked invitations will receive a new invitation after verification.')->assertSee('Queue invitations')->assertDontSee('wire:confirm', false);
-    Livewire::actingAs($actor)->test('organization.import-people')->set('rows', [['row' => 2, 'name' => 'Imported Recipient', 'email' => 'imported@example.com', 'job_function' => '', 'department' => '']])->assertSee('Queue company-wide WorkOS invitation recovery after importing')->assertSee('Includes eligible people already in this company: pending invitations are resent, and expired or missing invitations receive a new invitation. This is not limited to the imported rows.');
+    Livewire::actingAs($actor)->test('organization.import-people')->set('rows', [['row' => 2, 'name' => 'Imported Recipient', 'email' => 'imported@example.com', 'job_function' => '', 'department' => '']])->assertDontSee('Queue company-wide WorkOS invitation recovery after importing')->assertDontSee('wire:model="inviteAfterImport"', false);
 });

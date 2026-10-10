@@ -3,9 +3,10 @@
 namespace App\Actions\People;
 
 use App\Enums\Permission;
-use App\Enums\UserStatus;
+use App\Models\AccountRequestOperation;
 use App\Models\Department;
 use App\Models\JobFunction;
+use App\Models\PersonAccountLink;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
@@ -13,6 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
+use Ramsey\Uuid\Uuid;
 use RuntimeException;
 
 class ImportPeople
@@ -29,50 +31,57 @@ class ImportPeople
     {
         Gate::authorize(Permission::PeopleImport->value);
 
-        return DB::transaction(function () use ($rows, $jobFunctionMappings, $departmentMappings): array {
-            [$jobFunctions, $jobFunctionsCreated] = $this->resolveMappings(JobFunction::class, $jobFunctionMappings);
-            [$departments, $departmentsCreated] = $this->resolveMappings(Department::class, $departmentMappings);
-            $employeeRole = Role::query()->where('key', 'employee')->firstOrFail();
-            $created = 0;
-            $existing = 0;
+        $actor = auth()->user();
+        [$jobFunctions, $jobFunctionsCreated, $departments, $departmentsCreated] = DB::transaction(function () use ($jobFunctionMappings, $departmentMappings) {
+            [$functions, $functionCount] = $this->resolveMappings(JobFunction::class, $jobFunctionMappings);
+            [$departments, $departmentCount] = $this->resolveMappings(Department::class, $departmentMappings);
 
-            foreach ($rows as $row) {
-                $user = User::query()->where('email', $row['email'])->first();
+            return [$functions, $functionCount, $departments, $departmentCount];
+        });
+        $employeeRole = Role::query()->where('key', 'employee')->firstOrFail();
+        $result = ['created' => 0, 'existing' => 0, 'pending' => 0, 'job_functions_created' => $jobFunctionsCreated, 'departments_created' => $departmentsCreated, 'rows' => []];
+        foreach ($rows as $row) {
+            Gate::authorize(Permission::PeopleImport->value);
+            $user = User::query()->where('email', $row['email'])->first();
+            $pending = $user ? AccountRequestOperation::where('company_id', $actor->company_id)->where('user_id', $user->id)->where('kind', 'person.register')->where('state', '!=', 'confirmed')->first() : null;
+            if (! $user || $pending) {
+                $operationId = $pending?->id ?? Uuid::uuid5(Uuid::NAMESPACE_URL, 'company-registration:'.$actor->company_id.':'.strtolower($row['email']).':'.$row['name'])->toString();
+                $operation = app(RegisterPerson::class)->handle($actor, $operationId, $pending?->payload['payload']['name'] ?? $row['name'], $row['email'], import: true);
+                if ($operation->state !== 'confirmed') {
+                    $result['pending']++;
+                    $result['rows'][] = ['row' => $row['row'], 'outcome' => $operation->state, 'operation_id' => $operation->id];
 
-                if ($user === null) {
-                    $user = User::query()->create([
-                        'name' => $row['name'],
-                        'email' => $row['email'],
-                        'email_verified_at' => now(),
-                        'status' => UserStatus::Invited,
-                    ]);
-                    $created++;
-                } else {
-                    $existing++;
+                    continue;
                 }
+                $user = User::findOrFail($operation->user_id);
+                $result['created']++;
+            } else {
+                if (! PersonAccountLink::where('company_id', $user->company_id)->where('user_id', $user->id)->exists()) {
+                    $adoption = app(AdoptPeopleIntoAccount::class)->handle($actor, dryRun: false, personIds: [$user->id], import: true);
+                    if (($adoption[0]['outcome'] ?? 'unknown') !== 'confirmed') {
+                        $result['pending']++;
+                        $result['rows'][] = ['row' => $row['row'], 'outcome' => $adoption[0]['outcome'] ?? 'unknown'];
 
+                        continue;
+                    }
+                }
+                $result['existing']++;
+            }
+            // Each successful row commits independently; remote uncertainty never rolls it back.
+            DB::transaction(function () use ($user, $row, $employeeRole, $jobFunctions, $departments) {
                 $user->roles()->syncWithoutDetaching($employeeRole);
-
                 if ($row['job_function'] !== '') {
                     $user->jobFunctions()->syncWithoutDetaching($jobFunctions[$row['job_function']]);
                 }
-
                 if ($row['department'] !== '') {
                     $user->departments()->syncWithoutDetaching($departments[$row['department']]);
                 }
-            }
+            });
+            $result['rows'][] = ['row' => $row['row'], 'outcome' => 'confirmed'];
+        }
+        $this->audit->log('people.imported', metadata: array_diff_key($result, ['rows' => true]) + ['rows' => count($rows)]);
 
-            $result = [
-                'created' => $created,
-                'existing' => $existing,
-                'job_functions_created' => $jobFunctionsCreated,
-                'departments_created' => $departmentsCreated,
-            ];
-
-            $this->audit->log('people.imported', metadata: $result + ['rows' => count($rows)]);
-
-            return $result;
-        });
+        return $result;
     }
 
     /**

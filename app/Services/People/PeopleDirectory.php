@@ -3,8 +3,11 @@
 namespace App\Services\People;
 
 use App\Enums\WorkosInvitationState;
+use App\Models\AccountRequestOperation;
 use App\Models\Department;
 use App\Models\JobFunction;
+use App\Models\PersonAccountLink;
+use App\Models\PersonProductAccess;
 use App\Models\User;
 use App\Models\WorkosInvitationAttempt;
 use App\Models\WorkosSyncRun;
@@ -19,7 +22,7 @@ class PeopleDirectory
 
     public function query(array $filters = []): Builder
     {
-        $q = User::query()->with(['departments', 'jobFunctions'])->withCount(['assignments as open_assignments_count' => fn ($q) => $q->open(), 'assignments as overdue_assignments_count' => fn ($q) => $q->overdue()]);
+        $q = User::query()->addSelect(['users.*', 'account_access_enabled' => PersonProductAccess::select('confirmed_enabled')->whereColumn('user_id', 'users.id')->whereColumn('company_id', 'users.company_id')->limit(1)])->with(['departments', 'jobFunctions'])->withCount(['assignments as open_assignments_count' => fn ($q) => $q->open(), 'assignments as overdue_assignments_count' => fn ($q) => $q->overdue()]);
         if (filled($filters['search'] ?? null)) {
             $term = '%'.strtolower($filters['search']).'%';
             $q->where(fn ($q) => $q->whereRaw('lower(name) like ?', [$term])->orWhereRaw('lower(email) like ?', [$term])->orWhereRaw("lower(coalesce(employee_id, '')) like ?", [$term]));
@@ -57,7 +60,7 @@ class PeopleDirectory
 
     public function detail(User $person): array
     {
-        return ['personAttempt' => WorkosInvitationAttempt::query()->where('person_id', $person->id)->latest('id')->first()];
+        return ['accountAccess' => PersonProductAccess::where('company_id', $person->company_id)->where('user_id', $person->id)->first(), 'accountLink' => PersonAccountLink::where('company_id', $person->company_id)->where('user_id', $person->id)->first(), 'accountOperation' => AccountRequestOperation::where('company_id', $person->company_id)->where('user_id', $person->id)->latest()->first(), 'personAttempt' => WorkosInvitationAttempt::query()->where('person_id', $person->id)->latest('id')->first()];
     }
 
     public static function selectionReason(User $person): ?string

@@ -9,10 +9,10 @@ class ServicePrincipal extends Model
 {
     use HasApiTokens;
 
-    protected $fillable = ['name', 'product', 'environment', 'active'];
+    protected $fillable = ['name', 'product', 'environment', 'active', 'capabilities', 'company_uuids', 'expires_at'];
 
     protected function casts(): array
     {
-        return ['active' => 'boolean'];
+        return ['active' => 'boolean', 'capabilities' => 'array', 'company_uuids' => 'array', 'expires_at' => 'datetime'];
     }
 }

@@ -2,6 +2,9 @@
 
 use App\Http\Controllers\Api\Platform\TaskApiController;
 use App\Http\Controllers\ControlPlane\CompanyComplianceAccessController;
+use App\Http\Controllers\ControlPlane\ProductActorAuthorizationController;
+use App\Http\Controllers\ControlPlane\ProductOperationController;
+use App\Http\Controllers\ControlPlane\ProductOperationStatusController;
 use App\Http\Controllers\ControlPlane\ProvisionCompanyController;
 use App\Http\Middleware\EnsurePlatformTaskApiAccess;
 use App\Http\Middleware\EnsureProvisioningPrincipal;
@@ -30,3 +33,10 @@ Route::put('/control-plane/v1/companies/{account_company_uuid}', ProvisionCompan
 
 Route::put('/control-plane/v1/companies/{account_company_uuid}/compliance-access', CompanyComplianceAccessController::class)
     ->middleware(EnsureProvisioningPrincipal::class.':companies:access')->name('api.control-plane.companies.compliance-access');
+
+Route::put('/control-plane/v2/operations/{operation_uuid}', ProductOperationController::class)
+    ->middleware(EnsureProvisioningPrincipal::class.':operations.submit');
+Route::get('/control-plane/v2/operations/{operation_uuid}', ProductOperationStatusController::class)
+    ->middleware(EnsureProvisioningPrincipal::class.':operations.read');
+Route::post('/control-plane/v2/actor-authorizations', ProductActorAuthorizationController::class)
+    ->middleware(EnsureProvisioningPrincipal::class.':actors.authorize');

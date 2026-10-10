@@ -6,6 +6,7 @@ use App\Contracts\VideoProvider;
 use App\Enums\Permission;
 use App\Http\Middleware\AuthenticatePlatformTaskUser;
 use App\Http\Middleware\EnsureComplianceAccess;
+use App\Http\Middleware\EnsurePersonProductAccess;
 use App\Http\Middleware\EnsureUserIsPlatformAdmin;
 use App\Models\Certificate;
 use App\Models\Course;
@@ -41,6 +42,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
+use Tests\Support\AccountIntegrationFixture;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -69,10 +71,14 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        if (getenv('COMPANY_USER_QA_FIXTURE') === '1') {
+            AccountIntegrationFixture::bootHttpQa();
+        }
         // Livewire actions are posted to its own update endpoint. Reapply the
         // platform route's authentication there so task modals keep the same actor.
         Livewire::addPersistentMiddleware([
             EnsureComplianceAccess::class,
+            EnsurePersonProductAccess::class,
             EnsureUserIsPlatformAdmin::class,
             AuthenticatePlatformTaskUser::class,
         ]);

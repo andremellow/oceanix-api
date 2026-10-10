@@ -33,8 +33,9 @@ new class extends Component {
         :kicker="__('ui.organization')"
         :title="__('People')"
         :description="__('ui.people_page_description')">
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3">
             <span class="status-pill status-pill--accent">{{ trans_choice('ui.results_count', $people->total(), ['count' => $people->total()]) }}</span>
+            @can(App\Enums\Permission::PeopleManage->value)<flux:button href="{{ route('people.create') }}" wire:navigate>{{ __('Register person') }}</flux:button>@endcan
             @can(App\Enums\Permission::PeopleImport->value)
                 <flux:button href="{{ route('people.import') }}" wire:navigate variant="primary" class="admin-primary-action">{{ __('Import people') }}</flux:button>
             @endcan
@@ -135,7 +136,7 @@ new class extends Component {
                         <th>{{ __('Department') }}</th>
                         <th>{{ __('Job function') }}</th>
                         <th>{{ __('Person status') }}</th>
-                        <th>{{ __('Invitation status') }}</th><th>{{ __('Oceanix access') }}</th>
+                        <th>{{ __('Invitation status') }}</th><th>{{ __('Product access') }}</th><th>{{ __('Oceanix access') }}</th>
                         <th class="text-right">{{ __('Open training') }}</th>
                         <th class="text-right">{{ __('Overdue training') }}</th>
                     </tr>
@@ -160,6 +161,7 @@ new class extends Component {
                                 @if($person->invitation_verified_at)<span class="block text-xs text-muted">{{ __('Verified :date',['date'=>$person->invitation_verified_at->locale(app()->getLocale())->translatedFormat('M j, Y H:i')]) }}</span>@endif
                                 @if($person->invitation_check_error)<span class="block text-xs text-negative">{{ __('Latest check failed') }}</span>@endif
                             </td>
+                            <td><span class="status-pill {{ $person->account_access_enabled === null || $person->account_access_enabled ? 'status-pill--positive' : 'status-pill--negative' }}">{{ $person->account_access_enabled === null || $person->account_access_enabled ? __('Enabled') : __('Disabled') }}</span></td>
                             <td class="text-xs text-secondary">{{ $person->first_access_at?->locale(app()->getLocale())->translatedFormat('M j, Y H:i') ?? __('No recorded access') }}</td>
                             <td class="text-right font-bold text-[#5f6a71]">{{ $person->open_assignments_count }}</td>
                             <td class="text-right font-bold {{ $person->overdue_assignments_count > 0 ? 'text-[#b23a3a]' : 'text-[#8a9298]' }}">{{ $person->overdue_assignments_count }}</td>

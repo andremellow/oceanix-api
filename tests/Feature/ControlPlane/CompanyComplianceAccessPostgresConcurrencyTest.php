@@ -12,7 +12,10 @@ it('SC-14 serializes competing receiver commands and preserves old receipts on P
     if (DB::getDriverName() !== 'pgsql') {
         $this->markTestSkipped('Requires isolated PostgreSQL.');
     }
-    expect(config('database.connections.pgsql.database'))->toBe('compliance_access_qa');
+    expect(config('database.connections.pgsql.database'))->toBe('compliance_company_user_qa')
+        ->and(config('database.connections.pgsql.host'))->toBe('/private/tmp/oceanx-company-user-qa/pgsocket')
+        ->and((int) config('database.connections.pgsql.port'))->toBe(15439)
+        ->and(DB::selectOne('select current_database() as name')->name)->toBe('compliance_company_user_qa');
     $company = currentCompany();
     $company->update(['workos_organization_id' => 'org_race']);
     $uuid = (string) Str::uuid();

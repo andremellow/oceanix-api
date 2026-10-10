@@ -22,6 +22,12 @@ class EnsureProvisioningPrincipal
         if (! $principal instanceof ServicePrincipal || ! $principal->active || $principal->product !== 'compliance' || $principal->environment !== app()->environment() || ! in_array($ability, $token->abilities ?? [], true)) {
             return response()->json(['message' => 'Provisioning access denied.'], 403);
         }
+        if (str_contains($ability, '.')) {
+            $capability = $ability === 'operations.submit' ? $request->input('kind') : $ability;
+            if (($principal->expires_at && $principal->expires_at->isPast()) || ! in_array($capability, $principal->capabilities ?? [], true) || ($ability === 'operations.submit' && ! in_array($capability, $token->abilities ?? [], true))) {
+                return response()->json(['message' => 'Product operation access denied.'], 403);
+            }
+        }
         $request->attributes->set('provisioning_principal', $principal);
 
         return $next($request);

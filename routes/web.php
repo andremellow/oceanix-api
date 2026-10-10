@@ -15,6 +15,7 @@ use App\Http\Controllers\LessonDocumentController;
 use App\Http\Controllers\LessonDocumentLibraryController;
 use App\Http\Controllers\PlatformCoursePreviewController;
 use App\Http\Controllers\TrainingPlaybackController;
+use App\Http\Middleware\EnsurePersonProductAccess;
 use App\Http\Middleware\EnsurePlatformHasPermission;
 use App\Http\Middleware\EnsureUserCanAccessControlCenter;
 use App\Http\Middleware\EnsureUserHasPermission;
@@ -160,7 +161,7 @@ Route::prefix('platform')
 
 // Keep existing bookmarks and notification links useful while tenant URLs migrate to
 // /c/{slug}. These endpoints only redirect after the active company has been identified.
-Route::middleware([IdentifyCompany::class, 'auth'])->group(function (): void {
+Route::middleware([IdentifyCompany::class, 'auth', EnsurePersonProductAccess::class])->group(function (): void {
     $legacyRoutes = [
         '/dashboard' => 'dashboard',
         '/my-training' => 'my-training',
@@ -200,7 +201,7 @@ Route::post('/switch-company/{targetCompany:slug}', function (Company $targetCom
     $action->handle(request()->user(), $targetCompany);
 
     return redirect()->route('dashboard', ['company' => $targetCompany]);
-})->middleware([IdentifyCompany::class, 'auth'])->name('company.switch');
+})->middleware([IdentifyCompany::class, 'auth', EnsurePersonProductAccess::class])->name('company.switch');
 
 Route::get('/c/{company:slug}', function (Company $company) {
     return Auth::check()
@@ -209,7 +210,7 @@ Route::get('/c/{company:slug}', function (Company $company) {
 })->middleware(IdentifyCompany::class)->name('company.entry');
 
 Route::prefix('c/{company:slug}')
-    ->middleware([IdentifyCompany::class, 'auth'])
+    ->middleware([IdentifyCompany::class, 'auth', EnsurePersonProductAccess::class])
     ->group(function (): void {
         Route::get('/lesson-document-library/{document}', [LessonDocumentLibraryController::class, 'company'])
             ->whereUuid('document')->middleware(EnsureUserHasPermission::class.':lesson-documents.view')->name('lesson-documents.library.open');
@@ -288,6 +289,9 @@ Route::prefix('c/{company:slug}')
             Route::livewire('/people/import', 'organization.import-people')
                 ->middleware(EnsureUserHasPermission::class.':people.import')
                 ->name('people.import');
+            Route::livewire('/people/create', 'organization.create-person')
+                ->middleware(EnsureUserHasPermission::class.':people.manage')
+                ->name('people.create');
             Route::livewire('/people/{user}', 'organization.person')
                 ->middleware(EnsureUserHasPermission::class.':people.view')
                 ->name('people.show');

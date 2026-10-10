@@ -5,8 +5,10 @@ namespace App\Actions\Auth;
 use App\Data\SocialIdentity;
 use App\Exceptions\SocialLoginProviderException;
 use App\Models\Account;
+use App\Models\PersonAccountLink;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\People\PersonProductAccess;
 use App\Services\Tenancy\CompanyComplianceAccess;
 use Illuminate\Support\Facades\DB;
 
@@ -24,13 +26,21 @@ class AuthenticateSocialLogin
             $provider = strtolower($identity->provider);
             $email = strtolower($identity->email);
 
-            $user = User::query()->whereRaw('lower(email) = ?', [$email])->first();
+            $user = $provider === 'workos' ? User::query()->where('workos_user_id', $identity->providerId)->first() : null;
+            $user ??= User::query()->whereRaw('lower(email) = ?', [$email])->first();
+            if ($user && PersonAccountLink::where('company_id', $user->company_id)->where('user_id', $user->id)->exists()
+                && $user->workos_user_id && ($provider !== 'workos' || $user->workos_user_id !== $identity->providerId)) {
+                throw SocialLoginProviderException::accountNotProvisioned();
+            }
 
             if ($user === null) {
                 throw SocialLoginProviderException::accountNotProvisioned();
             }
 
             app(CompanyComplianceAccess::class)->assertEnabled($user->company_id);
+            if (! app(PersonProductAccess::class)->allows($user)) {
+                throw SocialLoginProviderException::accountInactive();
+            }
 
             if (! $identity->emailVerified) {
                 throw SocialLoginProviderException::emailNotVerified();
@@ -41,7 +51,7 @@ class AuthenticateSocialLogin
                 ->where('provider_id', $identity->providerId)
                 ->first() ?? Account::query()->whereRaw('lower(email) = ?', [$email])->first();
 
-            if ($account !== null && strtolower($account->email) !== $email) {
+            if ($account !== null && (strtolower($account->email) !== $email || ($user->workos_user_id && $account->workos_user_id && $account->workos_user_id !== $user->workos_user_id))) {
                 throw SocialLoginProviderException::accountNotProvisioned();
             }
 

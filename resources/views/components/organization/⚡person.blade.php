@@ -102,6 +102,22 @@ new class extends Component
         session()->flash('status', __('Administrator access updated.'));
     }
 
+    public bool $confirmingProductRemoval = false;
+
+    public function openProductRemoval(): void { $this->authorize('manage', $this->user); $this->confirmingProductRemoval = true; }
+
+    public function removeProductAccess(App\Actions\People\ChangePersonProductAccess $action): void
+    {
+        $this->authorize('manage', $this->user);
+        abort_unless($this->confirmingProductRemoval, 422);
+        $detail = app(App\Services\People\PeopleDirectory::class)->detail($this->user);
+        $pending = $detail['accountOperation'];
+        $id = $pending && $pending->kind === 'person.access.remove' && $pending->state !== 'confirmed' ? $pending->id : (string) Illuminate\Support\Str::uuid();
+        $operation = $action->handle(auth()->user(), $this->user, $id);
+        $this->confirmingProductRemoval = false;
+        session()->flash('status', $operation->state === 'confirmed' ? __('Product access removal confirmed.') : __('Account has not confirmed this change. Product access remains at its last confirmed state.'));
+    }
+
     public function confirmInvitation(): void
     {
         $this->authorize('invite', $this->user);
@@ -171,6 +187,9 @@ new class extends Component
         <p class="text-sm text-secondary">{{ __('WorkOS sign-in does not prove access to this company.') }}</p>
         @if($personAttempt)<p role="status">{{ __('Invitation') }}: {{ $personAttempt->status->label() }}@if($personAttempt->reason) — {{ App\Services\People\PeopleDirectory::reason($personAttempt->reason) }}@endif</p>@endif
     </section>
+
+    <section class="detail-card space-y-4" wire:poll.15s><h2 class="detail-card-title">{{ __('Product access') }}</h2><p>{{ $accountAccess && ! $accountAccess->confirmed_enabled ? __('Disabled') : __('Enabled') }}</p><p>{{ __('Product access is separate from local person status and recorded first access.') }}</p>@if($accountOperation && $accountOperation->state !== 'confirmed')<p role="status" aria-live="polite">{{ __('Account confirmation is pending or unavailable.') }}</p>@endif @if($accountLink && $accountAccess?->confirmed_enabled) @can('manage', $user)<flux:button id="account-product-remove" wire:click="openProductRemoval" wire:loading.attr="disabled">{{ $accountOperation?->kind === 'person.access.remove' && $accountOperation?->state !== 'confirmed' ? __('Check access removal again') : __('Remove product access') }}</flux:button>@endcan @endif</section>
+    <flux:modal wire:model.self="confirmingProductRemoval" class="max-w-lg" x-init="$el.querySelector('dialog').setAttribute('aria-labelledby', 'account-product-removal-heading')" x-on:close="$nextTick(() => document.getElementById('account-product-remove')?.focus())"><h2 id="account-product-removal-heading">{{ __('Remove product access?') }}</h2><p>{{ __('This removes only Compliance access for this company. Identity, other products and operational evidence are retained.') }}</p><flux:modal.close><flux:button>{{ __('Cancel') }}</flux:button></flux:modal.close><flux:button wire:click="removeProductAccess" variant="danger" wire:loading.attr="disabled">{{ __('Confirm removal') }}</flux:button></flux:modal>
 
     <div class="grid gap-5 lg:grid-cols-3">
         <section class="detail-card">
