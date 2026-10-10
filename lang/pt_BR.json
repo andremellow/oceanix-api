@@ -980,5 +980,8 @@
     "Queue company-wide WorkOS invitation recovery after importing": "Agendar recuperação de convites WorkOS de toda a empresa após importar",
     "Includes eligible people already in this company: pending invitations are resent, and expired or missing invitations receive a new invitation. This is not limited to the imported rows.": "Inclui pessoas elegíveis já cadastradas nesta empresa: convites pendentes são reenviados e convites expirados ou ausentes recebem um novo convite. Não se limita às linhas importadas.",
     "This person already exists.": "Esta pessoa já existe.",
-    "Your access to this product has been removed.": "Seu acesso a este produto foi removido."
+    "Your access to this product has been removed.": "Seu acesso a este produto foi removido.",
+    "Confirmed rows are saved. Retry the import to check incomplete rows using the same requests. No invitation is sent automatically.": "As linhas confirmadas foram salvas. Tente importar novamente para verificar as linhas incompletas usando as mesmas solicitações. Nenhum convite é enviado automaticamente.",
+    "Import row outcomes": "Resultados das linhas da importação",
+    "Row :row": "Linha :row"
 }

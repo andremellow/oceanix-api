@@ -10,6 +10,7 @@ use App\Enums\UserStatus;
 use App\Enums\WorkosInvitationState;
 use App\Enums\WorkosOperationStatus;
 use App\Models\Account;
+use App\Models\AccountRequestOperation;
 use App\Models\AuditLog;
 use App\Models\Company;
 use App\Models\User;
@@ -22,6 +23,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Symfony\Component\HttpKernel\Exception\HttpException;
+use Tests\Support\AccountIntegrationFixture;
 
 beforeEach(function () {
     currentCompany()->update(['workos_organization_id' => 'org_current']);
@@ -275,4 +277,33 @@ it('checks every distinct accepted identity including a stored invitation absent
         expect(collect(Http::recorded())->filter(fn ($pair) => str_ends_with($pair[0]->url(), '/users/'.$id)))->toHaveCount(1);
     }
     Http::assertNotSent(fn ($r) => $r->method() === 'POST');
+});
+
+it('reconciles linked invitation through Account receipt client while retaining generation and local first access', function () {
+    Http::preventStrayRequests();
+    config(['services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic-token', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
+    $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
+    $account = Account::factory()->create(['status' => 'active']);
+    $actor->forceFill(['workos_user_id' => 'user_linked_sync_actor', 'account_id' => $account->id])->save();
+    $person = User::factory()->create(['workos_user_id' => 'user_linked_sync_target', 'workos_invitation_id' => 'inv_linked_sync', 'invitation_generation' => 4, 'invitation_state' => WorkosInvitationState::Accepted, 'first_access_at' => now()->subDays(5)]);
+    $link = AccountIntegrationFixture::invitationLink($person)->fresh();
+    $snapshot = invitationFixture($person, 'accepted', 'inv_linked_sync', ['accepted_user_id' => $person->workos_user_id]);
+    $body = null;
+    Http::fake(['account.example.test/*' => function ($request) use (&$body, $snapshot) {
+        if ($request->method() === 'PUT') {
+            $body = $request->data();
+        }
+
+        return Http::response(AccountIntegrationFixture::invitationReceipt($body, $snapshot, sent: false, active: true));
+    }]);
+    $firstAccess = $person->first_access_at->toDateTimeString();
+    $action = app(ReconcileWorkosInvitations::class);
+    expect($action->refresh($person, $actor->id))->toBeTrue();
+    expect($action->refresh($person->fresh(), $actor->id))->toBeTrue();
+    expect($person->fresh()->invitation_generation)->toBe(4)->and($person->fresh()->first_access_at->toDateTimeString())->toBe($firstAccess)
+        ->and($person->fresh()->invitation_state)->toBe(WorkosInvitationState::Accepted)->and($link->fresh()->getRawOriginal())->toBe($link->getRawOriginal())
+        ->and(AccountRequestOperation::where('kind', 'person.invitation.reconcile')->count())->toBe(1);
+    expect(collect(Http::recorded())->map(fn ($pair) => $pair[0]->method())->all())->toBe(['PUT', 'GET']);
+    Http::assertSent(fn ($request) => $request->method() === 'PUT' && $request['kind'] === 'person.invitation.reconcile' && $request['actor_assertion']['actor_workos_user_id'] === $actor->workos_user_id);
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
 });

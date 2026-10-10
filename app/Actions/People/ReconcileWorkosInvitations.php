@@ -204,7 +204,7 @@ class ReconcileWorkosInvitations
             if ($new && (! $history || $new->greaterThan($history))) {
                 $history = $new;
             }
-            $locked->forceFill($attributes + ['invitation_accepted_history_at' => $history, 'workos_active_membership' => $read['membership'], 'workos_last_sign_in_at' => $read['external'], 'invitation_verified_at' => now(), 'invitation_check_error' => $read['unavailable'] ? 'invitation_unavailable' : null, 'invitation_generation' => $locked->invitation_generation + 1])->save();
+            $locked->forceFill($attributes + ['invitation_accepted_history_at' => $history, 'workos_active_membership' => $read['membership'], 'workos_last_sign_in_at' => $read['external'], 'invitation_verified_at' => now(), 'invitation_check_error' => $read['unavailable'] ? 'invitation_unavailable' : null, 'invitation_generation' => $read['generation'] ?? ($locked->invitation_generation + 1)])->save();
             AuditLog::query()->create(['company_id' => $locked->company_id, 'actor_id' => $actorId, 'action' => 'person.workos_invitation_reconciled', 'auditable_type' => User::class, 'auditable_id' => $locked->id, 'after' => ['state' => $locked->invitation_state->value, 'active_membership' => $locked->workos_active_membership]]);
 
             if ($run !== null) {
@@ -240,7 +240,9 @@ class ReconcileWorkosInvitations
         $invitation = $state['invitation'] ?? null;
         $snapshot = ! empty($invitation['id']) ? WorkosInvitationSnapshot::from($invitation, $person->email, $person->company->workos_organization_id) : null;
 
-        return ['snapshot' => $snapshot, 'history' => empty($state['accepted_history_at']) ? null : CarbonImmutable::parse($state['accepted_history_at']), 'membership' => (bool) ($state['active_membership'] ?? false), 'external' => empty($state['external_last_sign_in_at']) ? null : CarbonImmutable::parse($state['external_last_sign_in_at']), 'unavailable' => (bool) ($state['unavailable'] ?? false)];
+        abort_unless(is_int($state['generation'] ?? null) && $state['generation'] >= 0, 409);
+
+        return ['generation' => $state['generation'], 'snapshot' => $snapshot, 'history' => empty($state['accepted_history_at']) ? null : CarbonImmutable::parse($state['accepted_history_at']), 'membership' => (bool) ($state['active_membership'] ?? false), 'external' => empty($state['external_last_sign_in_at']) ? null : CarbonImmutable::parse($state['external_last_sign_in_at']), 'unavailable' => (bool) ($state['unavailable'] ?? false)];
     }
 
     public function markUnavailable(User $person): void

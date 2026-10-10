@@ -4,6 +4,8 @@ use App\Actions\ControlPlane\ApplyProductOperation;
 use App\Actions\ControlPlane\AuthorizeProductActor;
 use App\Enums\Permission;
 use App\Enums\UserStatus;
+use App\Models\AccountCompanyBinding;
+use App\Models\Company;
 use App\Models\PersonAccountLink;
 use App\Models\PersonProductAccess;
 use App\Models\ProductOperationReceipt;
@@ -82,5 +84,31 @@ it('reauthorizes product actor against current local permission status company a
     unset($input['payload_hash']);
     $input['payload_hash'] = ApplyProductOperation::hash($input);
     expect(fn () => $action->handle($principal, $input))->toThrow(HttpException::class);
+    Http::assertNothingSent();
+});
+
+it('executes authenticated v2 company provisioning ordering conflict and exact replay atomically', function () {
+    [$existing, $person, $principal, $token, $input] = Fixture::receiver();
+    $uuid = (string) Str::uuid();
+    $principal->update(['company_uuids' => [...$principal->company_uuids, $uuid]]);
+    $input = array_replace($input, ['kind' => 'company.provision', 'account_company_uuid' => $uuid, 'workos_organization_id' => 'org_v2_company', 'subject_id' => $uuid, 'payload' => ['name' => 'V2 Company', 'slug' => 'v2-company', 'enabled' => true]]);
+    $base = '/api/control-plane/v2/operations/';
+    $this->withToken($token)->withHeader('Idempotency-Key', $input['operation_id']);
+    $created = $this->putJson($base.$input['operation_id'], $input)->assertCreated()->assertJsonPath('confirmed_state.enabled', true)->json();
+    $company = Company::where('workos_organization_id', 'org_v2_company')->sole();
+    expect($created['confirmed_state']['local_company_id'])->toBe($company->public_id)->and($company->compliance_access_version)->toBe(1)
+        ->and(AccountCompanyBinding::where('account_company_uuid', $uuid)->sole()->compliance_company_id)->toBe($company->id);
+    $this->putJson($base.$input['operation_id'], $input)->assertOk()->assertExactJson($created);
+    $this->putJson($base.$input['operation_id'], array_replace($input, ['payload' => array_replace($input['payload'], ['name' => 'Conflicting'])]))->assertConflict();
+    $disabled = array_replace($input, ['operation_id' => (string) Str::uuid(), 'kind' => 'company.access', 'subject_id' => $company->public_id, 'resource_sequence' => 2, 'payload' => ['enabled' => false]]);
+    $this->withHeader('Idempotency-Key', $disabled['operation_id'])->putJson($base.$disabled['operation_id'], $disabled)->assertCreated()->assertJsonPath('confirmed_state.enabled', false);
+    $stale = array_replace($disabled, ['operation_id' => (string) Str::uuid()]);
+    $this->withHeader('Idempotency-Key', $stale['operation_id'])->putJson($base.$stale['operation_id'], $stale)->assertConflict();
+    expect(ProductOperationReceipt::where('company_id', $company->id)->count())->toBe(2)->and($company->fresh()->compliance_access_enabled)->toBeFalse()->and($company->fresh()->compliance_access_version)->toBe(2);
+    $enabled = array_replace($disabled, ['operation_id' => (string) Str::uuid(), 'resource_sequence' => 3, 'payload' => ['enabled' => true]]);
+    $this->withHeader('Idempotency-Key', $enabled['operation_id'])->putJson($base.$enabled['operation_id'], $enabled)->assertCreated()->assertJsonPath('confirmed_state.enabled', true);
+    $this->withHeader('Idempotency-Key', $input['operation_id'])->putJson($base.$input['operation_id'], $input)->assertExactJson($created);
+    $this->getJson($base.$disabled['operation_id'])->assertOk()->assertJsonPath('confirmed_state.enabled', false);
+    expect($company->fresh()->compliance_access_version)->toBe(3)->and($company->fresh()->compliance_access_enabled)->toBeTrue()->and(ProductOperationReceipt::where('company_id', $company->id)->count())->toBe(3);
     Http::assertNothingSent();
 });

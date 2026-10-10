@@ -88,13 +88,21 @@ new class extends Component
     </x-page-hero>
 
     @if ($result)
-        <flux:callout variant="success" :heading="($result['pending'] ?? 0) > 0 ? __('Some registrations need confirmation') : __('Import completed')">
+        <flux:callout :variant="($result['pending'] ?? 0) > 0 ? 'warning' : 'success'" :heading="($result['pending'] ?? 0) > 0 ? __('Some registrations need confirmation') : __('Import completed')">
             {{ __(':created people created, :existing already existed, :functions job functions created and :departments departments created.', [
                 'created' => $result['created'],
                 'existing' => $result['existing'],
                 'functions' => $result['job_functions_created'],
                 'departments' => $result['departments_created'],
             ]) }}
+            @if (($result['pending'] ?? 0) > 0)
+                <p role="status">{{ __('Confirmed rows are saved. Retry the import to check incomplete rows using the same requests. No invitation is sent automatically.') }}</p>
+            @endif
+            <ul aria-label="{{ __('Import row outcomes') }}">
+                @foreach ($result['rows'] ?? [] as $rowOutcome)
+                    <li>{{ __('Row :row', ['row' => $rowOutcome['row']]) }}: {{ $rowOutcome['outcome'] === 'confirmed' ? __('Confirmed') : __('Pending confirmation') }}</li>
+                @endforeach
+            </ul>
             @if (isset($result['invitations_queued']))
                 {{ trans_choice(':count invitation queued|:count invitations queued', $result['invitations_queued'], ['count' => $result['invitations_queued']]) }}
             @endif

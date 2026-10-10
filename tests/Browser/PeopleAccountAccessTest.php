@@ -18,7 +18,17 @@ it('shows pending Account outcomes without optimistic success or local status ch
     $this->actingAs($actor);
     $before = $person->fresh()->getRawOriginal();
     config(['services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
-    Http::fake(['account.example.test/*' => Http::failedConnection()]);
+    $sentEnvelope = null;
+    Http::fake(['account.example.test/*' => function ($request) use (&$sentEnvelope, $person) {
+        if ($request->method() === 'PUT') {
+            $sentEnvelope = $request->data();
+
+            return Http::failedConnection();
+        }
+        PersonProductAccess::where('user_id', $person->id)->update(['confirmed_enabled' => false, 'version' => $sentEnvelope['resource_sequence']]);
+
+        return Http::response(array_intersect_key($sentEnvelope, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => ['enabled' => false]]);
+    }]);
     $page = visit(route('people.show', ['user' => $person], false))->resize(390, 844);
     $page->assertSee('Product access is separate from local person status and recorded first access.')
         ->keys('#account-product-remove', 'Enter')->assertVisible('dialog[open]')
@@ -30,7 +40,10 @@ it('shows pending Account outcomes without optimistic success or local status ch
     expect(AccountRequestOperation::sole()->state)->toBe('unknown')
         ->and(PersonProductAccess::where('user_id', $person->id)->sole()->confirmed_enabled)->toBeTrue()
         ->and($person->fresh()->getRawOriginal())->toBe($before);
-    Http::assertSentCount(1);
+    $id = AccountRequestOperation::sole()->id;
+    $page->press('Check access removal again')->press('Confirm removal')->assertSee('Product access removal confirmed.')->assertMissing('#account-product-remove')->assertNoJavaScriptErrors();
+    expect(AccountRequestOperation::sole()->id)->toBe($id)->and(AccountRequestOperation::sole()->state)->toBe('confirmed')->and($person->fresh()->getRawOriginal())->toBe($before);
+    Http::assertSentCount(2);
     Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
 });
 
@@ -43,14 +56,41 @@ it('offers accessible registration and same-request recovery without automatic i
     $actor->forceFill(['workos_user_id' => 'user_browser_register_actor'])->save();
     $this->actingAs($actor);
     config(['services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
-    Http::fake(['account.example.test/*' => Http::failedConnection()]);
-    visit(route('people.create', [], false))->resize(390, 844)
+    $sentEnvelope = null;
+    Http::fake(['account.example.test/*' => function ($request) use (&$sentEnvelope) {
+        if ($request->method() === 'PUT') {
+            $sentEnvelope = $request->data();
+
+            return Http::failedConnection();
+        }
+        PersonProductAccess::where('user_id', $sentEnvelope['payload']['local_person_id'])->update(['confirmed_enabled' => true, 'version' => 1]);
+
+        return Http::response(array_intersect_key($sentEnvelope, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => ['enabled' => true]]);
+    }]);
+    $page = visit(route('people.create', [], false))->resize(390, 844);
+    $page->script(<<<'JS'
+        window.originalRegistrationFetch=window.fetch.bind(window);window.heldRegistrations=0;
+        window.fetch=(...args)=>{
+            if(typeof args[1]?.body==='string' && args[1].body.includes('\"method\":\"save\"')){
+                window.heldRegistrations++;
+                return new Promise((resolve,reject)=>{window.releaseRegistration=()=>window.originalRegistrationFetch(...args).then(resolve,reject)});
+            }return window.originalRegistrationFetch(...args);
+        };void 0;
+    JS);
+    $page
         ->fill('#account-person-name', 'Long Offshore Registration Recipient With Pending Central Confirmation')
-        ->fill('#account-person-email', 'browser-registration@example.test')->press('#account-person-save')
+        ->fill('#account-person-email', 'browser-registration@example.test')->keys('#account-person-save', 'Enter')->assertDisabled('#account-person-save')->assertSee('Waiting for Account confirmation…')->assertScript('window.heldRegistrations', 1);
+    $page->script("document.getElementById('account-person-save').click()");
+    $page->assertScript('window.heldRegistrations', 1)->script('void window.releaseRegistration()');
+    $page
         ->assertSee('Account has not confirmed this registration. Retry checks the same request; no invitation will be sent.')
         ->assertSee('Check registration again')->assertDisabled('#account-person-name')->assertDisabled('#account-person-email')->assertNoJavaScriptErrors();
     expect(User::where('email', 'browser-registration@example.test')->count())->toBe(1)
         ->and(AccountRequestOperation::sole()->state)->toBe('unknown');
-    Http::assertSentCount(1);
+    $id = AccountRequestOperation::sole()->id;
+    $page->script('window.fetch=window.originalRegistrationFetch;void 0');
+    $page->press('Check registration again')->assertSee('Person registered. No invitation was sent.')->assertNoJavaScriptErrors();
+    expect(AccountRequestOperation::sole()->id)->toBe($id)->and(AccountRequestOperation::sole()->state)->toBe('confirmed')->and(User::where('email', 'browser-registration@example.test')->count())->toBe(1);
+    Http::assertSentCount(2);
     Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
 });

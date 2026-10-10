@@ -1,15 +1,21 @@
 <?php
 
 use App\Actions\People\ImportPeople;
+use App\Actions\People\RegisterPerson;
 use App\Enums\Permission;
 use App\Models\AccountCompanyBinding;
+use App\Models\AccountRequestOperation;
 use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\JobFunction;
+use App\Models\PersonAccountLink;
+use App\Models\PersonProductAccess;
 use App\Models\User;
 use App\Services\People\PeopleImportPreview;
 use App\Services\People\PeopleSpreadsheetParser;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Ramsey\Uuid\Uuid;
 use Tests\Support\AccountIntegrationFixture;
 
 function positionalPeopleWorkbook(array $rows): string
@@ -144,4 +150,60 @@ it('revokes import access immediately and preserves the permission prerequisites
     $this->actingAs($user)->get(route('people.import'))->assertOk();
     $role->permissions()->detach();
     $this->actingAs($user->fresh())->get(route('people.import'))->assertForbidden();
+});
+
+it('retains mixed uncertain import rows and reuses pending registration and adoption receipts without duplicate people or email', function () {
+    seedAccessCatalog();
+    Http::preventStrayRequests();
+    config(['services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic-token', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
+    $actor = userWithPermissions([Permission::PeopleImport]);
+    $actor->forceFill(['workos_user_id' => 'user_mixed_import'])->save();
+    $company = currentCompany();
+    $company->update(['workos_organization_id' => 'org_mixed_import']);
+    $binding = AccountCompanyBinding::create(['account_company_uuid' => (string) Str::uuid(), 'compliance_company_id' => $company->id, 'workos_organization_id' => $company->workos_organization_id]);
+    $existing = User::factory()->create(['email' => 'adopt-mixed@example.test']);
+    $department = Department::factory()->create();
+    $recover = false;
+    $envelopes = [];
+    Http::fake(function ($request) use (&$recover, &$envelopes, $binding) {
+        $id = basename(parse_url($request->url(), PHP_URL_PATH));
+        if ($request->method() === 'PUT') {
+            $envelopes[$id] = $request->data();
+        }
+        $input = $envelopes[$id];
+        if (! $recover && ($input['payload']['email'] ?? '') !== 'confirmed-mixed@example.test') {
+            return Http::failedConnection();
+        }
+        $personId = $input['payload']['local_person_id'];
+        $shared = Uuid::uuid5(Uuid::NAMESPACE_URL, 'shared:'.$personId)->toString();
+        $member = Uuid::uuid5(Uuid::NAMESPACE_URL, 'member:'.$personId)->toString();
+        if ($input['kind'] === 'person.register') {
+            PersonProductAccess::where('user_id', $personId)->update(['confirmed_enabled' => true, 'version' => 1]);
+            PersonAccountLink::firstOrCreate(['company_id' => $binding->compliance_company_id, 'user_id' => $personId], ['account_company_uuid' => $binding->account_company_uuid, 'shared_person_id' => $shared, 'company_member_id' => $member, 'provenance' => []]);
+        }
+
+        return Http::response(array_intersect_key($input, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => ['shared_person_id' => $shared, 'company_member_id' => $member]]);
+    });
+    $pending = app(RegisterPerson::class)->handle($actor, (string) Str::uuid(), 'Pending mixed', 'pending-mixed@example.test', import: true);
+    expect($pending->state)->toBe('unknown');
+    $rows = [
+        ['row' => 2, 'name' => 'Confirmed mixed', 'email' => 'confirmed-mixed@example.test', 'job_function' => '', 'department' => 'Mapped'],
+        ['row' => 3, 'name' => 'Pending mixed', 'email' => 'pending-mixed@example.test', 'job_function' => '', 'department' => 'Mapped'],
+        ['row' => 4, 'name' => 'Adopt mixed', 'email' => $existing->email, 'job_function' => '', 'department' => 'Mapped'],
+    ];
+    $view = Livewire\Livewire::actingAs($actor)->test('organization.import-people')->set('rows', $rows)->set('departmentTerms', [['value' => 'Mapped', 'selected' => (string) $department->id, 'count' => 3, 'matched' => true]])->call('import')
+        ->assertSet('result.pending', 2)->assertSet('result.created', 1)->assertSet('rows', $rows)->assertSee('Some registrations need confirmation')->assertSee('Row 2: Confirmed')->assertSee('Row 3: Pending confirmation')->assertSee('Row 4: Pending confirmation')->assertDontSee('Import completed')->assertSee('Retry the import');
+    expect(User::where('email', 'confirmed-mixed@example.test')->sole()->departments()->whereKey($department->id)->exists())->toBeTrue()
+        ->and(User::where('email', 'pending-mixed@example.test')->sole()->departments()->count())->toBe(0)->and($existing->departments()->count())->toBe(0);
+    $identities = AccountRequestOperation::orderBy('id')->pluck('payload_hash', 'id')->all();
+    expect($identities)->toHaveCount(3)->and(AccountRequestOperation::find($pending->id)->state)->toBe('unknown');
+    $recover = true;
+    $view->call('import')->assertSet('result.pending', 0)->assertSet('rows', [])->assertSee('Import completed');
+    expect(AccountRequestOperation::orderBy('id')->pluck('payload_hash', 'id')->all())->toBe($identities)
+        ->and(AccountRequestOperation::where('state', 'confirmed')->count())->toBe(3)
+        ->and(User::whereIn('email', array_column($rows, 'email'))->count())->toBe(3)
+        ->and(User::where('email', 'pending-mixed@example.test')->sole()->departments()->whereKey($department->id)->exists())->toBeTrue()->and($existing->fresh()->departments()->whereKey($department->id)->exists())->toBeTrue();
+    $puts = collect(Http::recorded())->filter(fn ($pair) => $pair[0]->method() === 'PUT');
+    expect($puts->map(fn ($pair) => $pair[0]['operation_id'])->all())->toHaveCount(3);
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com') || str_contains($request->url(), '/invitations'));
 });
