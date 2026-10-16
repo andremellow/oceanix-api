@@ -47,7 +47,10 @@ it('shows pending Account outcomes without optimistic success or local status ch
     Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
 });
 
-it('offers accessible registration and same-request recovery without automatic invitation', function () {
+it('offers accessible registration and same-request recovery without automatic invitation', function ($locale, $width) {
+    seedAccessCatalog();
+    config(['app.locale' => $locale]);
+    app()->setLocale($locale);
     Http::preventStrayRequests();
     $company = currentCompany();
     $company->update(['workos_organization_id' => 'org_browser_registration']);
@@ -58,16 +61,22 @@ it('offers accessible registration and same-request recovery without automatic i
     config(['services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
     $sentEnvelope = null;
     Http::fake(['account.example.test/*' => function ($request) use (&$sentEnvelope) {
+        if (str_ends_with($request->url(), '/local-person')) {
+            $input = $request->data();
+            expect(PersonProductAccess::where('user_id', $input['payload']['local_person_id'])->sole()->confirmed_enabled)->toBeFalse();
+
+            return Http::response(array_intersect_key($input, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence', 'actor_workos_user_id'])) + ['outcome' => 'confirmed', 'confirmed_state' => $input['payload'] + ['mapping_complete' => true]]);
+        }
         if ($request->method() === 'PUT') {
             $sentEnvelope = $request->data();
 
             return Http::failedConnection();
         }
-        PersonProductAccess::where('user_id', $sentEnvelope['payload']['local_person_id'])->update(['confirmed_enabled' => true, 'version' => 1]);
+        expect(User::where('email', 'browser-registration@example.test')->count())->toBe(0);
 
-        return Http::response(array_intersect_key($sentEnvelope, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => ['enabled' => true]]);
+        return Http::response(array_intersect_key($sentEnvelope, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => ['shared_person_id' => '11111111-1111-4111-8111-111111111111', 'company_member_id' => '22222222-2222-4222-8222-222222222222', 'workos_user_id' => 'user_browser_registered', 'workos_membership_id' => 'om_browser_registered', 'membership_status' => 'pending', 'registration_mode' => 'confirmed-first', 'registration_source' => 'form', 'actor_workos_user_id' => $sentEnvelope['actor_workos_user_id'], 'request_payload_hash' => ApplyProductOperation::hash($sentEnvelope), 'mapping_complete' => false]]);
     }]);
-    $page = visit(route('people.create', [], false))->resize(390, 844);
+    $page = visit(route('people.create', [], false))->resize($width, 844);
     $page->script(<<<'JS'
         window.originalRegistrationFetch=window.fetch.bind(window);window.heldRegistrations=0;
         window.fetch=(...args)=>{
@@ -79,18 +88,18 @@ it('offers accessible registration and same-request recovery without automatic i
     JS);
     $page
         ->fill('#account-person-name', 'Long Offshore Registration Recipient With Pending Central Confirmation')
-        ->fill('#account-person-email', 'browser-registration@example.test')->keys('#account-person-save', 'Enter')->assertDisabled('#account-person-save')->assertSee('Waiting for Account confirmation…')->assertScript('window.heldRegistrations', 1);
+        ->fill('#account-person-email', 'browser-registration@example.test')->keys('#account-person-save', 'Enter')->assertDisabled('#account-person-save')->assertSee(__('Waiting for Account confirmation…'))->assertScript('window.heldRegistrations', 1);
     $page->script("document.getElementById('account-person-save').click()");
     $page->assertScript('window.heldRegistrations', 1)->script('void window.releaseRegistration()');
     $page
-        ->assertSee('Account has not confirmed this registration. Retry checks the same request; no invitation will be sent.')
-        ->assertSee('Check registration again')->assertDisabled('#account-person-name')->assertDisabled('#account-person-email')->assertNoJavaScriptErrors();
-    expect(User::where('email', 'browser-registration@example.test')->count())->toBe(1)
+        ->assertSee(__('Account has not confirmed this registration. Retry checks the same request; no invitation will be sent.'))
+        ->assertSee(__('Check registration again'))->assertDisabled('#account-person-name')->assertDisabled('#account-person-email')->assertNoJavaScriptErrors();
+    expect(User::where('email', 'browser-registration@example.test')->count())->toBe(0)
         ->and(AccountRequestOperation::sole()->state)->toBe('unknown');
     $id = AccountRequestOperation::sole()->id;
     $page->script('window.fetch=window.originalRegistrationFetch;void 0');
-    $page->press('Check registration again')->assertSee('Person registered. No invitation was sent.')->assertNoJavaScriptErrors();
+    $page->press(__('Check registration again'))->assertSee(__('Person registered. No invitation was sent.'))->assertNoJavaScriptErrors();
     expect(AccountRequestOperation::sole()->id)->toBe($id)->and(AccountRequestOperation::sole()->state)->toBe('confirmed')->and(User::where('email', 'browser-registration@example.test')->count())->toBe(1);
-    Http::assertSentCount(2);
+    Http::assertSentCount(3);
     Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
-});
+})->with(['English desktop' => ['en', 1440], 'Portuguese mobile' => ['pt_BR', 390]]);

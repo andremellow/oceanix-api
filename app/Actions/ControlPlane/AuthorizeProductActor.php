@@ -4,6 +4,7 @@ namespace App\Actions\ControlPlane;
 
 use App\Enums\Permission;
 use App\Models\AccountCompanyBinding;
+use App\Models\AccountRequestOperation;
 use App\Models\Company;
 use App\Models\ServicePrincipal;
 use App\Models\User;
@@ -40,6 +41,22 @@ class AuthorizeProductActor
                 default => null,
             };
             abort_unless($permission && Gate::forUser($actor)->allows($permission->value), 403);
+            if ($input['kind'] === 'person.register' && in_array($input['payload']['registration_mode'] ?? null, ['confirmed-first', 'confirmed-first-mapping'], true)) {
+                $operation = AccountRequestOperation::find($input['operation_id']);
+                abort_unless($operation && $operation->company_id === $actor->company_id && $operation->actor_id === $actor->id && $operation->actor_workos_user_id === $actor->workos_user_id && $operation->payload['subject_id'] === $input['subject_id'] && $input['subject_id'] === $input['operation_id'] && $input['resource_sequence'] === 1, 403);
+                foreach (['account_company_uuid', 'workos_organization_id', 'product'] as $key) {
+                    abort_unless($operation->payload[$key] === $input[$key], 403);
+                }
+                if ($input['payload']['registration_mode'] === 'confirmed-first') {
+                    abort_unless(hash_equals($operation->payload_hash, $hash), 403);
+                } else {
+                    $identity = $operation->receipt['registration']['confirmed_state'] ?? [];
+                    abort_unless($operation->user_id && $operation->user_id === ($input['payload']['local_person_id'] ?? null) && ($input['payload']['request_payload_hash'] ?? null) === $operation->payload_hash, 403);
+                    foreach (['shared_person_id', 'company_member_id', 'workos_user_id', 'workos_membership_id', 'registration_source'] as $key) {
+                        abort_unless(isset($identity[$key]) && $identity[$key] === ($input['payload'][$key] ?? null), 403);
+                    }
+                }
+            }
             if (isset($input['payload']['local_person_id'])) {
                 $target = User::whereKey($input['payload']['local_person_id'])->first();
                 abort_unless($target && $target->company_id === $actor->company_id, 403);

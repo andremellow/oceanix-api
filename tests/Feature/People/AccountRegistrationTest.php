@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\ControlPlane\ApplyProductOperation;
 use App\Actions\People\RegisterPerson;
 use App\Enums\Permission;
 use App\Models\AccountCompanyBinding;
@@ -8,9 +9,11 @@ use App\Models\PersonProductAccess;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 function accountRegistrationActor(): User
 {
+    seedAccessCatalog();
     Http::preventStrayRequests();
     config(['services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic-account-token', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
     $company = currentCompany();
@@ -22,30 +25,150 @@ function accountRegistrationActor(): User
     return $actor;
 }
 
-it('completes registration only after Account confirmation', function () {
+function confirmedRegistrationReceipt(array $envelope): array
+{
+    return array_intersect_key($envelope, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => [
+        'shared_person_id' => '11111111-1111-4111-8111-111111111111', 'company_member_id' => '22222222-2222-4222-8222-222222222222', 'workos_user_id' => 'user_registered', 'workos_membership_id' => 'om_registered', 'membership_status' => 'pending',
+        'registration_source' => $envelope['payload']['registration_source'], 'actor_workos_user_id' => $envelope['actor_workos_user_id'], 'request_payload_hash' => ApplyProductOperation::hash($envelope), 'registration_mode' => 'confirmed-first', 'mapping_complete' => false,
+    ]];
+}
+
+it('creates no provisional person and enables only after exact mapping acknowledgement', function () {
     $actor = accountRegistrationActor();
     Http::fake(['account.example.test/*' => function ($request) {
         $envelope = $request->data();
-        $access = PersonProductAccess::where('user_id', $envelope['payload']['local_person_id'])->firstOrFail();
-        $access->update(['confirmed_enabled' => true, 'version' => 1]);
+        if (str_ends_with($request->url(), '/local-person')) {
+            $person = User::where('email', 'new@example.test')->sole();
+            expect($person->roles()->count())->toBe(0)->and(PersonProductAccess::where('user_id', $person->id)->sole()->confirmed_enabled)->toBeFalse();
 
-        return Http::response(array_intersect_key($envelope, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => ['enabled' => true]]);
+            return Http::response(array_intersect_key($envelope, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence', 'actor_workos_user_id'])) + ['outcome' => 'confirmed', 'confirmed_state' => $envelope['payload'] + ['mapping_complete' => true]]);
+        }
+        expect(User::where('email', 'new@example.test')->count())->toBe(0)->and($envelope['subject_id'])->toBe($envelope['operation_id']);
+
+        return Http::response(confirmedRegistrationReceipt($envelope));
     }]);
     $id = (string) Str::uuid();
-    $result = app(RegisterPerson::class)->handle($actor, $id, 'Synthetic new person', 'new@example.test');
-    expect($result->state)->toBe('confirmed')->and(AccountRequestOperation::count())->toBe(1);
-    app(RegisterPerson::class)->handle($actor, $id, 'Synthetic new person', 'new@example.test');
-    Http::assertSentCount(1);
-    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
+    $operation = app(RegisterPerson::class)->handle($actor, $id, 'New person', 'new@example.test');
+    expect($operation->state)->toBe('confirmed')->and($operation->user_id)->not->toBeNull();
+    expect(User::where('email', 'new@example.test')->sole()->workos_user_id)->toBe('user_registered');
+    expect(PersonProductAccess::where('user_id', $operation->user_id)->sole()->confirmed_enabled)->toBeTrue();
+    app(RegisterPerson::class)->handle($actor, $id, 'New person', 'new@example.test');
+    Http::assertSentCount(2);
 });
 
-it('does not complete unconfirmed registration or removal', function () {
+it('persists only the original request when confirmation is unavailable', function () {
     $actor = accountRegistrationActor();
     Http::fake(['account.example.test/*' => Http::failedConnection()]);
-    $operation = app(RegisterPerson::class)->handle($actor, (string) Str::uuid(), 'Pending person', 'pending@example.test');
-    expect($operation->state)->toBe('unknown')->and(PersonProductAccess::where('user_id', $operation->user_id)->sole()->confirmed_enabled)->toBeFalse();
-    expect(User::where('email', 'pending@example.test')->count())->toBe(1);
-    app(RegisterPerson::class)->handle($actor, $operation->id, 'Pending person', 'pending@example.test');
-    expect(User::where('email', 'pending@example.test')->count())->toBe(1);
-    Http::assertNotSent(fn ($request) => str_contains($request->url(), '/invitations'));
+    $operation = app(RegisterPerson::class)->handle($actor, (string) Str::uuid(), 'Pending', 'pending@example.test');
+    expect($operation->state)->toBe('unknown')->and($operation->user_id)->toBeNull()->and(User::where('email', 'pending@example.test')->count())->toBe(0);
+    app(RegisterPerson::class)->handle($actor, $operation->id, 'Pending', 'pending@example.test');
+    expect(AccountRequestOperation::count())->toBe(1)->and(User::where('email', 'pending@example.test')->count())->toBe(0);
+});
+
+it('does not materialize invalid or non200 receipts', function ($status, $mutation) {
+    $actor = accountRegistrationActor();
+    Http::fake(['account.example.test/*' => function ($request) use ($status, $mutation) {
+        $receipt = confirmedRegistrationReceipt($request->data());
+        $receipt = $mutation($receipt);
+
+        return Http::response($receipt, $status);
+    }]);
+    $operation = app(RegisterPerson::class)->handle($actor, (string) Str::uuid(), 'Pending', 'pending@example.test');
+    expect($operation->state)->not->toBe('confirmed')->and($operation->user_id)->toBeNull()->and(User::where('email', 'pending@example.test')->count())->toBe(0);
+})->with([
+    '201' => [201, fn ($r) => $r], '202' => [202, fn ($r) => $r], 'pending' => [200, fn ($r) => array_replace($r, ['outcome' => 'pending'])],
+    'empty identity' => [200, fn ($r) => array_replace($r, ['confirmed_state' => []])],
+    'foreign hash' => [200, fn ($r) => array_replace_recursive($r, ['confirmed_state' => ['request_payload_hash' => str_repeat('0', 64)]])],
+    'foreign actor' => [200, fn ($r) => array_replace_recursive($r, ['confirmed_state' => ['actor_workos_user_id' => 'user_other']])],
+    'foreign source' => [200, fn ($r) => array_replace_recursive($r, ['confirmed_state' => ['registration_source' => 'import']])],
+]);
+
+it('recovers original main response loss and mapping response loss without duplicate materialization', function () {
+    $actor = accountRegistrationActor();
+    $main = null;
+    $mappingCalls = 0;
+    Http::fake(['account.example.test/*' => function ($request) use (&$main, &$mappingCalls) {
+        if (str_ends_with($request->url(), '/local-person')) {
+            $mappingCalls++;
+            if ($mappingCalls === 1) {
+                return Http::failedConnection();
+            }
+            $data = $request->data();
+
+            return Http::response(array_intersect_key($data, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence', 'actor_workos_user_id'])) + ['outcome' => 'confirmed', 'confirmed_state' => $data['payload'] + ['mapping_complete' => true]]);
+        }
+        if ($request->method() === 'PUT') {
+            $main = $request->data();
+
+            return Http::failedConnection();
+        }
+
+        return Http::response(confirmedRegistrationReceipt($main));
+    }]);
+    $id = (string) Str::uuid();
+    $first = app(RegisterPerson::class)->handle($actor, $id, 'Recovery', 'recovery@example.test');
+    expect($first->user_id)->toBeNull();
+    $second = app(RegisterPerson::class)->handle($actor, $id, 'Recovery', 'recovery@example.test');
+    expect($second->state)->toBe('mapping_pending')->and($second->user_id)->not->toBeNull();
+    $person = User::findOrFail($second->user_id);
+    expect($person->roles()->count())->toBe(0)->and(PersonProductAccess::where('user_id', $person->id)->sole()->confirmed_enabled)->toBeFalse();
+    $third = app(RegisterPerson::class)->handle($actor, $id, 'Recovery', 'recovery@example.test');
+    expect($third->state)->toBe('confirmed')->and($third->user_id)->toBe($person->id)->and(User::where('email', $person->email)->count())->toBe(1);
+    expect(collect(Http::recorded())->filter(fn ($pair) => $pair[0]->method() === 'PUT' && ! str_ends_with($pair[0]->url(), '/local-person'))->count())->toBe(1);
+    expect($third->payload_hash)->toBe($first->payload_hash);
+    expect(fn () => $third->update(['user_id' => $actor->id]))->toThrow(LogicException::class);
+});
+
+it('rechecks current permissions before materialization and effective grant', function ($stage) {
+    $actor = accountRegistrationActor();
+    Http::fake(['account.example.test/*' => function ($request) use ($actor, $stage) {
+        $data = $request->data();
+        $mapping = str_ends_with($request->url(), '/local-person');
+        if (($stage === 'materialize' && ! $mapping) || ($stage === 'grant' && $mapping)) {
+            $actor->roles()->detach();
+        }
+        if ($mapping) {
+            return Http::response(array_intersect_key($data, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence', 'actor_workos_user_id'])) + ['outcome' => 'confirmed', 'confirmed_state' => $data['payload'] + ['mapping_complete' => true]]);
+        }
+
+        return Http::response(confirmedRegistrationReceipt($data));
+    }]);
+    $operation = app(RegisterPerson::class)->handle($actor, (string) Str::uuid(), 'Revoked', 'revoked@example.test');
+    expect($operation->state)->not->toBe('confirmed');
+    if ($stage === 'materialize') {
+        expect($operation->user_id)->toBeNull();
+    } else {
+        expect(User::findOrFail($operation->user_id)->roles()->count())->toBe(0)->and(PersonProductAccess::where('user_id', $operation->user_id)->sole()->confirmed_enabled)->toBeFalse();
+    }
+})->with(['materialize', 'grant']);
+
+it('reuses pending email reservation and rejects another actor or changed source', function () {
+    $actor = accountRegistrationActor();
+    Http::fake(['account.example.test/*' => Http::failedConnection()]);
+    $first = app(RegisterPerson::class)->handle($actor, (string) Str::uuid(), 'Reserved', 'reserved@example.test');
+    $retry = app(RegisterPerson::class)->handle($actor, (string) Str::uuid(), 'Reserved', 'reserved@example.test');
+    expect($retry->id)->toBe($first->id)->and(AccountRequestOperation::count())->toBe(1)->and(User::where('email', 'reserved@example.test')->count())->toBe(0);
+    $other = userWithPermissions([Permission::PeopleManage]);
+    $other->update(['workos_user_id' => 'user_other_actor']);
+    expect(fn () => app(RegisterPerson::class)->handle($other, (string) Str::uuid(), 'Reserved', 'reserved@example.test'))->toThrow(HttpException::class);
+});
+
+it('preserves legacy provisional users and immutable envelopes while recovering their callback protocol', function () {
+    $actor = accountRegistrationActor();
+    $person = User::factory()->create(['email' => 'legacy@example.test']);
+    $binding = AccountCompanyBinding::sole();
+    $id = (string) Str::uuid();
+    $payload = ['protocol_version' => 2, 'operation_id' => $id, 'kind' => 'person.register', 'product' => 'compliance', 'account_company_uuid' => $binding->account_company_uuid, 'workos_organization_id' => $binding->workos_organization_id, 'subject_id' => (string) $person->id, 'resource_sequence' => 1, 'actor_workos_user_id' => $actor->workos_user_id, 'payload' => ['name' => $person->name, 'email' => $person->email, 'local_person_id' => $person->id, 'registration_source' => 'form']];
+    $operation = AccountRequestOperation::create(['id' => $id, 'company_id' => $actor->company_id, 'user_id' => $person->id, 'actor_id' => $actor->id, 'actor_workos_user_id' => $actor->workos_user_id, 'kind' => 'person.register', 'payload' => $payload, 'payload_hash' => ApplyProductOperation::hash($payload), 'dispatched_at' => now(), 'state' => 'unknown']);
+    PersonProductAccess::create(['company_id' => $actor->company_id, 'user_id' => $person->id, 'confirmed_enabled' => false, 'version' => 0, 'operation_id' => $id]);
+    $before = $person->fresh()->getRawOriginal();
+    Http::fake(['account.example.test/*' => function () use ($payload, $person) {
+        PersonProductAccess::where('user_id', $person->id)->update(['confirmed_enabled' => true, 'version' => 1]);
+
+        return Http::response(array_intersect_key($payload, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => ['enabled' => true]]);
+    }]);
+    $result = app(RegisterPerson::class)->handle($actor, $id, $person->name, $person->email);
+    expect($result->state)->toBe('confirmed')->and($result->payload)->toBe($payload)->and($result->user_id)->toBe($person->id)->and($person->fresh()->getRawOriginal())->toBe($before);
+    app(RegisterPerson::class)->handle($actor, $id, $person->name, $person->email);
+    Http::assertSentCount(1);
 });

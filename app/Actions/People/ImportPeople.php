@@ -43,7 +43,7 @@ class ImportPeople
         foreach ($rows as $row) {
             Gate::authorize(Permission::PeopleImport->value);
             $user = User::query()->where('email', $row['email'])->first();
-            $pending = $user ? AccountRequestOperation::where('company_id', $actor->company_id)->where('user_id', $user->id)->where('kind', 'person.register')->where('state', '!=', 'confirmed')->first() : null;
+            $pending = AccountRequestOperation::where('company_id', $actor->company_id)->where('actor_id', $actor->id)->where('kind', 'person.register')->where('state', '!=', 'confirmed')->get()->first(fn ($request) => ($request->payload['payload']['registration_source'] ?? 'form') === 'import' && ($request->payload['payload']['email'] ?? null) === strtolower(trim($row['email'])));
             if (! $user || $pending) {
                 $operationId = $pending?->id ?? Uuid::uuid5(Uuid::NAMESPACE_URL, 'company-registration:'.$actor->company_id.':'.strtolower($row['email']).':'.$row['name'])->toString();
                 $operation = app(RegisterPerson::class)->handle($actor, $operationId, $pending?->payload['payload']['name'] ?? $row['name'], $row['email'], import: true);

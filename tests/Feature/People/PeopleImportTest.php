@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\ControlPlane\ApplyProductOperation;
 use App\Actions\People\ImportPeople;
 use App\Actions\People\RegisterPerson;
 use App\Enums\Permission;
@@ -8,15 +9,12 @@ use App\Models\AccountRequestOperation;
 use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\JobFunction;
-use App\Models\PersonAccountLink;
-use App\Models\PersonProductAccess;
 use App\Models\User;
 use App\Services\People\PeopleImportPreview;
 use App\Services\People\PeopleSpreadsheetParser;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Ramsey\Uuid\Uuid;
-use Tests\Support\AccountIntegrationFixture;
 
 function positionalPeopleWorkbook(array $rows): string
 {
@@ -100,7 +98,19 @@ it('imports new people, reuses existing accounts, creates mappings, and preserve
     $company = currentCompany();
     $company->update(['workos_organization_id' => 'org_import']);
     AccountCompanyBinding::create(['account_company_uuid' => (string) Str::uuid(), 'compliance_company_id' => $company->id, 'workos_organization_id' => $company->workos_organization_id]);
-    AccountIntegrationFixture::fakeAccountConfirmation();
+    Http::preventStrayRequests();
+    config(['services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic-token', 'services.account.actor_assertion_secret' => 'synthetic-actor-proof']);
+    Http::fake(['account.example.test/*' => function ($request) {
+        $input = $request->data();
+        $state = ['shared_person_id' => Uuid::uuid5(Uuid::NAMESPACE_URL, 'shared:'.$input['operation_id'])->toString(), 'company_member_id' => Uuid::uuid5(Uuid::NAMESPACE_URL, 'member:'.$input['operation_id'])->toString()];
+        if (($input['payload']['registration_mode'] ?? null) === 'confirmed-first-mapping') {
+            $state = $input['payload'] + ['mapping_complete' => true];
+        } elseif ($input['kind'] === 'person.register') {
+            $state += ['workos_user_id' => 'user_import_new', 'workos_membership_id' => 'om_import_new', 'membership_status' => 'pending', 'registration_mode' => 'confirmed-first', 'registration_source' => 'import', 'actor_workos_user_id' => $input['actor_workos_user_id'], 'request_payload_hash' => ApplyProductOperation::hash($input), 'mapping_complete' => false];
+        }
+
+        return Http::response(array_intersect_key($input, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence', 'actor_workos_user_id'])) + ['outcome' => 'confirmed', 'confirmed_state' => $state]);
+    }]);
     $existing = User::factory()->create(['email' => 'existing@example.com']);
     $department = Department::factory()->create(['name' => 'Existing department']);
     $this->actingAs($operator);
@@ -165,24 +175,27 @@ it('retains mixed uncertain import rows and reuses pending registration and adop
     $department = Department::factory()->create();
     $recover = false;
     $envelopes = [];
-    Http::fake(function ($request) use (&$recover, &$envelopes, $binding) {
-        $id = basename(parse_url($request->url(), PHP_URL_PATH));
-        if ($request->method() === 'PUT') {
+    Http::fake(function ($request) use (&$recover, &$envelopes) {
+        $id = str_ends_with($request->url(), '/local-person') ? $request['operation_id'] : basename(parse_url($request->url(), PHP_URL_PATH));
+        if ($request->method() === 'PUT' && ! str_ends_with($request->url(), '/local-person')) {
             $envelopes[$id] = $request->data();
         }
-        $input = $envelopes[$id];
-        if (! $recover && ($input['payload']['email'] ?? '') !== 'confirmed-mixed@example.test') {
+        $input = str_ends_with($request->url(), '/local-person') ? $request->data() : $envelopes[$id];
+        if (! $recover && ! str_ends_with($request->url(), '/local-person') && ($input['payload']['email'] ?? '') !== 'confirmed-mixed@example.test') {
             return Http::failedConnection();
         }
-        $personId = $input['payload']['local_person_id'];
+        if (($input['payload']['registration_mode'] ?? null) === 'confirmed-first-mapping') {
+            return Http::response(array_intersect_key($input, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence', 'actor_workos_user_id'])) + ['outcome' => 'confirmed', 'confirmed_state' => $input['payload'] + ['mapping_complete' => true]]);
+        }
+        $personId = $input['payload']['local_person_id'] ?? $input['operation_id'];
         $shared = Uuid::uuid5(Uuid::NAMESPACE_URL, 'shared:'.$personId)->toString();
         $member = Uuid::uuid5(Uuid::NAMESPACE_URL, 'member:'.$personId)->toString();
+        $state = ['shared_person_id' => $shared, 'company_member_id' => $member];
         if ($input['kind'] === 'person.register') {
-            PersonProductAccess::where('user_id', $personId)->update(['confirmed_enabled' => true, 'version' => 1]);
-            PersonAccountLink::firstOrCreate(['company_id' => $binding->compliance_company_id, 'user_id' => $personId], ['account_company_uuid' => $binding->account_company_uuid, 'shared_person_id' => $shared, 'company_member_id' => $member, 'provenance' => []]);
+            $state += ['workos_user_id' => 'user_'.str_replace('-', '', $input['operation_id']), 'workos_membership_id' => 'om_'.str_replace('-', '', $input['operation_id']), 'membership_status' => 'pending', 'registration_mode' => 'confirmed-first', 'registration_source' => 'import', 'actor_workos_user_id' => $input['actor_workos_user_id'], 'request_payload_hash' => ApplyProductOperation::hash($input), 'mapping_complete' => false];
         }
 
-        return Http::response(array_intersect_key($input, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => ['shared_person_id' => $shared, 'company_member_id' => $member]]);
+        return Http::response(array_intersect_key($input, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => $state]);
     });
     $pending = app(RegisterPerson::class)->handle($actor, (string) Str::uuid(), 'Pending mixed', 'pending-mixed@example.test', import: true);
     expect($pending->state)->toBe('unknown');
@@ -194,7 +207,7 @@ it('retains mixed uncertain import rows and reuses pending registration and adop
     $view = Livewire\Livewire::actingAs($actor)->test('organization.import-people')->set('rows', $rows)->set('departmentTerms', [['value' => 'Mapped', 'selected' => (string) $department->id, 'count' => 3, 'matched' => true]])->call('import')
         ->assertSet('result.pending', 2)->assertSet('result.created', 1)->assertSet('rows', $rows)->assertSee('Some registrations need confirmation')->assertSee('Row 2: Confirmed')->assertSee('Row 3: Pending confirmation')->assertSee('Row 4: Pending confirmation')->assertDontSee('Import completed')->assertSee('Retry the import');
     expect(User::where('email', 'confirmed-mixed@example.test')->sole()->departments()->whereKey($department->id)->exists())->toBeTrue()
-        ->and(User::where('email', 'pending-mixed@example.test')->sole()->departments()->count())->toBe(0)->and($existing->departments()->count())->toBe(0);
+        ->and(User::where('email', 'pending-mixed@example.test')->count())->toBe(0)->and($existing->departments()->count())->toBe(0);
     $identities = AccountRequestOperation::orderBy('id')->pluck('payload_hash', 'id')->all();
     expect($identities)->toHaveCount(3)->and(AccountRequestOperation::find($pending->id)->state)->toBe('unknown');
     $recover = true;
@@ -204,6 +217,6 @@ it('retains mixed uncertain import rows and reuses pending registration and adop
         ->and(User::whereIn('email', array_column($rows, 'email'))->count())->toBe(3)
         ->and(User::where('email', 'pending-mixed@example.test')->sole()->departments()->whereKey($department->id)->exists())->toBeTrue()->and($existing->fresh()->departments()->whereKey($department->id)->exists())->toBeTrue();
     $puts = collect(Http::recorded())->filter(fn ($pair) => $pair[0]->method() === 'PUT');
-    expect($puts->map(fn ($pair) => $pair[0]['operation_id'])->all())->toHaveCount(3);
+    expect($puts->map(fn ($pair) => $pair[0]['operation_id'])->all())->toHaveCount(5);
     Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com') || str_contains($request->url(), '/invitations'));
 });
