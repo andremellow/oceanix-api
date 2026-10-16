@@ -60,8 +60,13 @@ it('offers accessible registration and same-request recovery without automatic i
     $this->actingAs($actor);
     config(['services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
     $sentEnvelope = null;
-    Http::fake(['account.example.test/*' => function ($request) use (&$sentEnvelope) {
+    $mappingAttempts = 0;
+    Http::fake(['account.example.test/*' => function ($request) use (&$sentEnvelope, &$mappingAttempts) {
         if (str_ends_with($request->url(), '/local-person')) {
+            $mappingAttempts++;
+            if ($mappingAttempts === 1) {
+                return Http::failedConnection();
+            }
             $input = $request->data();
             expect(PersonProductAccess::where('user_id', $input['payload']['local_person_id'])->sole()->confirmed_enabled)->toBeFalse();
 
@@ -72,7 +77,7 @@ it('offers accessible registration and same-request recovery without automatic i
 
             return Http::failedConnection();
         }
-        expect(User::where('email', 'browser-registration@example.test')->count())->toBe(0);
+        expect(User::where('email', 'browser-registration@example.test')->count())->toBe($mappingAttempts === 0 ? 0 : 1);
 
         return Http::response(array_intersect_key($sentEnvelope, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => ['shared_person_id' => '11111111-1111-4111-8111-111111111111', 'company_member_id' => '22222222-2222-4222-8222-222222222222', 'workos_user_id' => 'user_browser_registered', 'workos_membership_id' => 'om_browser_registered', 'membership_status' => 'pending', 'registration_mode' => 'confirmed-first', 'registration_source' => 'form', 'actor_workos_user_id' => $sentEnvelope['actor_workos_user_id'], 'request_payload_hash' => ApplyProductOperation::hash($sentEnvelope), 'mapping_complete' => false]]);
     }]);
@@ -98,8 +103,17 @@ it('offers accessible registration and same-request recovery without automatic i
         ->and(AccountRequestOperation::sole()->state)->toBe('unknown');
     $id = AccountRequestOperation::sole()->id;
     $page->script('window.fetch=window.originalRegistrationFetch;void 0');
+    $page->press(__('Check registration again'))
+        ->assertSee($locale === 'pt_BR' ? 'O Account confirmou esta pessoa. O acesso aguarda confirmação; tentar novamente consulta a mesma solicitação.' : 'Account confirmed this person. Access is pending confirmation; retry checks the same request.')
+        ->assertScript('window.location.pathname', route('people.create', [], false))
+        ->assertDontSee(__('Person registered. No invitation was sent.'))
+        ->assertDisabled('#account-person-name')->assertDisabled('#account-person-email')->assertNoJavaScriptErrors();
+    $pending = AccountRequestOperation::sole();
+    $person = User::where('email', 'browser-registration@example.test')->sole();
+    expect($pending->state)->toBe('mapping_pending')->and($pending->id)->toBe($id)->and($person->roles()->count())->toBe(0)->and(PersonProductAccess::where('user_id', $person->id)->sole()->confirmed_enabled)->toBeFalse();
     $page->press(__('Check registration again'))->assertSee(__('Person registered. No invitation was sent.'))->assertNoJavaScriptErrors();
+    expect(AccountRequestOperation::sole()->user_id)->toBe($person->id);
     expect(AccountRequestOperation::sole()->id)->toBe($id)->and(AccountRequestOperation::sole()->state)->toBe('confirmed')->and(User::where('email', 'browser-registration@example.test')->count())->toBe(1);
-    Http::assertSentCount(3);
+    Http::assertSentCount(5);
     Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
 })->with(['English desktop' => ['en', 1440], 'Portuguese mobile' => ['pt_BR', 390]]);

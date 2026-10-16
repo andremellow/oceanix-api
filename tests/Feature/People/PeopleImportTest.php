@@ -220,3 +220,39 @@ it('retains mixed uncertain import rows and reuses pending registration and adop
     expect($puts->map(fn ($pair) => $pair[0]['operation_id'])->all())->toHaveCount(5);
     Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com') || str_contains($request->url(), '/invitations'));
 });
+
+it('never decorates an unresolved registration owned by another caller or source', function ($source, $otherActor, $mappingFails) {
+    seedAccessCatalog();
+    Http::preventStrayRequests();
+    config(['services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
+    currentCompany()->update(['workos_organization_id' => 'org_import_ownership']);
+    AccountCompanyBinding::create(['account_company_uuid' => (string) Str::uuid(), 'compliance_company_id' => currentCompany()->id, 'workos_organization_id' => 'org_import_ownership']);
+    $owner = userWithPermissions([Permission::PeopleManage, Permission::PeopleImport]);
+    $owner->update(['workos_user_id' => 'user_registration_owner']);
+    Http::fake(['account.example.test/*' => function ($request) use ($mappingFails) {
+        $input = $request->data();
+        if (str_ends_with($request->url(), '/local-person')) {
+            if ($mappingFails) {
+                return Http::failedConnection();
+            }
+            $state = $input['payload'] + ['mapping_complete' => true];
+        } else {
+            $state = ['shared_person_id' => '11111111-1111-4111-8111-111111111111', 'company_member_id' => '22222222-2222-4222-8222-222222222222', 'workos_user_id' => 'user_import_owned', 'workos_membership_id' => 'om_import_owned', 'membership_status' => 'pending', 'registration_mode' => 'confirmed-first', 'registration_source' => $input['payload']['registration_source'], 'actor_workos_user_id' => $input['actor_workos_user_id'], 'request_payload_hash' => ApplyProductOperation::hash($input), 'mapping_complete' => false];
+        }
+
+        return Http::response(array_intersect_key($input, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence', 'actor_workos_user_id'])) + ['outcome' => 'confirmed', 'confirmed_state' => $state]);
+    }]);
+    $operation = app(RegisterPerson::class)->handle($owner, (string) Str::uuid(), 'Owned registration', 'owned@example.test', import: $source === 'import');
+    $person = User::findOrFail($operation->user_id);
+    $before = $operation->fresh()->getRawOriginal();
+    $importer = $otherActor ? userWithPermissions([Permission::PeopleImport]) : $owner;
+    $this->actingAs($importer);
+    $department = Department::factory()->create();
+    $job = JobFunction::factory()->create();
+    $result = app(ImportPeople::class)->handle([['row' => 2, 'name' => 'Must not rename', 'email' => $person->email, 'department' => 'Department', 'job_function' => 'Job']], ['Job' => (string) $job->id], ['Department' => (string) $department->id]);
+    expect($result['pending'])->toBe($mappingFails ? 1 : 0)->and($result['existing'])->toBe($mappingFails ? 0 : 1)->and($result['created'])->toBe(0);
+    expect($result['rows'][0]['outcome'])->toBe($mappingFails ? 'mapping_pending' : 'confirmed');
+    expect($person->roles()->where('key', 'employee')->exists())->toBe(! $mappingFails)->and($person->departments()->exists())->toBe(! $mappingFails)->and($person->jobFunctions()->exists())->toBe(! $mappingFails);
+    expect($operation->fresh()->getRawOriginal())->toBe($before);
+    Http::assertSentCount(2);
+})->with(['other import actor' => ['import', true, true], 'same actor form source' => ['form', false, true], 'confirmed existing positive' => ['form', true, false]]);
