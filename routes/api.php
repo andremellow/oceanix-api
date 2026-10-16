@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\Platform\TaskApiController;
 use App\Http\Controllers\ControlPlane\CompanyComplianceAccessController;
+use App\Http\Controllers\ControlPlane\MigrateAccountPersonController;
 use App\Http\Controllers\ControlPlane\ProductActorAuthorizationController;
 use App\Http\Controllers\ControlPlane\ProductOperationController;
 use App\Http\Controllers\ControlPlane\ProductOperationStatusController;
@@ -40,3 +41,6 @@ Route::get('/control-plane/v2/operations/{operation_uuid}', ProductOperationStat
     ->middleware(EnsureProvisioningPrincipal::class.':operations.read');
 Route::post('/control-plane/v2/actor-authorizations', ProductActorAuthorizationController::class)
     ->middleware(EnsureProvisioningPrincipal::class.':actors.authorize');
+
+Route::put('/control-plane/migrations/v1/people/{operation_uuid}', MigrateAccountPersonController::class)
+    ->middleware(EnsureProvisioningPrincipal::class.':migration.people.link');
