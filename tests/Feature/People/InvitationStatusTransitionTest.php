@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\ControlPlane\ApplyProductOperation;
 use App\Actions\People\ImportPeople;
 use App\Actions\Platform\GrantPlatformCompanyAccess;
 use App\Enums\Permission;
@@ -7,7 +8,6 @@ use App\Enums\UserStatus;
 use App\Models\Account;
 use App\Models\AccountCompanyBinding;
 use App\Models\ComplianceEvent;
-use App\Models\PersonProductAccess;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
 use App\Services\Requirements\AssignmentMaterializationService;
@@ -41,11 +41,14 @@ it('imports new people invited without changing existing protected statuses', fu
     Http::preventStrayRequests();
     Http::fake(['account.example.test/*' => function ($request) {
         $data = $request->data();
-        if ($data['kind'] === 'person.register') {
-            PersonProductAccess::where('user_id', $data['payload']['local_person_id'])->update(['confirmed_enabled' => true, 'version' => 1]);
+        $state = ['enabled' => true, 'shared_person_id' => (string) Str::uuid(), 'company_member_id' => (string) Str::uuid()];
+        if (($data['payload']['registration_mode'] ?? null) === 'confirmed-first-mapping') {
+            $state = $data['payload'] + ['mapping_complete' => true];
+        } elseif ($data['kind'] === 'person.register') {
+            $state += ['registration_mode' => 'confirmed-first', 'registration_source' => 'import', 'actor_workos_user_id' => $data['actor_workos_user_id'], 'request_payload_hash' => ApplyProductOperation::hash($data), 'workos_user_id' => 'user_import_status_new', 'workos_membership_id' => 'om_import_status_new', 'membership_status' => 'pending', 'mapping_complete' => false];
         }
 
-        return Http::response(array_intersect_key($data, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => ['enabled' => true, 'shared_person_id' => (string) Str::uuid(), 'company_member_id' => (string) Str::uuid()]]);
+        return Http::response(array_intersect_key($data, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence', 'actor_workos_user_id'])) + ['outcome' => 'confirmed', 'confirmed_state' => $state]);
     }]);
     $protected = User::factory()->suspended()->create(['email' => 'protected@example.com']);
     $result = app(ImportPeople::class)->handle([
@@ -54,7 +57,7 @@ it('imports new people invited without changing existing protected statuses', fu
     ], [], []);
     expect(User::where('email', 'new@example.com')->first()->status)->toBe(UserStatus::Invited)->and($protected->fresh()->status)->toBe(UserStatus::Suspended);
     expect($result['created'])->toBe(1)->and($result['existing'])->toBe(1)->and($result['pending'])->toBe(0);
-    Http::assertSentCount(2);
+    Http::assertSentCount(3);
     Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
 });
 
