@@ -9,6 +9,7 @@ use App\Models\Company;
 use App\Models\PersonAccountLink;
 use App\Models\PersonProductAccess;
 use App\Models\ProductOperationReceipt;
+use App\Models\ServicePrincipal;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -18,6 +19,8 @@ use Tests\Support\AccountIntegrationFixture as Fixture;
 
 it('replays receipt without replacing newer access', function () {
     [$company, $person, $principal, $token, $envelope] = Fixture::receiver();
+    $principal->update(['capabilities' => []]);
+    $token = $principal->createToken('key-trust', [])->plainTextToken;
     $url = '/api/control-plane/v2/operations/';
     $this->withToken($token)->withHeader('Idempotency-Key', $envelope['operation_id']);
     $receipt = $this->putJson($url.$envelope['operation_id'], $envelope)->assertCreated()->assertJsonPath('outcome', 'confirmed')->json();
@@ -30,10 +33,12 @@ it('replays receipt without replacing newer access', function () {
     Http::assertNothingSent();
 });
 
-it('enforces principal capability actor and receipt bindings', function () {
+it('enforces principal company and receipt bindings', function () {
     [$company, $person, $principal, $token, $envelope] = Fixture::receiver();
+    $principal->update(['capabilities' => []]);
+    $token = $principal->createToken('key-trust', [])->plainTextToken;
     $url = '/api/control-plane/v2/operations/'.$envelope['operation_id'];
-    $this->withToken($principal->createToken('wildcard', ['*'])->plainTextToken)->withHeader('Idempotency-Key', $envelope['operation_id'])->putJson($url, $envelope)->assertForbidden();
+    $this->withHeader('Idempotency-Key', $envelope['operation_id']);
     $this->withToken($token)->putJson($url, array_replace($envelope, ['workos_organization_id' => 'org_wrong']))->assertConflict();
     $principal->update(['company_uuids' => []]);
     $this->putJson($url, $envelope)->assertForbidden();
@@ -42,6 +47,8 @@ it('enforces principal capability actor and receipt bindings', function () {
 
 it('provisions an Account-origin person once without email merge or invitation', function () {
     [$company, $existing, $principal, $token, $input] = AccountIntegrationFixture::receiver();
+    $principal->update(['capabilities' => []]);
+    $token = $principal->createToken('key-trust', [])->plainTextToken;
     $input['payload']['local_person_id'] = null;
     $input['payload']['name'] = 'Central provisioned person';
     $input['payload']['email'] = 'central-provision@example.test';
@@ -61,6 +68,8 @@ it('provisions an Account-origin person once without email merge or invitation',
 
 it('reauthorizes product actor against current local permission status company and confirmed access', function () {
     [$company, $target, $principal, $token, $input] = AccountIntegrationFixture::receiver();
+    $principal->update(['capabilities' => []]);
+    $token = $principal->createToken('key-trust', [])->plainTextToken;
     config(['services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
     $actor = userWithPermissions([Permission::PeopleManage]);
     $actor->forceFill(['workos_user_id' => 'user_callback_actor'])->save();
@@ -89,6 +98,8 @@ it('reauthorizes product actor against current local permission status company a
 
 it('executes authenticated v2 company provisioning ordering conflict and exact replay atomically', function () {
     [$existing, $person, $principal, $token, $input] = Fixture::receiver();
+    $principal->update(['capabilities' => []]);
+    $token = $principal->createToken('key-trust', [])->plainTextToken;
     $uuid = (string) Str::uuid();
     $principal->update(['company_uuids' => [...$principal->company_uuids, $uuid]]);
     $input = array_replace($input, ['kind' => 'company.provision', 'account_company_uuid' => $uuid, 'workos_organization_id' => 'org_v2_company', 'subject_id' => $uuid, 'payload' => ['name' => 'V2 Company', 'slug' => 'v2-company', 'enabled' => true]]);
@@ -110,5 +121,74 @@ it('executes authenticated v2 company provisioning ordering conflict and exact r
     $this->withHeader('Idempotency-Key', $input['operation_id'])->putJson($base.$input['operation_id'], $input)->assertExactJson($created);
     $this->getJson($base.$disabled['operation_id'])->assertOk()->assertJsonPath('confirmed_state.enabled', false);
     expect($company->fresh()->compliance_access_version)->toBe(3)->and($company->fresh()->compliance_access_enabled)->toBeTrue()->and(ProductOperationReceipt::where('company_id', $company->id)->count())->toBe(3);
+    Http::assertNothingSent();
+});
+
+it('rejects invalid key identities on every inbound route without operational writes', function (string $state) {
+    [$company, $person, $principal, $token, $input] = Fixture::receiver();
+    $principal->update(['capabilities' => []]);
+    $token = $principal->createToken('key-trust', [])->plainTextToken;
+    $status = 403;
+    match ($state) {
+        'inactive' => $principal->update(['active' => false]),
+        'expired-principal' => $principal->update(['expires_at' => now()->subSecond()]),
+        'expiry-boundary' => $principal->update(['expires_at' => now()]),
+        'environment' => $principal->update(['environment' => 'production']),
+        'product' => $principal->update(['product' => 'other']),
+        'expired-token' => $token = $principal->createToken('expired', [], now()->subSecond())->plainTextToken,
+        'maximum-age' => config(['sanctum.expiration' => 1]),
+        'human' => $token = $person->createToken('human', [])->plainTextToken,
+        'revoked' => $principal->tokens()->delete(),
+        'invalid' => $token = 'invalid-key',
+        'missing' => $token = '',
+    };
+    if ($state === 'maximum-age') {
+        $principal->tokens()->update(['created_at' => now()->subMinutes(2)]);
+    }
+    if (in_array($state, ['expired-token', 'maximum-age', 'revoked', 'invalid', 'missing'], true)) {
+        $status = 401;
+    }
+    $before = [$company->fresh()->getRawOriginal(), $person->fresh()->getRawOriginal()];
+    $this->withToken($token)->withHeader('Idempotency-Key', $input['operation_id']);
+    foreach ([
+        ['put', '/api/control-plane/v1/companies/'.$input['account_company_uuid']],
+        ['put', '/api/control-plane/v1/companies/'.$input['account_company_uuid'].'/compliance-access'],
+        ['put', '/api/control-plane/v2/operations/'.$input['operation_id']],
+        ['get', '/api/control-plane/v2/operations/'.$input['operation_id']],
+        ['post', '/api/control-plane/v2/actor-authorizations'],
+        ['put', '/api/control-plane/migrations/v1/people/'.$input['operation_id']],
+    ] as [$method, $url]) {
+        $this->json(strtoupper($method), $url, $input)->assertStatus($status);
+    }
+    expect([$company->fresh()->getRawOriginal(), $person->fresh()->getRawOriginal()])->toBe($before)
+        ->and(ProductOperationReceipt::count())->toBe(0)->and(PersonAccountLink::count())->toBe(0)->and(PersonProductAccess::count())->toBe(0);
+    Http::assertNothingSent();
+})->with(['inactive', 'expired-principal', 'expiry-boundary', 'environment', 'product', 'expired-token', 'maximum-age', 'human', 'revoked', 'invalid', 'missing']);
+
+it('keeps receipts private to their issuer and allowed company with grantless keys', function () {
+    [$company, $person, $principal, $token, $input] = Fixture::receiver();
+    $principal->update(['capabilities' => []]);
+    $token = $principal->createToken('key-trust', [])->plainTextToken;
+    $url = '/api/control-plane/v2/operations/'.$input['operation_id'];
+    $this->withToken($token)->withHeader('Idempotency-Key', $input['operation_id']);
+    $receipt = $this->putJson($url, $input)->assertCreated()->json();
+    $other = ServicePrincipal::create(['name' => 'Other synthetic', 'product' => 'compliance', 'environment' => 'testing', 'active' => true, 'capabilities' => [], 'company_uuids' => $principal->company_uuids]);
+    $this->withToken($other->createToken('other', [])->plainTextToken)->getJson($url)->assertNotFound();
+    $principal->update(['company_uuids' => []]);
+    $this->withToken($token)->getJson($url)->assertForbidden();
+    $principal->update(['company_uuids' => [$input['account_company_uuid']]]);
+    $this->getJson($url)->assertExactJson($receipt);
+    expect(ProductOperationReceipt::count())->toBe(1);
+    Http::assertNothingSent();
+});
+
+it('validates unknown operation kinds before writing even with unrelated token metadata', function () {
+    [$company, $person, $principal, $token, $input] = Fixture::receiver();
+    $principal->update(['capabilities' => []]);
+    $input['kind'] = 'unknown.operation';
+    $this->withToken($principal->createToken('unrelated', ['unrelated'])->plainTextToken)
+        ->withHeader('Idempotency-Key', $input['operation_id'])
+        ->putJson('/api/control-plane/v2/operations/'.$input['operation_id'], $input)->assertUnprocessable();
+    expect(ProductOperationReceipt::count())->toBe(0)->and(PersonAccountLink::count())->toBe(0);
     Http::assertNothingSent();
 });

@@ -28,7 +28,7 @@ function accessFixture(): array
 it('SC-01 SC-13 SC-15 applies and replays immutable ordered access receipts', function () {
     Http::fake();
     [$company,$url,$principal,$payload,$key] = accessFixture();
-    $this->withToken($principal->createToken('access', ['companies:access'])->plainTextToken)->withHeader('Idempotency-Key', $key);
+    $this->withToken($principal->createToken('access', [])->plainTextToken)->withHeader('Idempotency-Key', $key);
     $first = $this->putJson($url, $payload)->assertOk()->assertJsonPath('enabled', false)->json();
     expect($company->fresh()->compliance_access_enabled)->toBeFalse();
     $next = (string) Str::uuid();
@@ -37,16 +37,16 @@ it('SC-01 SC-13 SC-15 applies and replays immutable ordered access receipts', fu
     expect($company->fresh()->compliance_access_enabled)->toBeTrue()->and(CompanyAccessReceipt::count())->toBe(2);
     Http::assertNothingSent();
 });
-it('SC-12 refuses wildcard bearer and malformed commands', function () {
+it('SC-12 accepts unrelated bearer abilities but refuses malformed commands', function () {
     [$company,$url,$principal,$payload,$key] = accessFixture();
-    $this->withToken($principal->createToken('wildcard', ['*'])->plainTextToken)->withHeader('Idempotency-Key', $key)->putJson($url, $payload)->assertForbidden();
-    $this->withToken($principal->createToken('access', ['companies:access'])->plainTextToken)->putJson($url, [...$payload, 'enabled' => 'false'])->assertUnprocessable();
-    expect($company->fresh()->compliance_access_enabled)->toBeTrue();
+    $this->withToken($principal->createToken('unrelated', ['unrelated'])->plainTextToken)->withHeader('Idempotency-Key', $key)->putJson($url, $payload)->assertOk();
+    $this->withToken($principal->createToken('access', [])->plainTextToken)->putJson($url, [...$payload, 'enabled' => 'false'])->assertUnprocessable();
+    expect($company->fresh()->compliance_access_enabled)->toBeFalse();
 });
 
 it('SC-12 rejects identity conflicts skipped versions and changed immutable keys', function () {
     [$company,$url,$principal,$payload,$key] = accessFixture();
-    $this->withToken($principal->createToken('access', ['companies:access'])->plainTextToken)->withHeader('Idempotency-Key', $key);
+    $this->withToken($principal->createToken('access', [])->plainTextToken)->withHeader('Idempotency-Key', $key);
     foreach ([['workos_organization_id' => 'org_other'], ['compliance_company_public_id' => (string) Str::uuid()], ['version' => 2]] as $change) {
         $this->putJson($url, [...$payload, ...$change])->assertConflict();
     }
@@ -68,7 +68,7 @@ it('SC-07 SC-08 preserves suspension identity and training evidence through a fu
     $company->update(['status' => 'suspended']);
     $tables = ['users', 'roles', 'role_user', 'permission_role', 'courses', 'course_versions', 'user_training_assignments', 'compliance_events', 'lesson_progress', 'certificates'];
     $before = collect($tables)->mapWithKeys(fn ($t) => [$t => DB::table($t)->get()->toJson()]);
-    $this->withToken($principal->createToken('access', ['companies:access'])->plainTextToken)->withHeader('Idempotency-Key', $key)->putJson($url, $payload)->assertOk();
+    $this->withToken($principal->createToken('access', [])->plainTextToken)->withHeader('Idempotency-Key', $key)->putJson($url, $payload)->assertOk();
     $next = (string) Str::uuid();
     $this->withHeader('Idempotency-Key', $next)->putJson($url, [...$payload, 'enabled' => true, 'version' => 2, 'correlation_id' => $next])->assertOk();
     expect($company->fresh()->status)->toBe('suspended')->and($company->fresh()->public_id)->toBe($company->public_id);
@@ -109,7 +109,7 @@ it('SC-06 SC-07 SC-08 restores only product eligibility while retaining effectiv
     }
     $grants = DB::table('permission_role')->get()->toJson();
     expect(DB::table('permission_role')->count())->toBeGreaterThan(0);
-    $this->withToken($principal->createToken('access', ['companies:access'])->plainTextToken)->withHeader('Idempotency-Key', $key)->putJson($url, $payload)->assertOk();
+    $this->withToken($principal->createToken('access', [])->plainTextToken)->withHeader('Idempotency-Key', $key)->putJson($url, $payload)->assertOk();
     $next = (string) Str::uuid();
     $this->withHeader('Idempotency-Key', $next)->putJson($url, [...$payload, 'enabled' => true, 'version' => 2, 'correlation_id' => $next])->assertOk();
     expect(DB::table('permission_role')->get()->toJson())->toBe($grants)->and($company->fresh()->compliance_access_enabled)->toBeTrue();

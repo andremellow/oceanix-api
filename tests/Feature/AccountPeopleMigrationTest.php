@@ -18,8 +18,8 @@ use Tests\Support\AccountIntegrationFixture;
 function migrationReceiver(): array
 {
     [$company, $person, $principal] = AccountIntegrationFixture::receiver();
-    $principal->update(['capabilities' => ['migration.people.link']]);
-    $token = $principal->createToken('migration', ['migration.people.link'])->plainTextToken;
+    $principal->update(['capabilities' => []]);
+    $token = $principal->createToken('migration', [])->plainTextToken;
     $input = ['operation_id' => (string) Str::uuid(), 'preview' => false, 'account_company_uuid' => $principal->company_uuids[0], 'workos_organization_id' => $company->workos_organization_id, 'actor_workos_user_id' => 'user_synthetic_actor', 'shared_person_id' => (string) Str::uuid(), 'company_member_id' => (string) Str::uuid(), 'source_key' => 'user:'.$person->workos_user_id, 'workos_user_id' => $person->workos_user_id, 'workos_membership_id' => 'om_synthetic', 'invitation_id' => null, 'name' => $person->name, 'email' => $person->email, 'baseline_eligible' => true];
     $input['payload_hash'] = ApplyProductOperation::hash($input);
 

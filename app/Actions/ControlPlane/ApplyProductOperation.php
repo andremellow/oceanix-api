@@ -44,7 +44,6 @@ class ApplyProductOperation
             $principal = ServicePrincipal::whereKey($principal->id)->lockForUpdate()->firstOrFail();
             abort_unless($principal->active && $principal->environment === app()->environment() && $principal->product === $input['product']
                 && (! $principal->expires_at || $principal->expires_at->isFuture())
-                && in_array($input['kind'], $principal->capabilities ?? [], true)
                 && in_array($input['account_company_uuid'], $principal->company_uuids ?? [], true), 403);
             if ($input['kind'] === 'company.provision') {
                 $prior = ProductOperationReceipt::where('service_principal_id', $principal->id)->where('operation_id', $input['operation_id'])->first();

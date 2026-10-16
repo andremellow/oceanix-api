@@ -18,7 +18,7 @@ class AuthorizeProductActor
     public function handle(ServicePrincipal $principal, array $input): array
     {
         abort_unless($principal->active && $principal->environment === app()->environment() && $principal->product === $input['product']
-            && in_array('actors.authorize', $principal->capabilities ?? [], true) && in_array($input['account_company_uuid'], $principal->company_uuids ?? [], true), 403);
+            && in_array($input['account_company_uuid'], $principal->company_uuids ?? [], true), 403);
         $hash = $input['payload_hash'];
         unset($input['payload_hash']);
         abort_unless(hash_equals(ApplyProductOperation::hash($input), $hash), 403);

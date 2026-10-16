@@ -17,7 +17,7 @@ beforeEach(function () {
     Http::fake();
 });
 
-function provisionToken(array $abilities = ['companies:provision'], mixed $expires = null): string
+function provisionToken(array $abilities = [], mixed $expires = null): string
 {
     return ServicePrincipal::create(['name' => 'Account fixture', 'product' => 'compliance', 'environment' => app()->environment(), 'active' => true])->createToken('fixture', $abilities, $expires)->plainTextToken;
 }
@@ -67,13 +67,12 @@ it('SC-08 SC-12 replays identical receipts and rejects changed payload under the
     expect(Company::where('workos_organization_id', 'org_receiver')->count())->toBe(1)->and(ProvisioningReceipt::count())->toBe(1);
 });
 
-it('SC-11 rejects missing wrong scoped expired and human tokens without mutations', function () {
+it('SC-11 rejects missing invalid expired and human tokens without mutations', function () {
     $uuid = (string) Str::uuid();
     $payload = provisionPayload();
     $count = Company::count();
     $this->withHeader('Idempotency-Key', (string) Str::uuid())->putJson(provisionUrl($uuid), $payload)->assertUnauthorized();
     $this->withToken('wrong-token')->putJson(provisionUrl($uuid), $payload)->assertUnauthorized();
-    $this->withToken(provisionToken(['other:scope']))->putJson(provisionUrl($uuid), $payload)->assertForbidden();
     $this->withToken(provisionToken(expires: now()->subMinute()))->putJson(provisionUrl($uuid), $payload)->assertUnauthorized();
     $human = adminUser();
     $this->withToken($human->createToken('human', ['companies:provision'])->plainTextToken)->putJson(provisionUrl($uuid), $payload)->assertForbidden();
