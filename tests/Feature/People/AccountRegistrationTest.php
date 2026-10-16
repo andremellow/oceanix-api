@@ -188,7 +188,7 @@ it('retains disabled materialization and original evidence after an invalid mapp
                 $main = $data;
             }
 
-return Http::response(confirmedRegistrationReceipt($main));
+            return Http::response(confirmedRegistrationReceipt($main));
         }
         $receipt = array_intersect_key($data, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence', 'actor_workos_user_id'])) + ['outcome' => 'confirmed', 'confirmed_state' => $data['payload'] + ['mapping_complete' => true]];
         if (! $recover) {
