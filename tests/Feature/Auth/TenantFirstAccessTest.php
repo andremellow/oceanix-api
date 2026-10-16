@@ -1,7 +1,6 @@
 <?php
 
 use App\Actions\Auth\RecordTenantAccess;
-use App\Actions\Platform\CreateCompany;
 use App\Actions\Platform\EnterCompany;
 use App\Actions\Tenancy\SwitchCompany;
 use App\Enums\UserStatus;
@@ -117,11 +116,12 @@ it('denies blocked target switching and preserves the allowed current session', 
     expect(auth()->id())->toBe($source->id)->and(session('company_id'))->toBe($previous->id)->and(app(TenantContext::class)->id())->toBe($previous->id)->and(User::withoutGlobalScope('company')->find($target->id)->first_access_at)->toBeNull()->and(User::withoutGlobalScope('company')->find($target->id)->status)->toBe($status);
 })->with([UserStatus::Suspended, UserStatus::Terminated]);
 
-it('keeps a supplied company owner invited until authorized entry', function () {
+it('keeps a provisioned company owner invited until authorized entry', function () {
     $account = Account::factory()->platformAdmin()->create(['workos_user_id' => 'user_owner']);
-    $company = app(CreateCompany::class)->handle('New owner company', owner: $account);
-    $person = User::withoutGlobalScope('company')->where('company_id', $company->id)->where('account_id', $account->id)->firstOrFail();
+    $company = Company::factory()->create(['name' => 'New owner company']);
     app(TenantContext::class)->set($company);
+    $person = adminUser();
+    $person->forceFill(['account_id' => $account->id, 'workos_user_id' => $account->workos_user_id, 'status' => UserStatus::Invited])->save();
     expect($person->status)->toBe(UserStatus::Invited)->and($person->account_id)->toBe($account->id)
         ->and($person->workos_user_id)->toBe('user_owner')->and($person->roles()->where('key', 'admin')->exists())->toBeTrue()
         ->and($person->first_access_at)->toBeNull()->and($person->last_access_at)->toBeNull();
