@@ -1,10 +1,14 @@
 <?php
 
 use App\Models\AccountCompanyBinding;
+use App\Models\Certificate;
+use App\Models\Course;
 use App\Models\PersonAccountLink;
 use App\Models\PersonProductAccess;
 use App\Models\ProductOperationReceipt;
+use App\Models\Role;
 use App\Models\User;
+use App\Models\UserTrainingAssignment;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Support\AccountIntegrationFixture as Fixture;
@@ -89,3 +93,35 @@ it('TA-02 rejects exact-mapping conflicts while a valid peer independently finis
     $this->withHeader('Idempotency-Key', $input['operation_id'])->putJson('/api/control-plane/v2/operations/'.$input['operation_id'], $input)->assertSuccessful()->assertJsonPath('confirmed_state.local_person_id', (string) $peer->id);
     expect(DB::table('users')->orderBy('id')->get()->toJson())->toBe($users)->and(PersonProductAccess::all()->toJson())->toBe($access)->and(ProductOperationReceipt::count())->toBe(1);
 })->with(['duplicate', 'organization', 'binding', 'different-stable-id', 'occupied-link', 'local-id']);
+
+it('QA-R02 initializes only untouched exact identity mapping without claiming verification', function () {
+    Fixture::fakeAccountActorAuthorization();
+    [$company, $person, $principal, $token, $input] = Fixture::receiver();
+    $person->forceFill(['workos_invitation_id' => null, 'invitation_generation' => 0, 'invitation_observation_sequence' => 0, 'invitation_observation_hash' => null, 'invitation_verified_at' => null])->save();
+    $input['kind'] = 'person.map-existing';
+    $input['payload'] = ['shared_person_id' => (string) Str::uuid(), 'workos_user_id' => $person->workos_user_id, 'invitation_id' => 'invitation_imported'];
+    $this->withToken($token)->withHeader('Idempotency-Key', $input['operation_id'])->putJson('/api/control-plane/v2/operations/'.$input['operation_id'], $input)->assertSuccessful();
+    expect($person->fresh()->workos_invitation_id)->toBe('invitation_imported')->and($person->fresh()->invitation_verified_at)->toBeNull()->and($person->fresh()->invitation_observation_sequence)->toBe(0);
+});
+
+it('TA-R01 rejects initialized null invitation mapping independently of each untouched guard', function (string $guard) {
+    Fixture::fakeAccountActorAuthorization();
+    [$company, $person, $principal, $token, $input] = Fixture::receiver();
+    $person->forceFill(['workos_invitation_id' => null, 'invitation_generation' => 0, 'invitation_observation_sequence' => 0, 'invitation_observation_hash' => null, 'invitation_verified_at' => null])->save();
+    $input['kind'] = 'person.map-existing';
+    $input['payload'] = ['shared_person_id' => (string) Str::uuid(), 'workos_user_id' => $person->workos_user_id];
+    $this->withToken($token)->withHeader('Idempotency-Key', $input['operation_id'])->putJson('/api/control-plane/v2/operations/'.$input['operation_id'], $input)->assertSuccessful();
+    $person->forceFill(['invitation_observation_sequence' => in_array($guard, ['sequence', 'observed'], true) ? 1 : 0, 'invitation_observation_hash' => in_array($guard, ['hash', 'observed'], true) ? str_repeat('c', 64) : null, 'invitation_verified_at' => in_array($guard, ['verified', 'observed'], true) ? now()->subDay() : null])->save();
+    seedAccessCatalog();
+    $person->roles()->syncWithoutDetaching(Role::where('key', 'employee')->sole()->id);
+    PersonProductAccess::create(['company_id' => $company->id, 'user_id' => $person->id, 'confirmed_enabled' => true, 'version' => 7, 'operation_id' => (string) Str::uuid()]);
+    $course = Course::factory()->create();
+    $assignment = UserTrainingAssignment::factory()->forCourse($course)->completed()->create(['user_id' => $person->id]);
+    Certificate::factory()->create(['user_id' => $person->id, 'assignment_id' => $assignment->id, 'course_id' => $assignment->course_id, 'course_version_id' => $assignment->course_version_id]);
+    $tables = ['users', 'person_account_links', 'product_operation_receipts', 'person_product_accesses', 'role_user', 'user_training_assignments', 'certificates'];
+    $before = collect($tables)->mapWithKeys(fn ($table) => [$table => DB::table($table)->orderBy('id')->get()->toJson()])->all();
+    $input['operation_id'] = (string) Str::uuid();
+    $input['payload']['invitation_id'] = 'invitation_forbidden_replacement';
+    $this->withHeader('Idempotency-Key', $input['operation_id'])->putJson('/api/control-plane/v2/operations/'.$input['operation_id'], $input)->assertConflict();
+    expect(collect($tables)->mapWithKeys(fn ($table) => [$table => DB::table($table)->orderBy('id')->get()->toJson()])->all())->toBe($before);
+})->with(['sequence', 'hash', 'verified', 'observed']);

@@ -16,6 +16,15 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Tests\Support\AccountIntegrationFixture as Fixture;
 
+/** Existing synchronization regressions start with a known legacy verification baseline. */
+function knownSyncInvitationLink(User $person): void
+{
+    if ($person->invitation_verified_at === null) {
+        $person->forceFill(['invitation_verified_at' => now()->subDays(3)])->save();
+    }
+    Fixture::invitationLink($person);
+}
+
 beforeEach(function () {
     config(['services.account.invitation_ownership_enabled' => true, 'services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic', 'services.account.actor_assertion_secret' => 'synthetic-actor-proof']);
     Http::preventStrayRequests();
@@ -25,10 +34,10 @@ beforeEach(function () {
 it('SC-07 SC-13 receives every lifecycle through Account while preserving operational access', function (string $state, bool $active) {
     $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
     $actor->forceFill(['workos_user_id' => 'user_sync_actor', 'account_id' => Account::factory()->create()->id])->save();
-    Fixture::invitationLink($actor);
+    knownSyncInvitationLink($actor);
     $person = employeeUser();
     $person->forceFill(['workos_user_id' => 'user_exact', 'workos_invitation_id' => $state === 'none' ? null : 'invitation_exact', 'invitation_generation' => 3, 'workos_active_membership' => $active])->save();
-    Fixture::invitationLink($person);
+    knownSyncInvitationLink($person);
     $before = $person->fresh()->only(['status', 'workos_active_membership', 'account_id', 'first_access_at']);
     $roles = DB::table('role_user')->get()->toJson();
     Http::fake(['account.example.test/*' => fn ($request) => Http::response(Fixture::observationReceipt($request->data(), $person, $state))]);
@@ -40,10 +49,10 @@ it('SC-07 SC-13 receives every lifecycle through Account while preserving operat
 it('SC-16 preserves last verification on transport and malformed receipt failures', function (string $failure) {
     $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
     $actor->forceFill(['workos_user_id' => 'user_sync_actor', 'account_id' => Account::factory()->create()->id])->save();
-    Fixture::invitationLink($actor);
+    knownSyncInvitationLink($actor);
     $person = employeeUser();
     $person->forceFill(['workos_invitation_id' => 'invitation_retained', 'invitation_generation' => 2, 'invitation_state' => WorkosInvitationState::Accepted, 'invitation_verified_at' => now()->subDay(), 'invitation_accepted_history_at' => now()->subDays(2)])->save();
-    Fixture::invitationLink($person);
+    knownSyncInvitationLink($person);
     $before = $person->fresh()->getAttributes();
     Http::fake(['account.example.test/*' => fn () => $failure === 'network' ? Http::failedConnection() : Http::response(['outcome' => 'confirmed'])]);
     expect(fn () => app(ReconcileWorkosInvitations::class)->refresh($person, $actor->id))->toThrow(Exception::class);
@@ -54,9 +63,9 @@ it('SC-16 preserves last verification on transport and malformed receipt failure
 it('SC-15 rejects revoked actors before any Account or provider request with an authorized positive control', function () {
     $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
     $actor->forceFill(['workos_user_id' => 'user_sync_actor', 'account_id' => Account::factory()->create()->id])->save();
-    Fixture::invitationLink($actor);
+    knownSyncInvitationLink($actor);
     $person = employeeUser();
-    Fixture::invitationLink($person);
+    knownSyncInvitationLink($person);
     Http::fake(['account.example.test/*' => fn ($request) => Http::response(Fixture::observationReceipt($request->data(), $person, 'none'))]);
     app(ReconcileWorkosInvitations::class)->refresh($person, $actor->id);
     $actor->roles()->detach();
@@ -69,9 +78,9 @@ it('SC-15 rejects revoked actors before any Account or provider request with an 
 it('SC-12 keeps a queued sync running until its original Account receipt completes', function () {
     $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
     $actor->forceFill(['workos_user_id' => 'user_sync_actor', 'account_id' => Account::factory()->create()->id])->save();
-    Fixture::invitationLink($actor);
+    knownSyncInvitationLink($actor);
     $person = employeeUser();
-    Fixture::invitationLink($person);
+    knownSyncInvitationLink($person);
     $run = WorkosSyncRun::create(['actor_id' => $actor->id, 'status' => WorkosOperationStatus::Queued]);
     Http::fake(['account.example.test/*' => function ($request) {
         return Http::response(array_intersect_key($request->data(), array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'pending', 'confirmed_state' => []]);
@@ -86,8 +95,8 @@ it('SC-18 reports exhausted Account targets as terminal failures without replaci
     $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
     $actor->forceFill(['workos_user_id' => 'user_terminal_actor', 'account_id' => Account::factory()->create()->id])->save();
     $person = employeeUser();
-    Fixture::invitationLink($actor);
-    Fixture::invitationLink($person);
+    knownSyncInvitationLink($actor);
+    knownSyncInvitationLink($person);
     $person->forceFill(['invitation_verified_at' => now()->subDay()])->save();
     $verified = $person->fresh()->invitation_verified_at;
     $run = WorkosSyncRun::create(['actor_id' => $actor->id, 'status' => WorkosOperationStatus::Queued]);
@@ -115,7 +124,7 @@ it('SC-19 preserves a newer invitation and independent access written while an A
     $actor->forceFill(['workos_user_id' => 'user_interleaved_actor', 'account_id' => Account::factory()->create()->id])->save();
     $person = employeeUser();
     $person->forceFill(['invitation_generation' => 1, 'workos_invitation_id' => 'invitation_old'])->save();
-    Fixture::invitationLink($person);
+    knownSyncInvitationLink($person);
     Http::fake(['account.example.test/*' => function ($request) use ($person) {
         $receipt = Fixture::observationReceipt($request->data(), $person, 'expired');
         $person->forceFill(['workos_invitation_id' => 'invitation_newer', 'invitation_generation' => 100, 'status' => UserStatus::Suspended])->save();
@@ -132,7 +141,7 @@ it('SC-13 SC-21 rejects malformed or foreign Account observations before any loc
     $actor->forceFill(['workos_user_id' => 'user_validation_actor', 'account_id' => Account::factory()->create()->id])->save();
     $person = employeeUser();
     $person->forceFill(['workos_invitation_id' => 'invitation_exact', 'invitation_generation' => 1])->save();
-    Fixture::invitationLink($person);
+    knownSyncInvitationLink($person);
     $before = $person->fresh()->getAttributes();
     Http::fake(['account.example.test/*' => function ($request) use ($person, $failure) {
         $receipt = Fixture::observationReceipt($request->data(), $person, 'pending');
@@ -157,8 +166,8 @@ it('SC-15 restores tenant context after a real new-format synchronization job co
     $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
     $actor->forceFill(['workos_user_id' => 'user_context_actor', 'account_id' => Account::factory()->create()->id])->save();
     $person = employeeUser();
-    Fixture::invitationLink($actor);
-    Fixture::invitationLink($person);
+    knownSyncInvitationLink($actor);
+    knownSyncInvitationLink($person);
     $run = WorkosSyncRun::create(['actor_id' => $actor->id, 'status' => WorkosOperationStatus::Queued]);
     Http::fake(['account.example.test/*' => function ($request) {
         $person = User::whereKey($request['payload']['local_person_id'])->firstOrFail();
@@ -177,9 +186,9 @@ it('SC-15 restores tenant context after a real new-format synchronization job co
 it('CR-04 retains transient unknown polling and later completes the original Account operations', function () {
     $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
     $actor->forceFill(['workos_user_id' => 'user_transient_actor', 'account_id' => Account::factory()->create()->id])->save();
-    Fixture::invitationLink($actor);
+    knownSyncInvitationLink($actor);
     $person = employeeUser();
-    Fixture::invitationLink($person);
+    knownSyncInvitationLink($person);
     $person->forceFill(['invitation_verified_at' => now()->subDay()])->save();
     $verified = $person->fresh()->invitation_verified_at;
     $run = WorkosSyncRun::create(['actor_id' => $actor->id, 'status' => WorkosOperationStatus::Queued]);

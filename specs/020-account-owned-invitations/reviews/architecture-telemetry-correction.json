@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "runId": "20261020-account-owned-invitations",
+  "recordedAt": "2026-10-20T14:19:11.361319Z",
+  "kind": "truthful-phase-metadata-correction",
+  "reason": "Owner rejected Account configuration path amendment; subsequent registry clarification did not replace approved architecture. Preserve original authoring as authoritative and accurately classify later evidence.",
+  "toolLimitation": "Installed toscanini-event.py phase choices do not include architecture-amendment or architecture-clarification; only runtime metadata was corrected, with no tool or validator change.",
+  "approvedArchitectureSha256": "490eb8c361fc7cbdb60f3ae8d0b33843fb25c1c140a243df5e2a9f8294310ecb",
+  "changes": [
+    {
+      "lineNumber": 1184,
+      "originalLine": "{\"timestamp\":\"2026-10-20T13:55:53.281013Z\",\"runId\":\"20261020-account-owned-invitations\",\"pid\":36607,\"agent\":\"architect\",\"role\":\"architect\",\"event\":\"started\",\"state\":\"active\",\"summary\":\"Directed authoring of single Account configuration path amendment; no full architecture audit\",\"reviewMode\":\"independent\",\"architectureSha256\":\"490eb8c361fc7cbdb60f3ae8d0b33843fb25c1c140a243df5e2a9f8294310ecb\",\"artifact\":\"specs/020-account-owned-invitations/architecture-amendment-01.md\",\"round\":1,\"phase\":\"architecture\",\"findingCount\":0,\"scopeId\":\"account-owned-invitations-v1\"}",
+      "originalLineSha256": "dca0c0569cc73d1e0a8cf8a220231e00efe03ade356967e7ed504c889fd9d07c",
+      "originalEvent": {
+        "timestamp": "2026-10-20T13:55:53.281013Z",
+        "runId": "20261020-account-owned-invitations",
+        "pid": 36607,
+        "agent": "architect",
+        "role": "architect",
+        "event": "started",
+        "state": "active",
+        "summary": "Directed authoring of single Account configuration path amendment; no full architecture audit",
+        "reviewMode": "independent",
+        "architectureSha256": "490eb8c361fc7cbdb60f3ae8d0b33843fb25c1c140a243df5e2a9f8294310ecb",
+        "artifact": "specs/020-account-owned-invitations/architecture-amendment-01.md",
+        "round": 1,
+        "phase": "architecture",
+        "findingCount": 0,
+        "scopeId": "account-owned-invitations-v1"
+      },
+      "correctedEvent": {
+        "timestamp": "2026-10-20T13:55:53.281013Z",
+        "runId": "20261020-account-owned-invitations",
+        "pid": 36607,
+        "agent": "architect",
+        "role": "architect",
+        "event": "started",
+        "state": "active",
+        "summary": "Directed authoring of single Account configuration path amendment; no full architecture audit",
+        "reviewMode": "independent",
+        "architectureSha256": "490eb8c361fc7cbdb60f3ae8d0b33843fb25c1c140a243df5e2a9f8294310ecb",
+        "artifact": "specs/020-account-owned-invitations/architecture-amendment-01.md",
+        "round": 1,
+        "phase": "architecture-amendment",
+        "findingCount": 0,
+        "scopeId": "account-owned-invitations-v1",
+        "metadataCorrection": {
+          "recordedAt": "2026-10-20T14:19:11.361319Z",
+          "originalPhase": "architecture",
+          "auditArtifact": "specs/020-account-owned-invitations/reviews/architecture-telemetry-correction.json",
+          "reason": "Distinct amendment/clarification authoring was mislabeled as replacement whole-architecture authoring; correct classification without changing verdict, artifact, timestamp or approved architecture."
+        }
+      }
+    },
+    {
+      "lineNumber": 1185,
+      "originalLine": "{\"timestamp\":\"2026-10-20T13:55:59.071331Z\",\"runId\":\"20261020-account-owned-invitations\",\"pid\":36618,\"agent\":\"architect\",\"role\":\"architect\",\"event\":\"completed\",\"state\":\"completed\",\"summary\":\"Single-file Account cutover configuration amendment authored; owner approval pending; amendment SHA256 e3285ce0f33482dcb0c46fade08097272018bea8f7cb5308565ad11135b348c7\",\"reviewMode\":\"independent\",\"architectureSha256\":\"490eb8c361fc7cbdb60f3ae8d0b33843fb25c1c140a243df5e2a9f8294310ecb\",\"artifact\":\"specs/020-account-owned-invitations/architecture-amendment-01.md\",\"verdict\":\"approved\",\"round\":1,\"phase\":\"architecture\",\"findingCount\":0,\"scopeId\":\"account-owned-invitations-v1\"}",
+      "originalLineSha256": "8e175142045c9adc9541936b48071038baa7b10ff3bd95a012cebee36a2621bf",
+      "originalEvent": {
+        "timestamp": "2026-10-20T13:55:59.071331Z",
+        "runId": "20261020-account-owned-invitations",
+        "pid": 36618,
+        "agent": "architect",
+        "role": "architect",
+        "event": "completed",
+        "state": "completed",
+        "summary": "Single-file Account cutover configuration amendment authored; owner approval pending; amendment SHA256 e3285ce0f33482dcb0c46fade08097272018bea8f7cb5308565ad11135b348c7",
+        "reviewMode": "independent",
+        "architectureSha256": "490eb8c361fc7cbdb60f3ae8d0b33843fb25c1c140a243df5e2a9f8294310ecb",
+        "artifact": "specs/020-account-owned-invitations/architecture-amendment-01.md",
+        "verdict": "approved",
+        "round": 1,
+        "phase": "architecture",
+        "findingCount": 0,
+        "scopeId": "account-owned-invitations-v1"
+      },
+      "correctedEvent": {
+        "timestamp": "2026-10-20T13:55:59.071331Z",
+        "runId": "20261020-account-owned-invitations",
+        "pid": 36618,
+        "agent": "architect",
+        "role": "architect",
+        "event": "completed",
+        "state": "completed",
+        "summary": "Single-file Account cutover configuration amendment authored; owner approval pending; amendment SHA256 e3285ce0f33482dcb0c46fade08097272018bea8f7cb5308565ad11135b348c7",
+        "reviewMode": "independent",
+        "architectureSha256": "490eb8c361fc7cbdb60f3ae8d0b33843fb25c1c140a243df5e2a9f8294310ecb",
+        "artifact": "specs/020-account-owned-invitations/architecture-amendment-01.md",
+        "verdict": "approved",
+        "round": 1,
+        "phase": "architecture-amendment",
+        "findingCount": 0,
+        "scopeId": "account-owned-invitations-v1",
+        "metadataCorrection": {
+          "recordedAt": "2026-10-20T14:19:11.361319Z",
+          "originalPhase": "architecture",
+          "auditArtifact": "specs/020-account-owned-invitations/reviews/architecture-telemetry-correction.json",
+          "reason": "Distinct amendment/clarification authoring was mislabeled as replacement whole-architecture authoring; correct classification without changing verdict, artifact, timestamp or approved architecture."
+        }
+      }
+    },
+    {
+      "lineNumber": 1186,
+      "originalLine": "{\"timestamp\":\"2026-10-20T14:03:33.211361Z\",\"runId\":\"20261020-account-owned-invitations\",\"pid\":37976,\"agent\":\"architect\",\"role\":\"architect\",\"event\":\"started\",\"state\":\"active\",\"summary\":\"Directed clarification of existing ProductModule cutover configuration ownership after rejected path addition\",\"reviewMode\":\"independent\",\"architectureSha256\":\"490eb8c361fc7cbdb60f3ae8d0b33843fb25c1c140a243df5e2a9f8294310ecb\",\"artifact\":\"specs/020-account-owned-invitations/architecture-clarification-01.md\",\"round\":1,\"phase\":\"architecture\",\"findingCount\":0,\"scopeId\":\"account-owned-invitations-v1\"}",
+      "originalLineSha256": "427b6b68c808f3045bbbf3f21f9b2b09505451948a5a72943c4c7538c5a6a94b",
+      "originalEvent": {
+        "timestamp": "2026-10-20T14:03:33.211361Z",
+        "runId": "20261020-account-owned-invitations",
+        "pid": 37976,
+        "agent": "architect",
+        "role": "architect",
+        "event": "started",
+        "state": "active",
+        "summary": "Directed clarification of existing ProductModule cutover configuration ownership after rejected path addition",
+        "reviewMode": "independent",
+        "architectureSha256": "490eb8c361fc7cbdb60f3ae8d0b33843fb25c1c140a243df5e2a9f8294310ecb",
+        "artifact": "specs/020-account-owned-invitations/architecture-clarification-01.md",
+        "round": 1,
+        "phase": "architecture",
+        "findingCount": 0,
+        "scopeId": "account-owned-invitations-v1"
+      },
+      "correctedEvent": {
+        "timestamp": "2026-10-20T14:03:33.211361Z",
+        "runId": "20261020-account-owned-invitations",
+        "pid": 37976,
+        "agent": "architect",
+        "role": "architect",
+        "event": "started",
+        "state": "active",
+        "summary": "Directed clarification of existing ProductModule cutover configuration ownership after rejected path addition",
+        "reviewMode": "independent",
+        "architectureSha256": "490eb8c361fc7cbdb60f3ae8d0b33843fb25c1c140a243df5e2a9f8294310ecb",
+        "artifact": "specs/020-account-owned-invitations/architecture-clarification-01.md",
+        "round": 1,
+        "phase": "architecture-clarification",
+        "findingCount": 0,
+        "scopeId": "account-owned-invitations-v1",
+        "metadataCorrection": {
+          "recordedAt": "2026-10-20T14:19:11.361319Z",
+          "originalPhase": "architecture",
+          "auditArtifact": "specs/020-account-owned-invitations/reviews/architecture-telemetry-correction.json",
+          "reason": "Distinct amendment/clarification authoring was mislabeled as replacement whole-architecture authoring; correct classification without changing verdict, artifact, timestamp or approved architecture."
+        }
+      }
+    },
+    {
+      "lineNumber": 1187,
+      "originalLine": "{\"timestamp\":\"2026-10-20T14:03:33.394055Z\",\"runId\":\"20261020-account-owned-invitations\",\"pid\":37970,\"agent\":\"architect\",\"role\":\"architect\",\"event\":\"completed\",\"state\":\"completed\",\"summary\":\"Existing registry storage fits approved sections 7.6 and 7.7 with no new production path; rejected config addition remains rejected\",\"reviewMode\":\"independent\",\"architectureSha256\":\"490eb8c361fc7cbdb60f3ae8d0b33843fb25c1c140a243df5e2a9f8294310ecb\",\"artifact\":\"specs/020-account-owned-invitations/architecture-clarification-01.md\",\"verdict\":\"approved\",\"round\":1,\"phase\":\"architecture\",\"findingCount\":0,\"scopeId\":\"account-owned-invitations-v1\"}",
+      "originalLineSha256": "58c7a206ecfbefd010751cf780d9fc7aa8d206ba32115a56ebc592d54dbdf31d",
+      "originalEvent": {
+        "timestamp": "2026-10-20T14:03:33.394055Z",
+        "runId": "20261020-account-owned-invitations",
+        "pid": 37970,
+        "agent": "architect",
+        "role": "architect",
+        "event": "completed",
+        "state": "completed",
+        "summary": "Existing registry storage fits approved sections 7.6 and 7.7 with no new production path; rejected config addition remains rejected",
+        "reviewMode": "independent",
+        "architectureSha256": "490eb8c361fc7cbdb60f3ae8d0b33843fb25c1c140a243df5e2a9f8294310ecb",
+        "artifact": "specs/020-account-owned-invitations/architecture-clarification-01.md",
+        "verdict": "approved",
+        "round": 1,
+        "phase": "architecture",
+        "findingCount": 0,
+        "scopeId": "account-owned-invitations-v1"
+      },
+      "correctedEvent": {
+        "timestamp": "2026-10-20T14:03:33.394055Z",
+        "runId": "20261020-account-owned-invitations",
+        "pid": 37970,
+        "agent": "architect",
+        "role": "architect",
+        "event": "completed",
+        "state": "completed",
+        "summary": "Existing registry storage fits approved sections 7.6 and 7.7 with no new production path; rejected config addition remains rejected",
+        "reviewMode": "independent",
+        "architectureSha256": "490eb8c361fc7cbdb60f3ae8d0b33843fb25c1c140a243df5e2a9f8294310ecb",
+        "artifact": "specs/020-account-owned-invitations/architecture-clarification-01.md",
+        "verdict": "approved",
+        "round": 1,
+        "phase": "architecture-clarification",
+        "findingCount": 0,
+        "scopeId": "account-owned-invitations-v1",
+        "metadataCorrection": {
+          "recordedAt": "2026-10-20T14:19:11.361319Z",
+          "originalPhase": "architecture",
+          "auditArtifact": "specs/020-account-owned-invitations/reviews/architecture-telemetry-correction.json",
+          "reason": "Distinct amendment/clarification authoring was mislabeled as replacement whole-architecture authoring; correct classification without changing verdict, artifact, timestamp or approved architecture."
+        }
+      }
+    }
+  ],
+  "unchanged": [
+    "Original architecture author started/completed events",
+    "All event timestamps and chronology",
+    "Every event verdict, state, role, summary and artifact",
+    "Approved architecture, approval, scope, contract, AC/INV/QA and implementation files"
+  ]
+}

@@ -117,6 +117,7 @@ class ReconcileWorkosInvitations
         $actor = $this->authorizedActor($person->company_id, $actorId, Permission::PeopleSyncWorkos);
         abort_unless($actor && $actor->workos_user_id, 403);
         $link = app(AdoptPeopleIntoAccount::class)->ensure($actor, $person, 'person.invitation.reconcile');
+        $person->refresh();
         $id = (string) Uuid::uuid5(Uuid::NAMESPACE_URL, 'compliance:'.$person->company_id.':reconcile:'.($run?->id ?? $person->invitation_generation).':'.$person->id);
         $payload = ['protocol_version' => 2, 'operation_id' => $id, 'kind' => 'person.invitation.reconcile', 'product' => 'compliance', 'account_company_uuid' => $link->account_company_uuid, 'workos_organization_id' => $person->company->workos_organization_id, 'subject_id' => $link->company_member_id, 'resource_sequence' => $person->invitation_generation + 1, 'actor_workos_user_id' => $actor->workos_user_id, 'payload' => ['local_person_id' => $person->id, 'invitation_id' => $person->workos_invitation_id, 'generation' => $person->invitation_generation]];
         $operation = AccountRequestOperation::firstOrCreate(['id' => $id], ['company_id' => $person->company_id, 'user_id' => $person->id, 'actor_id' => $actor->id, 'kind' => 'person.invitation.reconcile', 'actor_workos_user_id' => $actor->workos_user_id, 'payload' => $payload, 'payload_hash' => ApplyProductOperation::hash($payload)]);

@@ -185,13 +185,15 @@ it('TA-06 synchronizes populated and no-invitation people through pending pollin
     $company = currentCompany();
     $company->update(['workos_organization_id' => 'org_browser_sync']);
     $actor = userWithPermissions([Permission::PeopleView, Permission::PeopleSyncWorkos]);
-    $actor->forceFill(['workos_user_id' => 'user_browser_sync_actor', 'account_id' => Account::factory()->create()->id])->save();
+    $actor->forceFill(['workos_user_id' => 'user_browser_sync_actor', 'account_id' => Account::factory()->create()->id, 'invitation_verified_at' => now()->subDays(2)])->save();
     $this->actingAs($actor);
     Fixture::invitationLink($actor);
     $person = User::factory()->create(['name' => 'Browser synchronization target', 'workos_user_id' => 'user_browser_sync_target', 'workos_invitation_id' => 'invitation_browser_sync', 'invitation_generation' => 1, 'invitation_state' => WorkosInvitationState::Pending]);
     $person->forceFill(['invitation_verified_at' => now()->subDay(), 'invitation_accepted_history_at' => now()->subDays(3)])->save();
     Fixture::invitationLink($person);
     $empty = User::factory()->create(['name' => 'Empty invitation peer', 'workos_user_id' => 'user_browser_empty']);
+    // These polling regressions start with previously verified, known invitation baselines.
+    $empty->forceFill(['invitation_verified_at' => now()->subDays(2)])->save();
     Fixture::invitationLink($empty);
     $before = $person->fresh()->only(['status', 'workos_active_membership', 'first_access_at', 'invitation_accepted_history_at']);
     $verified = $person->fresh()->invitation_verified_at;

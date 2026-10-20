@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "scopeId": "account-owned-invitations-v1",
+  "architectureSha256": "490eb8c361fc7cbdb60f3ae8d0b33843fb25c1c140a243df5e2a9f8294310ecb",
+  "ownerApproved": false,
+  "documents": [
+    {
+      "path": "architecture.md",
+      "sha256": "490eb8c361fc7cbdb60f3ae8d0b33843fb25c1c140a243df5e2a9f8294310ecb"
+    },
+    {
+      "path": "approval-summary.md",
+      "sha256": "b5260c8054944ba497889e280158e5381f09a063f6816afe3e7cccb5f4a24e31"
+    },
+    {
+      "path": "quickstart.md",
+      "sha256": "9663b476c972d398cf655f0a417c2a1a6d42a5e4d0970381656c0ee582b6c2ca"
+    },
+    {
+      "path": "discovery.md",
+      "sha256": "b859cd86cfc6e359b6ed10750d48fd9cea33888e00a0eae3fbf504e15d551948"
+    },
+    {
+      "path": "research.md",
+      "sha256": "07151d1b2912e570e0e27248a709f791755a1204a9cade67fdf73043a81e1f7c"
+    },
+    {
+      "path": "scenarios.md",
+      "sha256": "f3074553396f1422300c522ecf0ad956adab1f579dc7650c23ac0784513888d0"
+    },
+    {
+      "path": "approval-request.md",
+      "sha256": "a135135e9aeefeea7ba0d8450b2a84184d640370cca28ca471fff72845239808"
+    },
+    {
+      "path": "data-model.md",
+      "sha256": "dcfed28110adcba92783769e247386c7c4c60a427ecbba266360ded17eb81eb6"
+    },
+    {
+      "path": "plan.md",
+      "sha256": "583bfbad1ce1276cced43c6912d30c449d159851444d071fae7c04f627f2ddd1"
+    },
+    {
+      "path": "design-constraints.md",
+      "sha256": "6a74f43ff5f8961905ff77162fbc73069e2f9bc7e0dbb461d0bac30e7c4264b6"
+    },
+    {
+      "path": "spec.md",
+      "sha256": "2f37c2a191bf34bdb2ec6e7d0fdec9fb1226deef1ad5bb29dce2afa0bdd7d21b"
+    },
+    {
+      "path": "architecture-paths.json",
+      "sha256": "66ce6a6c288907ca00116863016e777d13ac283bcab87b956ed0709e918d87b6"
+    },
+    {
+      "path": "clarification.md",
+      "sha256": "96d00a80f34e3a1caca538cd289858a0434d538d1ebc6d00e6db105775f802c2"
+    },
+    {
+      "path": "document-report.json",
+      "sha256": "c6bc388333642a25b0d3c650669a7efb705665e3ee268646dbf0b3bbb8982399"
+    },
+    {
+      "path": "checklists/requirements.md",
+      "sha256": "9ae02259da25b80aa76fe9c36d1480bd81130cf5abf4f93494817b6c71c378cc"
+    },
+    {
+      "path": "contracts/http-invitations.md",
+      "sha256": "49f44648d3a7a1184c0a96b20f6c88f4a9df2caeb9c2c87c15871f0d645c81c5"
+    },
+    {
+      "path": "reviews/architecture-author.md",
+      "sha256": "82388973faabc503da5ca390625917b5c6e982b4173155a5557bf8097264a6a1"
+    }
+  ],
+  "executionContracts": {
+    "compliance": "6efefc828e5298fa2b01ca9a9d8a7fcad6b02798b86f8e979db7bfa58c6a2244",
+    "account": "f6749e6e82f1417989637944edf11c556b3a8b52bb3d7de32ccacb216ce72cdb"
+  },
+  "readingReportVersion": 2
+}

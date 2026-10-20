@@ -1,0 +1,38 @@
+{
+  "checkpoint": "invitation-validation-repair-v1-0e82b8595ce44ed2",
+  "repositories": {
+    "account": {
+      "command": "toscanini verify --run-id 20261020-invitation-validation-repair",
+      "exitCode": 0,
+      "log": "/private/tmp/account-owned-invitation-run-3r98wy0s/repair-account-canonical2.log",
+      "summaries": [
+        "Tests:    7 skipped, 465 passed (3150 assertions)",
+        "\u2713 built in 542ms",
+        "Tests:    43 passed (664 assertions)"
+      ]
+    },
+    "compliance": {
+      "command": "toscanini verify --run-id 20261020-invitation-validation-repair",
+      "exitCode": 0,
+      "log": "/private/tmp/account-owned-invitation-run-3r98wy0s/repair-compliance-canonical3.log",
+      "summaries": [
+        "Tests:    18 skipped, 1164 passed (7018 assertions)",
+        "# tests 30",
+        "# pass 30",
+        "# fail 0",
+        "\u2713 built in 658ms",
+        "# tests 4",
+        "# pass 4",
+        "# fail 0",
+        "Tests:    79 passed (811 assertions)",
+        "Tests:    40 passed (800 assertions)",
+        "Tests:    2 passed (10 assertions)",
+        "Tests:    4 passed (48 assertions)",
+        "Tests:    12 passed (207 assertions)",
+        "# tests 25",
+        "# pass 25",
+        "# fail 0"
+      ]
+    }
+  }
+}

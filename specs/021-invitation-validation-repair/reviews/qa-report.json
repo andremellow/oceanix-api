@@ -1,0 +1,348 @@
+{
+  "runId": "20261020-invitation-validation-repair",
+  "scopeId": "invitation-validation-repair-v1",
+  "checkpoint": "invitation-validation-repair-v1-67670919374299c4",
+  "reviewMode": "independent",
+  "contextMode": "fresh",
+  "role": "qa",
+  "round": 1,
+  "phase": "qa",
+  "verdict": "PASS_WITH_NON_BLOCKING_FINDINGS",
+  "completedScenarioIds": [
+    "QA-R01",
+    "QA-R02",
+    "QA-R03",
+    "QA-R04",
+    "QA-R05",
+    "QA-R06"
+  ],
+  "findingCount": 1,
+  "blockingFindingCount": 0,
+  "findings": [
+    {
+      "id": "QA-R-FOLLOWUP-01",
+      "detectedBy": "qa",
+      "failureStage": "implementation",
+      "classification": "follow-up",
+      "severity": "low",
+      "blocking": false,
+      "basis": null,
+      "scenario": "QA-R05",
+      "evidence": "CUA console captured InvalidStateError at2026-10-20T18:38:57Z: showModal called on a dialog already open non-modally. No tested UI flow failed; relation to the current diff not established.",
+      "requiredOutcome": "Investigate separately whether the existing dialog lifecycle can emit duplicate modal-opening errors. Do not enlarge this repair scope."
+    }
+  ],
+  "environment": {
+    "account": "loopback16586 / account_owned_account / testing",
+    "compliance": "loopback16587 / account_owned_compliance / testing",
+    "realProviderMutations": false,
+    "readiness": "Both /__readiness responses verified before writes. PostgreSQL17 private socket15587. No normal .env touched; no RefreshDatabase on runtime databases."
+  },
+  "scenarios": [
+    {
+      "id": "QA-R01",
+      "result": "PASS",
+      "setup": "Created a unique pending administrator using the real Compliance platform company form. Provider fixture initially reported pending exact membership; no Account login User existed for the new actor.",
+      "action": "Drained real membership/invitation queues; accepted the synthetic provider invitation; executed actual AuthKit redirect/state/callback. Used the accepted actor to register a new person in the normal UI and start Compliance synchronization. Rechecked an actual fresh queued reconcile with cached active_provider_membership=false, confirmed_enabled=true, exact active provider membership and zero Account login Users. Temporarily removed only this synthetic actor's source role during another queued delivery, then restored it.",
+      "expected": "Fresh exact current authority works without Account login; stale local cache is not the sole authority; invalid/revoked/foreign authority fails before operational effects.",
+      "observed": "AuthKit callback302 landed on authenticated dashboard200. Normal registration created one new Compliance person and confirmed Account intent. Initial and post-import raw snapshots both retained the actor cache=false; the import did not make it active. Fresh queued reconcile d6e720cf completed confirmed with cache still false, confirmed access/provider evidence unchanged, Account login Users0. A queued delivery after current source-role removal became needs_attention; role restored. Foreign actor403, pending/inactive membership403; no unintended people or access changes.",
+      "evidence": [
+        "repair-independent-authkit.json",
+        "repair-independent-a-state.json",
+        "repair-independent-queued-a.json",
+        "repair-independent-stale-a.json",
+        "repair-independent-stale-final.json",
+        "repair-independent-fresh-security.json",
+        "repair-independent-final-a-state.json"
+      ],
+      "cleanup": "Restored the synthetic actor's exact original role list and original cache value(false); removed AuthKit identity selector. Kept synthetic operational evidence in the designated disposable databases."
+    },
+    {
+      "id": "QA-R02",
+      "result": "PASS",
+      "setup": "Created separate unique Compliance people fromc22/froma23 with exact fake provider identities, null invitation baseline, generation0/sequence0/no successful verification; imported their existing provider counterparts locally into Account.",
+      "action": "Queued both origins through their real UIs. Processed the froma Account transition first through real queue workers/HTTP; separately ran the Compliance queue to obtain mapping metadata before freezing fromc reconcile, then processed that Account intent and delivery.",
+      "expected": "Exact mappings initialize only untouched baselines; both origins converge without duplicates or access/role/history changes; immutable inputs/old receipts remain unchanged.",
+      "observed": "Account-origin mapping initialized froma pointer before any successful verification, then delivered expired generation0/sequence1. Compliance-origin mapping initialized fromc pointer while status/time remained null, then delivered expired generation0/sequence1. Later successful checks advanced sequences normally. Original197 Account and88 Compliance intent payloads/hashes and confirmed mapping receipts remained unchanged; original users/access/roles/training preserved.",
+      "evidence": [
+        "repair-independent-cohort.json",
+        "repair-independent-froma-c.json",
+        "repair-independent-afterc-c.json",
+        "repair-independent-r02-c.json",
+        "repair-independent-immutable-preservation.json",
+        "repair-independent-existing-preservation.json",
+        "repair-independent-existing-c-preservation.json"
+      ],
+      "cleanup": "Retained only this run's uniquely named synthetic people and mapping/observation evidence. No deletion/reset or historical intent rewrite."
+    },
+    {
+      "id": "QA-R03",
+      "result": "PASS",
+      "setup": "Used the run's actual persisted froma mapping and observation envelopes, plus the loss case's old generation0 requests. Temporary transport faults were scoped to the invitation-observation HTTP kind.",
+      "action": "Replayed identical mapping/observation intents and changed their immutable input. Lost a usable acknowledgement after receiver commit with one-shot malformed-after; retried the same actual target through UI and worker. Failed a target repeatedly at real retry deadlines via the private clock. Created an explicit new invitation generation through UI after changing only the target's fake provider precondition, delivered generation1, then executed the older queued canonical reconciliation alias.",
+      "expected": "Same intent reuses receipt; altered immutable input is rejected; lost acknowledgement does not duplicate effects; retries are finite; old work does not replace newer generation/state.",
+      "observed": "Same mapping and observation receipts200; changed immutable resource_sequence409. Receiver committed sequence3 despite malformed acknowledgement; manual recovery retained identical target ID/hash/payload and left receiver sequence3 unchanged. Automatic retries stopped at7 with needs_attention and next_attempt_at=null; extra worker cycles did not increase attempts. First send when membership was active correctly returned sent=false; after the target was made inactive in the fake provider, explicit send created generation1/new invitation, which Compliance retained after late generation0 canonical receipt replay. The old alias returned its immutable generation0 receipt without replacing current generation1/sequence3.",
+      "evidence": [
+        "repair-independent-receipts.json",
+        "repair-independent-bodyloss-a.json",
+        "repair-independent-bodyloss-c.json",
+        "repair-independent-bodyloss-recovered-a.json",
+        "repair-independent-bodyloss-recovered-c.json",
+        "repair-independent-exhausted-a.json",
+        "repair-independent-order-before-a.json",
+        "repair-independent-generation-final-a.json",
+        "repair-independent-generation-final-c.json"
+      ],
+      "cleanup": "Removed private clock and transport-fault file; resumed the held worker. No real email/provider mutation occurred. The explicit synthetic send is distinct from status-only retries."
+    },
+    {
+      "id": "QA-R04",
+      "result": "PASS",
+      "setup": "Owner-approved schema-prevention equivalent: attempted provider-ID and exact normalized-email duplicate Compliance factory records inside rollback-only PostgreSQL transactions. Prepared uniquely named same-email/different-provider and legacy prior-link cases without removing constraints.",
+      "action": "Ran real Account-origin sync workers to create actual mapping targets and send their HTTP requests. Replayed the actual failing mapping requests; also submitted wrong-company and absent-binding requests through the real API with the valid test service principal.",
+      "expected": "Constraints prevent impossible duplicate fixtures; reachable identity conflicts and missing/wrong binding deny reassignment, preserve existing mappings, and permit a valid peer to complete.",
+      "observed": "Both duplicates raised SQLSTATE23505 and retained no rows. Real prior-link mapping returned409 identity_conflict; same-email/different-provider returned409 mapping_required, with both targets visibly requiring attention. Wrong-company/absent-binding probes returned generic500 and did not reassign identity or create people; these statuses are reported literally, not as specific403/404 binding errors. Valid peer froma/fromc completed. Original reciprocal mappings and protected user fields remained unchanged.",
+      "evidence": [
+        "repair-independent-constraints.json",
+        "repair-independent-conflict-cases.json",
+        "repair-independent-conflict-a.json",
+        "repair-independent-conflict-http.json",
+        "repair-independent-existing-c-preservation.json"
+      ],
+      "cleanup": "Rolled back duplicate candidates. Preserved safe synthetic conflict rows/history for inspection; no constraint alteration, original binding mutation, merge or destructive cleanup."
+    },
+    {
+      "id": "QA-R05",
+      "result": "PASS_WITH_NON_BLOCKING_FINDINGS",
+      "setup": "Used actual queued/confirmed/failing/exhausted/partially delivered targets from this run, manager and viewer fixture sessions, desktop and390x844 viewport.",
+      "action": "Interacted with actual list sync and person retry controls; observed loading/disabled copy and keyboard actions. Held a real queue worker with host SIGSTOP only after a persisted claim, inspected Processing, then resumed via SIGCONT. Observed list/detail/Communication, retained date+relative age, partial delivery, seven-attempt exhaustion, manual retry, narrow rendering and hidden viewer controls; inspected browser console.",
+      "expected": "Before-action no-email explanation; retained absolute date+age beside safe error; honest queued/running/completed/partial/exhausted/retry; accessible interaction/focus, narrow composition, permission-hidden controls.",
+      "observed": "List and detail explain checks without email. Loading displayed Synchronizing invitations and disabled the initiating control; queued status announced queued count/no email and the initiating button regained focus. Actual held claim rendered Processing and hid retry while claimed. Failed checks retained the successful20Oct18:38 date plus relative age alongside Retry due/Needs attention and safe explanation. Exhaustion displayed7 failed attempts, no scheduled retry, Automatic retries stopped and eligible retry. Keyboard retry showed Retrying disabled, then the same intent recovered confirmed. Partial case displayed successful read separately from unconfirmed Compliance delivery; same-target retry recovered. Narrow list/detail body375px at390px viewport, identity/actions/date remained available. Viewer had0 sync controls. One incidental modal console InvalidStateError was captured; no tested flow failed and causal relation to the repair diff was not established.",
+      "evidence": [
+        "repair-independent-running2-capture.json",
+        "repair-independent-exhausted-a.json",
+        "repair-independent-bodyloss-a.json",
+        "repair-independent-bodyloss-recovered-a.json",
+        "repair-independent-ui-evidence.json"
+      ],
+      "cleanup": "Worker resumed and exited; viewport reset; no pending global fault/clock/auth/config override. Synthetic evidence retained. Browser UI logs were inspected; no separate complete failed-network export is available from the exposed CUA surface, so no blanket zero-network-error claim is made."
+    },
+    {
+      "id": "QA-R06",
+      "result": "PASS",
+      "setup": "Valid isolated service principal plus pre-existing private negative test credentials; this run's actual ordinary-actor registration, mapping and typed reconcile envelopes. Fresh negative requests used new identities without executing new effects.",
+      "action": "Submitted inactive/environment/product/expired/revoked/absent/invalid principal cases; fresh invalid/expired proof and foreign actor; pending/inactive/foreign provider membership and provider outage; valid actual registration/mapping/reconcile; current source-role removal during queued delivery. Observed responses/provider-call deltas and final people/access/history.",
+      "expected": "Current principal, exact proof and actor/provider failures deny before operational effects; proof failures make zero provider requests; valid fresh membership proceeds with source ability; authorization does not persist access/cache or use Compliance operational WorkOS fallback.",
+      "observed": "Principal cases403/provider delta0. Fresh invalid proof403/provider delta0 across registration, mapping and reconcile; expired proof403/delta0; foreign actor403/delta0. Pending/inactive membership403 after one read; foreign membership/provider failure returned generic500 after one read and created no people/access effects. A manufactured fresh intent with no source-owned durable intent was denied500 after current-authority read; it is not counted as a valid positive. Positive evidence comes from real accepted-actor UI registration, mapping and queue reconcile, with no Account login and unchanged cache/access. Source revocation stopped pending delivery; original user access, entitlements, role assignments and training hashes unchanged. No unexpected security-case people were created. Actual observed C operational paths used Account requests and queues; AuthKit callback remained direct and successful.",
+      "evidence": [
+        "repair-independent-security.json",
+        "repair-independent-fresh-security.json",
+        "repair-independent-shared-guard.json",
+        "repair-independent-stale-final.json",
+        "repair-independent-protected.json",
+        "repair-independent-original-roles.json",
+        "repair-independent-final-a-state.json",
+        "repair-independent-final-c-state.json"
+      ],
+      "cleanup": "Restored synthetic source roles/cache, provider outage/membership-failure controls; removed temporary global selectors/faults/clock. Retained negative-operation evidence in disposable runtime only."
+    }
+  ],
+  "preservation": {
+    "account": {
+      "permissions": {
+        "before": {
+          "count": 19,
+          "hash": "afdb2c065b3753799e949524ae0bffaddc6c608b856fd8eb37505d18e1a278a2"
+        },
+        "after": {
+          "count": 19,
+          "hash": "afdb2c065b3753799e949524ae0bffaddc6c608b856fd8eb37505d18e1a278a2"
+        },
+        "identical": true
+      },
+      "user_product_entitlements": {
+        "before": {
+          "count": 20,
+          "hash": "a650d479f69aec1c29c97dbf7d52c883d488e27f2a0871830214e9f14996848e"
+        },
+        "after": {
+          "count": 28,
+          "hash": "62b0fd36ebb3e9d8a34be8255e56924624cd50300c1e3f73cd09570d4c90b6b6"
+        },
+        "identical": false
+      }
+    },
+    "compliance": {
+      "courses": {
+        "before": {
+          "count": 1,
+          "hash": "381fa92ac321a189d75104c87cdd29a65296bd5fbbef2c61e918f642c6292b20"
+        },
+        "after": {
+          "count": 1,
+          "hash": "381fa92ac321a189d75104c87cdd29a65296bd5fbbef2c61e918f642c6292b20"
+        },
+        "identical": true
+      },
+      "course_versions": {
+        "before": {
+          "count": 1,
+          "hash": "92af44260810da378aae689a7965a106e2eb791dca638d6058b76fa8defd24f5"
+        },
+        "after": {
+          "count": 1,
+          "hash": "92af44260810da378aae689a7965a106e2eb791dca638d6058b76fa8defd24f5"
+        },
+        "identical": true
+      },
+      "user_training_assignments": {
+        "before": {
+          "count": 1,
+          "hash": "70f8d6636aa788827fcbe56a0ce2c49f7bee578cc630c2b550f292a348625cf9"
+        },
+        "after": {
+          "count": 1,
+          "hash": "70f8d6636aa788827fcbe56a0ce2c49f7bee578cc630c2b550f292a348625cf9"
+        },
+        "identical": true
+      },
+      "certificates": {
+        "before": {
+          "count": 1,
+          "hash": "be016b4632ffc6fd1faa5e6da3f2889352d9ab07196803246a609eb6724910ca"
+        },
+        "after": {
+          "count": 1,
+          "hash": "be016b4632ffc6fd1faa5e6da3f2889352d9ab07196803246a609eb6724910ca"
+        },
+        "identical": true
+      },
+      "compliance_events": {
+        "before": {
+          "count": 1,
+          "hash": "a425af82131253ec975a7ffcc6b8fffac8b70e83485866771c1e1c7c6458eff0"
+        },
+        "after": {
+          "count": 1,
+          "hash": "a425af82131253ec975a7ffcc6b8fffac8b70e83485866771c1e1c7c6458eff0"
+        },
+        "identical": true
+      },
+      "roles": {
+        "before": {
+          "count": 14,
+          "hash": "18adc6e97139ff5a009e40764a8cf7e0afda3e7b8d80abcdfe802cec9328d194"
+        },
+        "after": {
+          "count": 14,
+          "hash": "18adc6e97139ff5a009e40764a8cf7e0afda3e7b8d80abcdfe802cec9328d194"
+        },
+        "identical": true
+      },
+      "permissions": {
+        "before": {
+          "count": 40,
+          "hash": "7f5668a268be0214f0abfd0a39fb1db2f25e9b9d2178378a321f2bbacdf09906"
+        },
+        "after": {
+          "count": 40,
+          "hash": "7f5668a268be0214f0abfd0a39fb1db2f25e9b9d2178378a321f2bbacdf09906"
+        },
+        "identical": true
+      },
+      "permission_role": {
+        "before": {
+          "count": 104,
+          "hash": "c75d1e484d7a90889f7229f6f1dd51a2762b2053fc56911084a60273ec009323"
+        },
+        "after": {
+          "count": 104,
+          "hash": "c75d1e484d7a90889f7229f6f1dd51a2762b2053fc56911084a60273ec009323"
+        },
+        "identical": true
+      }
+    },
+    "causal": {
+      "9f5123fe-0da7-5745-9c14-1eed61dc3fe4": {
+        "state": "needs_attention",
+        "safe_error": "invitation_confirmation_unavailable"
+      },
+      "d6e720cf-10bf-5b3c-81ff-f1360fac72a5": {
+        "state": "confirmed",
+        "safe_error": null
+      }
+    }
+  },
+  "originalAccountRows": {
+    "company_members": {
+      "original_count": 21,
+      "missing": 0,
+      "protected_field_changes": []
+    },
+    "user_product_entitlements": {
+      "original_count": 20,
+      "missing": 0,
+      "protected_field_changes": []
+    },
+    "product_person_links": {
+      "original_count": 18,
+      "missing": 0,
+      "protected_field_changes": []
+    }
+  },
+  "originalComplianceRows": {
+    "users": {
+      "original_count": 17,
+      "missing": 0,
+      "protected_field_changes": [],
+      "before_protected_hash": "928f85185ec99db4f5e55e6b9000e2606cf51531da14a5e6398ae59da4b1d210",
+      "after_protected_hash": "928f85185ec99db4f5e55e6b9000e2606cf51531da14a5e6398ae59da4b1d210"
+    },
+    "person_product_accesses": {
+      "original_count": 7,
+      "missing": 0,
+      "protected_field_changes": [],
+      "before_protected_hash": "730cb59f44c9db1e30a507dd5c2441d6a280c57abf71e2f4080641df9dd777ad",
+      "after_protected_hash": "730cb59f44c9db1e30a507dd5c2441d6a280c57abf71e2f4080641df9dd777ad"
+    },
+    "person_account_links": {
+      "original_count": 18,
+      "missing": 0,
+      "protected_field_changes": [],
+      "before_protected_hash": "81c0b819648f44d27153ea1560638de952131e4f735b51ab4184b4f525870072",
+      "after_protected_hash": "81c0b819648f44d27153ea1560638de952131e4f735b51ab4184b4f525870072"
+    }
+  },
+  "originalRoleRows": {
+    "before": {
+      "count": 19,
+      "hash": "3c2a22ca4b3da7cc17996468c7db0519bb481d739701a10eb6cafd0eda2b1830"
+    },
+    "after_original_rows": {
+      "count": 19,
+      "hash": "3c2a22ca4b3da7cc17996468c7db0519bb481d739701a10eb6cafd0eda2b1830"
+    },
+    "identical": true
+  },
+  "immutableIntents": {
+    "account": {
+      "original_intents": 197,
+      "missing": [],
+      "immutable_input_changes": [],
+      "confirmed_mapping_receipt_changes": []
+    },
+    "compliance": {
+      "original_intents": 88,
+      "missing": [],
+      "immutable_input_changes": [],
+      "confirmed_mapping_receipt_changes": []
+    }
+  },
+  "limits": [
+    "No code/test review, automated-test substitution or prior reviewer/Worker conclusions were used.",
+    "This is the six-scenario repair matrix, not a new full audit of all original23 scenarios.",
+    "Wrong-company/absent-binding and provider/source failures returned generic500; only denial/no effects are claimed, not a specific HTTP error classification.",
+    "Generation ordering evidence includes the real late canonical alias returning its old receipt while current generation1 remains; it is not described as a newly fabricated stale observation being accepted.",
+    "QA-created operational evidence is retained in the local ephemeral databases because operational records are not deleted. Temporary controls were removed; all original rows/history preserved."
+  ]
+}

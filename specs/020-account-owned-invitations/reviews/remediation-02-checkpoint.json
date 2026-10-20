@@ -1,0 +1,99 @@
+{
+  "checkpointId": "account-owned-invitations-v1-remediation2-9a02b0261bbf387d",
+  "scopeId": "account-owned-invitations-v1",
+  "architectureSha256": "490eb8c361fc7cbdb60f3ae8d0b33843fb25c1c140a243df5e2a9f8294310ecb",
+  "phase": "remediation-checkpoint",
+  "round": 2,
+  "previousCheckpointId": "account-owned-invitations-v1-remediation2-cd88c0078bf46580",
+  "repositories": [
+    {
+      "id": "account",
+      "repository": "/Users/andrepiresdemello/Code/Oceanix/Account",
+      "branch": "codex/account-owned-invitations",
+      "checkpointCommit": "8cb3a44f330c4675f11acf1ee3a6fbbde51ea6f2",
+      "remediationDiffBase": "33375e42da9f5c33b2761686229cbfcc90787559",
+      "reviewDiffBase": "e9b128a3de1592a5b0a0cbaf3674c110c2ad7b51",
+      "changedPathCount": 3,
+      "changedPaths": [
+        "app/Actions/CompanyUsers/ReconcileCompanyInvitation.php",
+        "docs/production-integration.md",
+        "tests/Feature/CompanyUsers/InvitationObservationDeliveryTest.php"
+      ],
+      "remediationDiffSha256": "b2520172853012670f87dbbc9cd8c5072d55935d33e87305c4d29cb0182d97fa"
+    },
+    {
+      "id": "compliance",
+      "repository": "/Users/andrepiresdemello/Code/oceanix-api",
+      "branch": "feature/lesson-pdf-links",
+      "checkpointCommit": "462f6b5604268904393fa8aebee2bb771ca4beaf",
+      "remediationDiffBase": "5ff9d2089115dee98f9d8c18ec0819289d207ca1",
+      "reviewDiffBase": "c46e45874b717c20d26d2674a079e1881699ea53",
+      "changedPathCount": 4,
+      "changedPaths": [
+        "app/Actions/People/SendWorkosInvitation.php",
+        "docs/production-integration.md",
+        "tests/Feature/ControlPlane/SystemPrincipalTest.php",
+        "tests/Feature/People/AccountInvitationTest.php"
+      ],
+      "remediationDiffSha256": "a786f13c7177f9e512e6206415ffef2417ddcdf30eefdd258d3b206e9b1cba56"
+    }
+  ],
+  "canonical": {
+    "account": {
+      "exitCode": 0,
+      "featureUnit": {
+        "passed": 440,
+        "skipped": 7,
+        "assertions": 3016
+      },
+      "browser": {
+        "passed": 43,
+        "assertions": 658
+      },
+      "build": "pass",
+      "pint": "pass"
+    },
+    "compliance": {
+      "exitCode": 0,
+      "featureUnit": {
+        "passed": 1157,
+        "skipped": 18,
+        "assertions": 6984
+      },
+      "editorJs": 30,
+      "pdfBrowserJs": 4,
+      "browserGroups": [
+        [
+          79,
+          811
+        ],
+        [
+          40,
+          800
+        ],
+        [
+          2,
+          10
+        ],
+        [
+          4,
+          48
+        ],
+        [
+          12,
+          207
+        ]
+      ],
+      "previewJs": 25,
+      "build": "pass",
+      "pint": "pass"
+    }
+  },
+  "findingIds": [
+    "CR-06",
+    "CR-07",
+    "TA-01"
+  ],
+  "independentVerdicts": "pending directed verification",
+  "evidence": "specs/020-account-owned-invitations/reviews/remediation-02-evidence.md"
+}

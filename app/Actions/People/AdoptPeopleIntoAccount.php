@@ -6,6 +6,7 @@ use App\Actions\ControlPlane\ApplyProductOperation;
 use App\Enums\Permission;
 use App\Models\AccountCompanyBinding;
 use App\Models\AccountRequestOperation;
+use App\Models\Company;
 use App\Models\PersonAccountLink;
 use App\Models\User;
 use App\Services\Account\AccountUserClient;
@@ -55,13 +56,15 @@ class AdoptPeopleIntoAccount
         };
         Gate::forUser($actor->fresh())->authorize($permission->value);
         $link = PersonAccountLink::where('company_id', $person->company_id)->where('user_id', $person->id)->first();
-        if ($link) {
+        $uninitialized = $person->workos_invitation_id === null && (int) $person->invitation_generation === 0
+            && (int) $person->invitation_observation_sequence === 0 && $person->invitation_observation_hash === null && $person->invitation_verified_at === null;
+        if ($link && ($sourceKind !== 'person.invitation.reconcile' || ! $uninitialized)) {
             return $link;
         }
         abort_unless($person->workos_user_id || $person->workos_invitation_id, 409, 'mapping_required');
         $binding = AccountCompanyBinding::where('compliance_company_id', $person->company_id)->firstOrFail();
         // Freeze a source intent before requesting its narrowly inherited mapping authority.
-        $sourceId = (string) Uuid::uuid5(Uuid::NAMESPACE_URL, 'mapping-source:'.$person->company_id.':'.$person->id.':'.$actor->id.':'.$sourceKind.':'.$person->invitation_generation);
+        $sourceId = (string) Uuid::uuid5(Uuid::NAMESPACE_URL, 'mapping-baseline-v1-source:'.$person->company_id.':'.$person->id.':'.$actor->id.':'.$sourceKind.':'.$person->invitation_generation);
         $sourcePayload = ['protocol_version' => 2, 'operation_id' => $sourceId, 'kind' => $sourceKind, 'product' => 'compliance', 'account_company_uuid' => $binding->account_company_uuid, 'workos_organization_id' => $binding->workos_organization_id, 'subject_id' => (string) $person->id, 'resource_sequence' => max(1, $person->invitation_generation + 1), 'actor_workos_user_id' => $actor->workos_user_id, 'payload' => ['local_person_id' => $person->id, 'mapping_prerequisite' => true]];
         $source = AccountRequestOperation::firstOrCreate(['id' => $sourceId], ['company_id' => $person->company_id, 'user_id' => $person->id, 'actor_id' => $actor->id, 'kind' => $sourceKind, 'actor_workos_user_id' => $actor->workos_user_id, 'payload' => $sourcePayload, 'payload_hash' => ApplyProductOperation::hash($sourcePayload)]);
         $id = (string) Uuid::uuid5(Uuid::NAMESPACE_URL, 'mapping:'.$sourceId);
@@ -78,9 +81,20 @@ class AdoptPeopleIntoAccount
         abort_unless($receipt['outcome'] === 'confirmed' && ($state['mapping_complete'] ?? null) === true && (string) ($state['local_person_id'] ?? '') === (string) $person->id && Str::isUuid($state['shared_person_id'] ?? '') && Str::isUuid($state['company_member_id'] ?? ''), 409);
 
         return DB::transaction(function () use ($person, $binding, $operation, $receipt, $state) {
-            User::whereKey($person->id)->lockForUpdate()->firstOrFail();
+            Company::whereKey($person->company_id)->lockForUpdate()->firstOrFail();
+            $locked = User::whereKey($person->id)->lockForUpdate()->firstOrFail();
+            AccountRequestOperation::whereKey($operation->id)->lockForUpdate()->firstOrFail();
+            abort_unless($locked->workos_user_id === $operation->payload['payload']['workos_user_id']
+                && AccountCompanyBinding::where('compliance_company_id', $locked->company_id)->where('account_company_uuid', $binding->account_company_uuid)->where('workos_organization_id', $binding->workos_organization_id)->exists(), 409, 'identity_conflict');
             $link = PersonAccountLink::firstOrCreate(['company_id' => $person->company_id, 'user_id' => $person->id], ['account_company_uuid' => $binding->account_company_uuid, 'shared_person_id' => $state['shared_person_id'], 'company_member_id' => $state['company_member_id'], 'provenance' => ['operation_id' => $operation->id, 'kind' => 'person.map-existing']]);
-            abort_unless($link->shared_person_id === $state['shared_person_id'] && $link->company_member_id === $state['company_member_id'], 409);
+            abort_unless($link->account_company_uuid === $binding->account_company_uuid && $link->shared_person_id === $state['shared_person_id'] && $link->company_member_id === $state['company_member_id'], 409);
+            $baseline = $state['invitation_baseline'] ?? null;
+            if ($locked->workos_invitation_id === null && (int) $locked->invitation_generation === 0 && (int) $locked->invitation_observation_sequence === 0
+                && $locked->invitation_observation_hash === null && $locked->invitation_verified_at === null && $baseline !== null) {
+                abort_unless(is_array($baseline) && array_key_exists('invitation_id', $baseline) && ($baseline['generation'] ?? null) === 0
+                    && ($baseline['invitation_id'] === null || (is_string($baseline['invitation_id']) && $baseline['invitation_id'] !== '')), 409, 'invitation_conflict');
+                $locked->forceFill(['workos_invitation_id' => $baseline['invitation_id']])->save();
+            }
             $operation->update(['state' => 'confirmed', 'receipt' => $receipt, 'safe_error' => null]);
             AccountRequestOperation::whereKey($operation->payload['payload']['source_operation_id'])->update(['state' => 'confirmed', 'receipt' => ['mapping_operation_id' => $operation->id, 'mapping_complete' => true]]);
 

@@ -1,0 +1,11 @@
+# Approved test amendment 02 — implementation evidence
+
+The owner explicitly approved the two Compliance paths in test-scope-amendment-02-approval.md. The approval-bound proposal remains unchanged. The prior blocked Worker state is retained in telemetry, followed by a truthful resumed started event in each repository.
+
+`tests/Feature/AccountPeopleMigrationTest.php` retains the original payload-tampering and email-only collision checks. The tenant-denial stimulus now mismatches the actual company/organization binding rather than clearing the deprecated UUID list. To make this causal, the test restores the fixture's valid exact-person input, enables preview and recomputes its payload hash. A successful 200/ready response with zero links/receipts proves the positive control. Changing only the actual binding then yields the existing exact 409. The Action's binding checks in `app/Actions/ControlPlane/MigrateAccountPerson.php` explicitly use 409; production was not changed to force the old UUID-list 403. Zero links/receipts and no outgoing HTTP remain asserted. Other principal lifecycle/403 controls remain unchanged elsewhere in the retained suites.
+
+`tests/Feature/People/InvitationStatusTransitionTest.php` retains every existing test. The protected suspended import fixture now has an exact stable WorkOS ID; the test explicitly enables paired readiness and returns the exact mapping-only acknowledgement. The original new-person Invited/protected-person Suspended, created=1/existing=1/pending=0, three HTTP requests and no operational WorkOS assertions all pass. Confirmed-first registration behavior and receipt validation remain unchanged.
+
+The platform status test uses the approved Account fixture with exact binding and confirmed membership instead of a legacy direct-provider mock. Repeated grant retrieves the same stored receipt; the original Invited/null first access/admin-role and later Suspended status assertions remain. A no-operational-WorkOS assertion protects the new boundary.
+
+Actual verification after feature-only Pint: **13 passed, 109 assertions**, both complete files. Compliance's full visible canonical verification remains the parent's next gate; these focused results do not claim it passed.

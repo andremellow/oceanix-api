@@ -1,0 +1,16 @@
+{
+  "runId": "20261020-invitation-validation-repair",
+  "applicationCheckpoint": "invitation-validation-repair-v1-67670919374299c4",
+  "verificationToolCheckpoint": "gate-directed-order-db2f936ade34ccda",
+  "command": "python3 .toscanini/bin/toscanini-gate.py --run-id 20261020-invitation-validation-repair --require-contract --require-architecture --require-design",
+  "account": {
+    "exitCode": 0,
+    "approved": true,
+    "findings": []
+  },
+  "compliance": {
+    "exitCode": 0,
+    "approved": true,
+    "findings": []
+  }
+}

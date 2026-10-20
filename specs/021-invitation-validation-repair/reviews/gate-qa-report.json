@@ -1,0 +1,330 @@
+{
+  "runId": "20261020-invitation-validation-repair",
+  "scopeId": "invitation-validation-repair-v1",
+  "applicationCheckpoint": "invitation-validation-repair-v1-67670919374299c4",
+  "verificationToolCheckpoint": "gate-directed-order-db2f936ade34ccda",
+  "reviewMode": "directed",
+  "contextMode": "inherited",
+  "round": 2,
+  "phase": "qa",
+  "assignedFindingIds": [
+    "GATE-COMPAT-01"
+  ],
+  "verdict": "PASS",
+  "newFindingCount": 0,
+  "findings": [],
+  "completedToolScenarioIds": [
+    "GATE-QA01",
+    "GATE-QA02",
+    "GATE-QA03",
+    "GATE-QA04",
+    "GATE-QA05",
+    "GATE-QA06",
+    "GATE-QA07"
+  ],
+  "applicationCoverageRetained": [
+    "QA-R01",
+    "QA-R02",
+    "QA-R03",
+    "QA-R04",
+    "QA-R05",
+    "QA-R06"
+  ],
+  "applicationScenariosRerun": [],
+  "scenarios": [
+    {
+      "id": "GATE-QA01",
+      "result": "PASS",
+      "setup": "Private metadata-only project with approved contract template, artifact stub, exact synthetic scope/checkpoint, chronological event stream and typed ledger. Directed positive has complete original fresh reviews, resolved findings, matching starts, accepted terminals and reasons; change only the named metadata condition.",
+      "action": "Execute actual copied Account gate CLI subprocess: python3 .toscanini/bin/toscanini-gate.py --run-id synthetic-gate-cli --require-contract.",
+      "expected": "Valid fresh independent approvals before QA remain accepted.",
+      "observed": [
+        {
+          "scenario": "GATE-QA01",
+          "case": "independent-before-qa",
+          "expectedExit": 0,
+          "actualExit": 0,
+          "approved": true,
+          "errors": [],
+          "matchesExpected": true,
+          "evidence": "observations/GATE-QA01/independent-before-qa"
+        }
+      ],
+      "evidence": [
+        "observations/GATE-QA01/independent-before-qa"
+      ],
+      "cleanup": "No actual lifecycle/approval data changed. Synthetic histories and outputs retained privately outside repositories."
+    },
+    {
+      "id": "GATE-QA02",
+      "result": "PASS",
+      "setup": "Private metadata-only project with approved contract template, artifact stub, exact synthetic scope/checkpoint, chronological event stream and typed ledger. Directed positive has complete original fresh reviews, resolved findings, matching starts, accepted terminals and reasons; change only the named metadata condition.",
+      "action": "Execute actual copied Account gate CLI subprocess: python3 .toscanini/bin/toscanini-gate.py --run-id synthetic-gate-cli --require-contract.",
+      "expected": "Fresh independent request-changes followed by resolved directed closures before QA is accepted at exact final scope/checkpoint.",
+      "observed": [
+        {
+          "scenario": "GATE-QA02",
+          "case": "resolved-directed-before-qa",
+          "expectedExit": 0,
+          "actualExit": 0,
+          "approved": true,
+          "errors": [],
+          "matchesExpected": true,
+          "evidence": "observations/GATE-QA02/resolved-directed-before-qa"
+        }
+      ],
+      "evidence": [
+        "observations/GATE-QA02/resolved-directed-before-qa"
+      ],
+      "cleanup": "No actual lifecycle/approval data changed. Synthetic histories and outputs retained privately outside repositories."
+    },
+    {
+      "id": "GATE-QA03",
+      "result": "PASS",
+      "setup": "Private metadata-only project with approved contract template, artifact stub, exact synthetic scope/checkpoint, chronological event stream and typed ledger. Directed positive has complete original fresh reviews, resolved findings, matching starts, accepted terminals and reasons; change only the named metadata condition.",
+      "action": "Execute actual copied Account gate CLI subprocess: python3 .toscanini/bin/toscanini-gate.py --run-id synthetic-gate-cli --require-contract.",
+      "expected": "Directed closure completed after QA started is rejected.",
+      "observed": [
+        {
+          "scenario": "GATE-QA03",
+          "case": "directed-terminal-after-qa",
+          "expectedExit": 1,
+          "actualExit": 1,
+          "approved": false,
+          "errors": [
+            "QA started before approved code-reviewer"
+          ],
+          "matchesExpected": true,
+          "evidence": "observations/GATE-QA03/directed-terminal-after-qa"
+        }
+      ],
+      "evidence": [
+        "observations/GATE-QA03/directed-terminal-after-qa"
+      ],
+      "cleanup": "No actual lifecycle/approval data changed. Synthetic histories and outputs retained privately outside repositories."
+    },
+    {
+      "id": "GATE-QA04",
+      "result": "PASS",
+      "setup": "Private metadata-only project with approved contract template, artifact stub, exact synthetic scope/checkpoint, chronological event stream and typed ledger. Directed positive has complete original fresh reviews, resolved findings, matching starts, accepted terminals and reasons; change only the named metadata condition.",
+      "action": "Execute actual copied Account gate CLI subprocess: python3 .toscanini/bin/toscanini-gate.py --run-id synthetic-gate-cli --require-contract.",
+      "expected": "Missing or non-fresh independent review is rejected.",
+      "observed": [
+        {
+          "scenario": "GATE-QA04",
+          "case": "missing-independent",
+          "expectedExit": 1,
+          "actualExit": 1,
+          "approved": false,
+          "errors": [
+            "missing gate: code-reviewer",
+            "missing started event: code-reviewer",
+            "QA started before approved code-reviewer"
+          ],
+          "matchesExpected": true,
+          "evidence": "observations/GATE-QA04/missing-independent"
+        },
+        {
+          "scenario": "GATE-QA04",
+          "case": "nonfresh-independent",
+          "expectedExit": 1,
+          "actualExit": 1,
+          "approved": false,
+          "errors": [
+            "invalid directed revalidation evidence: code-reviewer",
+            "unapproved gate: code-reviewer (request-changes)",
+            "checkpoint mismatch: code-reviewer",
+            "QA started before approved code-reviewer"
+          ],
+          "matchesExpected": true,
+          "evidence": "observations/GATE-QA04/nonfresh-independent"
+        }
+      ],
+      "evidence": [
+        "observations/GATE-QA04/missing-independent",
+        "observations/GATE-QA04/nonfresh-independent"
+      ],
+      "cleanup": "No actual lifecycle/approval data changed. Synthetic histories and outputs retained privately outside repositories."
+    },
+    {
+      "id": "GATE-QA05",
+      "result": "PASS",
+      "setup": "Private metadata-only project with approved contract template, artifact stub, exact synthetic scope/checkpoint, chronological event stream and typed ledger. Directed positive has complete original fresh reviews, resolved findings, matching starts, accepted terminals and reasons; change only the named metadata condition.",
+      "action": "Execute actual copied Account gate CLI subprocess: python3 .toscanini/bin/toscanini-gate.py --run-id synthetic-gate-cli --require-contract.",
+      "expected": "Missing or unresolved linked findings are rejected.",
+      "observed": [
+        {
+          "scenario": "GATE-QA05",
+          "case": "missing-linked-findings",
+          "expectedExit": 1,
+          "actualExit": 1,
+          "approved": false,
+          "errors": [
+            "invalid directed revalidation evidence: code-reviewer",
+            "unapproved gate: code-reviewer (request-changes)",
+            "checkpoint mismatch: code-reviewer",
+            "QA started before approved code-reviewer"
+          ],
+          "matchesExpected": true,
+          "evidence": "observations/GATE-QA05/missing-linked-findings"
+        },
+        {
+          "scenario": "GATE-QA05",
+          "case": "unresolved-linked-finding",
+          "expectedExit": 1,
+          "actualExit": 1,
+          "approved": false,
+          "errors": [
+            "unresolved blocking finding: SYN-CR01",
+            "invalid directed revalidation evidence: code-reviewer",
+            "unapproved gate: code-reviewer (request-changes)",
+            "checkpoint mismatch: code-reviewer",
+            "QA started before approved code-reviewer"
+          ],
+          "matchesExpected": true,
+          "evidence": "observations/GATE-QA05/unresolved-linked-finding"
+        }
+      ],
+      "evidence": [
+        "observations/GATE-QA05/missing-linked-findings",
+        "observations/GATE-QA05/unresolved-linked-finding"
+      ],
+      "cleanup": "No actual lifecycle/approval data changed. Synthetic histories and outputs retained privately outside repositories."
+    },
+    {
+      "id": "GATE-QA06",
+      "result": "PASS",
+      "setup": "Private metadata-only project with approved contract template, artifact stub, exact synthetic scope/checkpoint, chronological event stream and typed ledger. Directed positive has complete original fresh reviews, resolved findings, matching starts, accepted terminals and reasons; change only the named metadata condition.",
+      "action": "Execute actual copied Account gate CLI subprocess: python3 .toscanini/bin/toscanini-gate.py --run-id synthetic-gate-cli --require-contract.",
+      "expected": "Directed scope or checkpoint mismatch is rejected.",
+      "observed": [
+        {
+          "scenario": "GATE-QA06",
+          "case": "checkpoint-mismatch",
+          "expectedExit": 1,
+          "actualExit": 1,
+          "approved": false,
+          "errors": [
+            "checkpoint mismatch: code-reviewer",
+            "QA started before approved code-reviewer"
+          ],
+          "matchesExpected": true,
+          "evidence": "observations/GATE-QA06/checkpoint-mismatch"
+        },
+        {
+          "scenario": "GATE-QA06",
+          "case": "scope-mismatch",
+          "expectedExit": 1,
+          "actualExit": 1,
+          "approved": false,
+          "errors": [
+            "scope mismatch: code-reviewer",
+            "QA started before approved code-reviewer"
+          ],
+          "matchesExpected": true,
+          "evidence": "observations/GATE-QA06/scope-mismatch"
+        }
+      ],
+      "evidence": [
+        "observations/GATE-QA06/checkpoint-mismatch",
+        "observations/GATE-QA06/scope-mismatch"
+      ],
+      "cleanup": "No actual lifecycle/approval data changed. Synthetic histories and outputs retained privately outside repositories."
+    },
+    {
+      "id": "GATE-QA07",
+      "result": "PASS",
+      "setup": "Private metadata-only project with approved contract template, artifact stub, exact synthetic scope/checkpoint, chronological event stream and typed ledger. Directed positive has complete original fresh reviews, resolved findings, matching starts, accepted terminals and reasons; change only the named metadata condition.",
+      "action": "Execute actual copied Account gate CLI subprocess: python3 .toscanini/bin/toscanini-gate.py --run-id synthetic-gate-cli --require-contract.",
+      "expected": "Failed/incomplete closure or missing matching directed start is rejected.",
+      "observed": [
+        {
+          "scenario": "GATE-QA07",
+          "case": "failed-directed-terminal",
+          "expectedExit": 1,
+          "actualExit": 1,
+          "approved": false,
+          "errors": [
+            "incomplete gate: code-reviewer (failed)",
+            "QA started before approved code-reviewer"
+          ],
+          "matchesExpected": true,
+          "evidence": "observations/GATE-QA07/failed-directed-terminal"
+        },
+        {
+          "scenario": "GATE-QA07",
+          "case": "incomplete-directed",
+          "expectedExit": 1,
+          "actualExit": 1,
+          "approved": false,
+          "errors": [
+            "unapproved gate: code-reviewer (request-changes)",
+            "checkpoint mismatch: code-reviewer",
+            "QA started before approved code-reviewer"
+          ],
+          "matchesExpected": true,
+          "evidence": "observations/GATE-QA07/incomplete-directed"
+        },
+        {
+          "scenario": "GATE-QA07",
+          "case": "missing-directed-start",
+          "expectedExit": 1,
+          "actualExit": 1,
+          "approved": false,
+          "errors": [
+            "invalid directed revalidation evidence: code-reviewer",
+            "unapproved gate: code-reviewer (request-changes)",
+            "checkpoint mismatch: code-reviewer",
+            "QA started before approved code-reviewer"
+          ],
+          "matchesExpected": true,
+          "evidence": "observations/GATE-QA07/missing-directed-start"
+        }
+      ],
+      "evidence": [
+        "observations/GATE-QA07/failed-directed-terminal",
+        "observations/GATE-QA07/incomplete-directed",
+        "observations/GATE-QA07/missing-directed-start"
+      ],
+      "cleanup": "No actual lifecycle/approval data changed. Synthetic histories and outputs retained privately outside repositories."
+    }
+  ],
+  "actualRunProbe": {
+    "actualExit": 1,
+    "response": {
+      "runId": "20261020-invitation-validation-repair",
+      "approved": false,
+      "findings": [
+        "unresolved blocking finding: GATE-COMPAT-01",
+        "architecture conformance must follow completed Worker",
+        "architecture conformance must follow completed QA",
+        "invalid directed revalidation evidence: code-reviewer",
+        "unapproved gate: code-reviewer (request-changes)",
+        "checkpoint mismatch: code-reviewer",
+        "invalid directed revalidation evidence: test-analyst",
+        "unapproved gate: test-analyst (request-changes)",
+        "checkpoint mismatch: test-analyst"
+      ],
+      "report": "/Users/andrepiresdemello/Code/Oceanix/Account/.toscanini/runtime/runs/20261020-invitation-validation-repair/execution-report.md"
+    }
+  },
+  "retentionReason": "All27 application checkpoint file hashes recomputed and unchanged. Only the separately checkpointed Account gate tool changed. Prior actual paired HTTP/queue/UI application QA evidence is retained; none is relabeled as rerun.",
+  "scopeLimit": "Directed GATE-COMPAT-01 verification and seven approved tool controls only; not a new independent whole-scope QA approval.",
+  "setup": {
+    "safeEnvironment": "Private /private/tmp metadata-only project; no services, credentials, provider calls, database or browser.",
+    "executedFiles": [
+      "toscanini-gate.py",
+      "toscanini_contract.py",
+      "toscanini_report.py",
+      "toscanini_architecture.py"
+    ],
+    "copyMatchesCurrentGate": true,
+    "gateSha256": "1f4e62195110d00aa78dc44e0748d4f53e913ed1afccf45df2dd9ddc5cda1464",
+    "sourceReview": false,
+    "automatedTestsReviewedOrExecuted": false,
+    "fixtureArtifacts": "Synthetic contract/ledger/events and fixture.md stub are explicit test data outside actual repositories, not real approvals. Lifecycle stream is chronological, matching real append-only behavior."
+  },
+  "actualRunConclusion": "Actual Account completion gate exited1/approved=false. Open GATE-COMPAT-01, pending Worker/QA conformance ordering and unresolved directed-review linkage remain literal errors. This result does not assert overall completion or close the ledger; orchestrator must record actual closure and obtain remaining conformance/retention evidence.",
+  "cleanup": "No app/tool/test source edits, actual event rewrites or approval changes. Only required actual QA lifecycle telemetry emitted. Private synthetic fixture artifacts retained outside repositories.",
+  "failureAttribution": "No new defect detected in correction. Existing GATE-COMPAT-01 remains assigned tool-compatibility finding for orchestrator closure after this evidence."
+}

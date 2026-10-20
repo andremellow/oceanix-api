@@ -20,6 +20,8 @@ class ApplyInvitationObservation
         abort_unless($link && $link->account_company_uuid === $input['account_company_uuid'] && $link->company_member_id === $input['subject_id'] && $link->company_member_id === $data['company_member_id'] && $link->shared_person_id === $data['shared_person_id'] && $person->workos_user_id === $data['workos_user_id'], 409, 'identity_conflict');
         $acceptedIdentity = $data['invitation']['accepted_user_id'] ?? null;
         abort_unless(! $acceptedIdentity || ! $person->workos_user_id || $acceptedIdentity === $person->workos_user_id, 409, 'identity_conflict');
+        $uninitialized = $person->workos_invitation_id === null && (int) $person->invitation_generation === 0
+            && (int) $person->invitation_observation_sequence === 0 && $person->invitation_observation_hash === null && $person->invitation_verified_at === null;
         $pair = [$data['generation'], $data['observation_sequence']];
         $current = [(int) $person->invitation_generation, (int) $person->invitation_observation_sequence];
         $hash = ApplyProductOperation::hash($data);
@@ -27,7 +29,7 @@ class ApplyInvitationObservation
         if ($pair === $current) {
             abort_unless($person->invitation_observation_hash && hash_equals($person->invitation_observation_hash, $hash), 409, 'observation_conflict');
         } elseif ($pair > $current) {
-            abort_unless($data['generation'] > $current[0] || $person->workos_invitation_id === $data['invitation']['id'], 409, 'invitation_conflict');
+            abort_unless($data['generation'] > $current[0] || $person->workos_invitation_id === $data['invitation']['id'] || ($uninitialized && $data['generation'] === 0), 409, 'invitation_conflict');
             $updates = ['workos_invitation_id' => $data['invitation']['id'], 'invitation_state' => $data['invitation']['state'] === 'none' ? WorkosInvitationState::NotInvited : $data['invitation']['state'], 'invitation_generation' => $data['generation'], 'invitation_observation_sequence' => $data['observation_sequence'], 'invitation_observation_hash' => $hash, 'invitation_verified_at' => $data['verified_at'], 'invitation_check_error' => null];
             foreach (['created_at' => 'invitation_sent_at', 'expires_at' => 'invitation_expires_at', 'accepted_at' => 'invitation_accepted_at', 'revoked_at' => 'invitation_revoked_at'] as $source => $target) {
                 $updates[$target] = $data['invitation'][$source] ?? null;

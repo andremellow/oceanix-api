@@ -1,0 +1,76 @@
+{
+  "checkpoint": "invitation-validation-repair-v1-67670919374299c4",
+  "scopeId": "invitation-validation-repair-v1",
+  "repositories": {
+    "account": {
+      "root": "/Users/andrepiresdemello/Code/Oceanix/Account",
+      "baseline": "8cb3a44f330c4675f11acf1ee3a6fbbde51ea6f2",
+      "paths": [
+        "app/Services/Integration/ProductActorAuthorization.php",
+        "app/Actions/CompanyUsers/MapExistingProductPerson.php",
+        "app/Services/CompanyUsers/CompanyUserDirectory.php",
+        "resources/views/components/company-users/\u26a1index.blade.php",
+        "resources/views/components/company-users/\u26a1show.blade.php",
+        "lang/pt_BR.json",
+        "tests/Feature/Integration/RegistrationActorAuthorizationTest.php",
+        "tests/Feature/CompanyUsers/ExistingPersonMappingTest.php",
+        "tests/Feature/CompanyInvitationSyncTest.php",
+        "tests/Browser/CompanyInvitationSyncTest.php",
+        "tests/Feature/Integration/SystemPrincipalTest.php",
+        "tests/Feature/CompanyUsers/RegistrationTest.php",
+        "tests/Feature/CompanyUsers/RegistrationMappingTest.php",
+        "tests/Feature/CompanyUsers/AdoptionTest.php",
+        "tests/Feature/CompanyUsers/InvitationObservationDeliveryTest.php",
+        "tests/Feature/CompanyUsers/OperationRecoveryTest.php",
+        "tests/Feature/CompanyUsers/PrReviewRecoveryTest.php",
+        "tests/Support/ProductIntegrationFixture.php"
+      ],
+      "sha256": {
+        "app/Services/Integration/ProductActorAuthorization.php": "4aef0f6e62d2dad929cf4feb53d2f3541b49cf55be4d3928b30686e014ff3c49",
+        "app/Actions/CompanyUsers/MapExistingProductPerson.php": "12782367c3640c720e5286deac3d9368b44d9ae3dcb7a8a39d5780d1bc3f3f51",
+        "app/Services/CompanyUsers/CompanyUserDirectory.php": "8efae34b9b3fd7f196dab6a0c6e84ea4bc58c422c24c6e63f555acbd3b110b99",
+        "resources/views/components/company-users/\u26a1index.blade.php": "eca1edd195baa0c591117a91629f335aedb43f897300776a27a92558b6dccc29",
+        "resources/views/components/company-users/\u26a1show.blade.php": "994ee99924221eff9f2d67c32f207e07d056b8467428ab853027562d3e5c7ac0",
+        "lang/pt_BR.json": "d1e8c9bd9ac05a2c42eccc00c1056101dd33007b84ca212ab4c91348f3630244",
+        "tests/Feature/Integration/RegistrationActorAuthorizationTest.php": "78f56b958795eafadcd2c7d3c9224c3798cab6d534be52985f887de0f1d59851",
+        "tests/Feature/CompanyUsers/ExistingPersonMappingTest.php": "4393b5b5049f60a603648fa365bb9280d5369bb80d52052e693d1eb55d3a07a2",
+        "tests/Feature/CompanyInvitationSyncTest.php": "bc0aec5899a46d0a656a6a5bb524012d475a490e6f535f0248271eb2bb6d965a",
+        "tests/Browser/CompanyInvitationSyncTest.php": "ba3324c30e2d3dbc0ae60f94930dbff45f243848f4cb3f0464ca30d672664f88",
+        "tests/Feature/Integration/SystemPrincipalTest.php": "f363466c64243ebc8657a5a725d93284e108f120eb36639a954508ef56b62f0a",
+        "tests/Feature/CompanyUsers/RegistrationTest.php": "d80cd2f5196494fc38e0e563d4c662de7ab302c612e30e151e9c070344e5a9f4",
+        "tests/Feature/CompanyUsers/RegistrationMappingTest.php": "620b4cefc1c51f242ef64712c4f63d0f70799c03b2804c080285fc1defa09014",
+        "tests/Feature/CompanyUsers/AdoptionTest.php": "71d3ff518f17ae0881a81981a6e592974af81f722141519d741fa56d87e58708",
+        "tests/Feature/CompanyUsers/InvitationObservationDeliveryTest.php": "f7db7f131483b8cc5ad04c5c51d392aabff8ddb9cffe38bb1fbc40949af37f5a",
+        "tests/Feature/CompanyUsers/OperationRecoveryTest.php": "aaacb8d33fdc647942636fed88f7853d8cc45f2e8366f21cced18f5ffbfe4ec1",
+        "tests/Feature/CompanyUsers/PrReviewRecoveryTest.php": "3853650dc52de6b5fb31fdd6c0f501df6f39e883a2123192773cec0798f0a3a5",
+        "tests/Support/ProductIntegrationFixture.php": "9be1008d6e1e8c14ab5e33bd20e11927e754798c0d8ae0ace223687c50c1d43d"
+      }
+    },
+    "compliance": {
+      "root": "/Users/andrepiresdemello/Code/oceanix-api",
+      "baseline": "462f6b5604268904393fa8aebee2bb771ca4beaf",
+      "paths": [
+        "app/Actions/People/AdoptPeopleIntoAccount.php",
+        "app/Actions/People/ReconcileWorkosInvitations.php",
+        "app/Actions/ControlPlane/MapExistingAccountPerson.php",
+        "app/Actions/ControlPlane/ApplyInvitationObservation.php",
+        "tests/Feature/ControlPlane/ExistingAccountPersonMappingTest.php",
+        "tests/Feature/ControlPlane/InvitationObservationTest.php",
+        "tests/Feature/People/AccountAdoptionTest.php",
+        "tests/Browser/PeopleAccountAccessTest.php",
+        "tests/Feature/People/WorkosInvitationSyncTest.php"
+      ],
+      "sha256": {
+        "app/Actions/People/AdoptPeopleIntoAccount.php": "6404c1b2efcb96a067aa4464f44952a6e7f4c51a1d3afc8cfe9f4fdcf36d05e7",
+        "app/Actions/People/ReconcileWorkosInvitations.php": "0680a236b0c5305fbcbeec1b1e64a3e807a87222bc5907b37c2c4c4d2c1418ea",
+        "app/Actions/ControlPlane/MapExistingAccountPerson.php": "10122e994c0590be02433a8a5bbbb15925dff259947ab8cad12a6c2af1652d20",
+        "app/Actions/ControlPlane/ApplyInvitationObservation.php": "b6f91d37ea17a3f49a6af1b7eb90bd89586e9f89d92d7d5b660594b6adfabaf7",
+        "tests/Feature/ControlPlane/ExistingAccountPersonMappingTest.php": "cfe35b5235bf5d4ceff0fb2a95d0046ceb7feb238ae5e2a91563b77b00e16b6a",
+        "tests/Feature/ControlPlane/InvitationObservationTest.php": "95327f6ec3be1465f37e9cf303ec224e90489344fb1cc6348f7ef3026b708b49",
+        "tests/Feature/People/AccountAdoptionTest.php": "9643188160ff4e580c3e843b1aab3851b444e1cd65cd52f2338893ec3536717c",
+        "tests/Browser/PeopleAccountAccessTest.php": "8500d9d426077ef15d483c83ceb36e027020295572f7d5ff35eed7daecc36049",
+        "tests/Feature/People/WorkosInvitationSyncTest.php": "ebeb678814b81a818fffdf56b83c937fba76c273355b34e1e7f50a13c8921273"
+      }
+    }
+  }
+}

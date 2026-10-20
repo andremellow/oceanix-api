@@ -1,8 +1,13 @@
 <?php
 
 use App\Actions\ControlPlane\ApplyProductOperation;
+use App\Models\Certificate;
+use App\Models\Course;
 use App\Models\PersonAccountLink;
+use App\Models\PersonProductAccess;
 use App\Models\ProductOperationReceipt;
+use App\Models\Role;
+use App\Models\UserTrainingAssignment;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Support\AccountIntegrationFixture as Fixture;
@@ -133,3 +138,43 @@ it('TA-03 serializes competing PostgreSQL receivers with authority before transa
         }
     }
 })->skip(fn () => getenv('ACCOUNT_INVITATION_PG_CONCURRENCY') !== '1', 'Executed separately on the exact disposable Compliance PostgreSQL test database.');
+
+it('QA-R02 QA-R03 initializes a first exact generation-zero observation then rejects pointer replacement', function () {
+    Fixture::fakeAccountActorAuthorization();
+    [$company, $person, $principal, $token, $input] = Fixture::receiver();
+    $link = PersonAccountLink::create(['company_id' => $company->id, 'user_id' => $person->id, 'account_company_uuid' => $input['account_company_uuid'], 'shared_person_id' => $input['payload']['shared_person_id'], 'company_member_id' => $input['subject_id'], 'provenance' => []]);
+    $person->forceFill(['workos_invitation_id' => null, 'invitation_generation' => 0, 'invitation_observation_sequence' => 0, 'invitation_observation_hash' => null, 'invitation_verified_at' => null])->save();
+    $input['kind'] = 'person.invitation.observed';
+    $input['payload'] = ['local_person_id' => $person->id, 'shared_person_id' => $link->shared_person_id, 'company_member_id' => $link->company_member_id, 'workos_user_id' => $person->workos_user_id, 'generation' => 0, 'observation_sequence' => 1, 'verified_at' => now()->toIso8601String(), 'accepted_history_at' => null, 'invitation' => ['id' => 'invitation_initial', 'state' => 'expired']];
+    $this->withToken($token)->withHeader('Idempotency-Key', $input['operation_id'])->putJson('/api/control-plane/v2/operations/'.$input['operation_id'], $input)->assertSuccessful()->assertJsonPath('confirmed_state.result', 'applied');
+    $before = $person->fresh()->getAttributes();
+    $input['operation_id'] = (string) Str::uuid();
+    $input['payload']['observation_sequence'] = 2;
+    $input['payload']['invitation']['id'] = 'invitation_replacement';
+    $this->withHeader('Idempotency-Key', $input['operation_id'])->putJson('/api/control-plane/v2/operations/'.$input['operation_id'], $input)->assertConflict();
+    expect($person->fresh()->getAttributes())->toBe($before);
+});
+
+it('TA-R01 rejects a higher-sequence new invitation after each initialized null guard', function (string $guard) {
+    Fixture::fakeAccountActorAuthorization();
+    [$company, $person, $principal, $token, $input] = Fixture::receiver();
+    $link = PersonAccountLink::create(['company_id' => $company->id, 'user_id' => $person->id, 'account_company_uuid' => $input['account_company_uuid'], 'shared_person_id' => $input['payload']['shared_person_id'], 'company_member_id' => $input['subject_id'], 'provenance' => []]);
+    $person->forceFill(['workos_invitation_id' => null, 'invitation_generation' => 0, 'invitation_observation_sequence' => 0, 'invitation_observation_hash' => null, 'invitation_verified_at' => null])->save();
+    $input['kind'] = 'person.invitation.observed';
+    $input['payload'] = ['local_person_id' => $person->id, 'shared_person_id' => $link->shared_person_id, 'company_member_id' => $link->company_member_id, 'workos_user_id' => $person->workos_user_id, 'generation' => 0, 'observation_sequence' => 1, 'verified_at' => now()->subDay()->toIso8601String(), 'accepted_history_at' => null, 'invitation' => ['id' => null, 'state' => 'none']];
+    $this->withToken($token)->withHeader('Idempotency-Key', $input['operation_id'])->putJson('/api/control-plane/v2/operations/'.$input['operation_id'], $input)->assertSuccessful();
+    $person->refresh()->forceFill(['invitation_observation_sequence' => in_array($guard, ['sequence', 'observed'], true) ? 1 : 0, 'invitation_observation_hash' => in_array($guard, ['hash', 'observed'], true) ? $person->invitation_observation_hash : null, 'invitation_verified_at' => in_array($guard, ['verified', 'observed'], true) ? $person->invitation_verified_at : null])->save();
+    seedAccessCatalog();
+    $person->roles()->syncWithoutDetaching(Role::where('key', 'employee')->sole()->id);
+    PersonProductAccess::create(['company_id' => $company->id, 'user_id' => $person->id, 'confirmed_enabled' => true, 'version' => 7, 'operation_id' => (string) Str::uuid()]);
+    $course = Course::factory()->create();
+    $assignment = UserTrainingAssignment::factory()->forCourse($course)->completed()->create(['user_id' => $person->id]);
+    Certificate::factory()->create(['user_id' => $person->id, 'assignment_id' => $assignment->id, 'course_id' => $assignment->course_id, 'course_version_id' => $assignment->course_version_id]);
+    $tables = ['users', 'person_account_links', 'product_operation_receipts', 'person_product_accesses', 'role_user', 'user_training_assignments', 'certificates'];
+    $before = collect($tables)->mapWithKeys(fn ($table) => [$table => DB::table($table)->orderBy('id')->get()->toJson()])->all();
+    $input['operation_id'] = (string) Str::uuid();
+    $input['payload']['observation_sequence'] = 99;
+    $input['payload']['invitation'] = ['id' => 'invitation_forbidden_replacement', 'state' => 'expired'];
+    $this->withHeader('Idempotency-Key', $input['operation_id'])->putJson('/api/control-plane/v2/operations/'.$input['operation_id'], $input)->assertConflict();
+    expect(collect($tables)->mapWithKeys(fn ($table) => [$table => DB::table($table)->orderBy('id')->get()->toJson()])->all())->toBe($before);
+})->with(['sequence', 'hash', 'verified', 'observed']);
