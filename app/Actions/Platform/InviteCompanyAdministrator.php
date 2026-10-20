@@ -3,15 +3,13 @@
 namespace App\Actions\Platform;
 
 use App\Enums\UserStatus;
-use App\Enums\WorkosInvitationState;
 use App\Models\Account;
 use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\Account\AccountUserClient;
 use App\Services\Audit\AuditLogger;
 use App\Services\Platform\PlatformAccess;
-use App\Services\Workos\WorkosInvitationService;
-use App\Services\Workos\WorkosOrganizationMembershipService;
 use App\Tenancy\TenantContext;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
@@ -22,9 +20,8 @@ class InviteCompanyAdministrator
     public function __construct(
         private readonly PlatformAccess $access,
         private readonly TenantContext $context,
-        private readonly WorkosInvitationService $sendInvitation,
         private readonly AuditLogger $audit,
-        private readonly WorkosOrganizationMembershipService $memberships,
+        private readonly AccountUserClient $accountClient,
     ) {}
 
     /** @return array{person: User, invitation_sent: bool} */
@@ -56,29 +53,21 @@ class InviteCompanyAdministrator
                 'status' => $person->exists ? $person->status : UserStatus::Invited,
             ])->save();
 
+            $membership = $this->accountClient->platformOperation($account, $company, $person, 'person.membership.ensure');
+            abort_unless($account->fresh()->is_platform_admin && $account->fresh()->status === 'active', 403);
+            $this->access->authorize();
             $person->roles()->syncWithoutDetaching(Role::query()->where('key', 'admin')->firstOrFail());
             $this->audit->log('platform.company_administrator_granted', $person, after: [
-                'email' => $person->email,
-                'role' => 'admin',
-            ], metadata: ['platform_account_id' => $account->id]);
+                'email' => $person->email, 'role' => 'admin',
+            ], metadata: ['platform_account_id' => $account->id, 'workos_organization_membership_id' => $membership['workos_membership_id']]);
+            $state = $this->accountClient->platformOperation($account, $company, $person->fresh(), 'person.invite');
 
-            if (filled($person->workos_user_id)) {
-                $membershipId = $this->memberships->ensure($person, $company);
-                $this->audit->log('platform.company_workos_membership_created', $person, metadata: [
-                    'platform_account_id' => $account->id,
-                    'workos_organization_membership_id' => $membershipId,
-                ]);
-
-                return ['person' => $person->fresh(), 'invitation_sent' => false];
+            if (($state['outcome'] ?? null) !== 'confirmed' && ! array_key_exists('sent', $state)) {
+                throw new RuntimeException(__('The invitation is awaiting confirmation from Account.'));
             }
 
-            $snapshot = $person->invitation_state === WorkosInvitationState::Pending
-                ? $this->sendInvitation->resend($person)
-                : $this->sendInvitation->create($person);
-            $person->forceFill($snapshot->attributes() + ['invitation_sent_at' => now(), 'invitation_generation' => $person->invitation_generation + 1])->save();
-            $this->audit->log('person.workos_invitation_sent', $person, after: ['state' => $snapshot->state->value]);
+            return ['person' => $person->fresh(), 'invitation_sent' => ($state['sent'] ?? false) === true];
 
-            return ['person' => $person->fresh(), 'invitation_sent' => true];
         } finally {
             $previous === null ? $this->context->clear() : $this->context->set($previous);
         }

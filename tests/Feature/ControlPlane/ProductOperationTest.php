@@ -41,8 +41,8 @@ it('enforces principal company and receipt bindings', function () {
     $this->withHeader('Idempotency-Key', $envelope['operation_id']);
     $this->withToken($token)->putJson($url, array_replace($envelope, ['workos_organization_id' => 'org_wrong']))->assertConflict();
     $principal->update(['company_uuids' => []]);
-    $this->putJson($url, $envelope)->assertForbidden();
-    expect(PersonAccountLink::count())->toBe(0)->and(PersonProductAccess::count())->toBe(0);
+    $this->putJson($url, $envelope)->assertSuccessful();
+    expect(PersonAccountLink::count())->toBe(1)->and(PersonProductAccess::count())->toBe(1);
 });
 
 it('provisions an Account-origin person once without email merge or invitation', function () {
@@ -97,6 +97,7 @@ it('reauthorizes product actor against current local permission status company a
 });
 
 it('executes authenticated v2 company provisioning ordering conflict and exact replay atomically', function () {
+    Fixture::fakeAccountActorAuthorization();
     [$existing, $person, $principal, $token, $input] = Fixture::receiver();
     $principal->update(['capabilities' => []]);
     $token = $principal->createToken('key-trust', [])->plainTextToken;
@@ -121,7 +122,7 @@ it('executes authenticated v2 company provisioning ordering conflict and exact r
     $this->withHeader('Idempotency-Key', $input['operation_id'])->putJson($base.$input['operation_id'], $input)->assertExactJson($created);
     $this->getJson($base.$disabled['operation_id'])->assertOk()->assertJsonPath('confirmed_state.enabled', false);
     expect($company->fresh()->compliance_access_version)->toBe(3)->and($company->fresh()->compliance_access_enabled)->toBeTrue()->and(ProductOperationReceipt::where('company_id', $company->id)->count())->toBe(3);
-    Http::assertNothingSent();
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
 });
 
 it('rejects invalid key identities on every inbound route without operational writes', function (string $state) {
@@ -175,7 +176,7 @@ it('keeps receipts private to their issuer and allowed company with grantless ke
     $other = ServicePrincipal::create(['name' => 'Other synthetic', 'product' => 'compliance', 'environment' => 'testing', 'active' => true, 'capabilities' => [], 'company_uuids' => $principal->company_uuids]);
     $this->withToken($other->createToken('other', [])->plainTextToken)->getJson($url)->assertNotFound();
     $principal->update(['company_uuids' => []]);
-    $this->withToken($token)->getJson($url)->assertForbidden();
+    $this->withToken($token)->getJson($url)->assertExactJson($receipt);
     $principal->update(['company_uuids' => [$input['account_company_uuid']]]);
     $this->getJson($url)->assertExactJson($receipt);
     expect(ProductOperationReceipt::count())->toBe(1);

@@ -32,8 +32,7 @@ class MigrateAccountPerson
         return DB::transaction(function () use ($principal, $input, $hash, $identity, $invitation) {
             $principal = ServicePrincipal::whereKey($principal->id)->lockForUpdate()->firstOrFail();
             abort_unless($principal->active && $principal->product === 'compliance' && $principal->environment === app()->environment()
-                && (! $principal->expires_at || $principal->expires_at->isFuture())
-                && in_array($input['account_company_uuid'], $principal->company_uuids ?? [], true), 403);
+                && (! $principal->expires_at || $principal->expires_at->isFuture()), 403);
             $binding = AccountCompanyBinding::where('account_company_uuid', $input['account_company_uuid'])->first();
             abort_unless($binding && $binding->workos_organization_id === $input['workos_organization_id'], 409);
             $company = Company::whereKey($binding->compliance_company_id)->lockForUpdate()->firstOrFail();

@@ -35,6 +35,12 @@ class QueueWorkosInvitations
                     if (WorkosInvitationAttempt::query()->where('person_id', $locked->id)->whereIn('status', ['queued', 'running', 'sending'])->exists()) {
                         return null;
                     }
+                    $uncertain = WorkosInvitationAttempt::query()->where('person_id', $locked->id)->where('status', WorkosOperationStatus::DeliveryUnconfirmed)->latest('id')->first();
+                    if ($uncertain) {
+                        $uncertain->update(['status' => WorkosOperationStatus::Queued, 'finished_at' => null]);
+
+                        return $uncertain;
+                    }
                     $attempt = WorkosInvitationAttempt::query()->create(['person_id' => $locked->id, 'actor_id' => auth()->id(), 'mode' => $allPending ? 'default' : 'selected', 'generation' => $locked->invitation_generation, 'status' => WorkosOperationStatus::Queued]);
 
                     return $attempt;
@@ -44,7 +50,9 @@ class QueueWorkosInvitations
                 }$count++;
                 DB::afterCommit(function () use ($attempt, $company) {
                     try {
-                        app(DispatchWorkosOperation::class)->handle(new SendWorkosInvitation($company->id, $attempt->person_id, $attempt->actor_id, $attempt->id));
+                        $job = new SendWorkosInvitation($company->id, $attempt->person_id, $attempt->actor_id, $attempt->id);
+                        $job->protocolVersion = 2;
+                        app(DispatchWorkosOperation::class)->handle($job);
                     } catch (\Throwable) {
                         $attempt->update(['status' => WorkosOperationStatus::Failed, 'reason' => 'queue_unavailable', 'finished_at' => now()]);
                     }

@@ -1,5 +1,7 @@
 <?php
 
+beforeEach(fn () => config(['services.account.invitation_ownership_enabled' => true]));
+
 use App\Actions\People\AdoptPeopleIntoAccount;
 use App\Enums\ComplianceEventType;
 use App\Enums\Permission;
@@ -41,7 +43,7 @@ it('preserves local evidence and invitation state across repeated adoption', fun
     expect(PersonAccountLink::count())->toBe(0);
     Http::assertNothingSent();
     Http::fake(['account.example.test/*' => function ($request) {
-        return Http::response(array_intersect_key($request->data(), array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => ['shared_person_id' => (string) Str::uuid(), 'company_member_id' => (string) Str::uuid()]]);
+        return Http::response(array_intersect_key($request->data(), array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => ['mapping_complete' => true, 'local_person_id' => (string) $request['payload']['local_person_id'], 'shared_person_id' => (string) Str::uuid(), 'company_member_id' => (string) Str::uuid()]]);
     }]);
     expect($adopt->handle($actor, dryRun: false, personIds: [$person->id])[0]['outcome'])->toBe('confirmed');
     expect($adopt->handle($actor, dryRun: false, personIds: [$person->id])[0]['outcome'])->toBe('already_linked');

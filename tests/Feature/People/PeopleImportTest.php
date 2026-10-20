@@ -1,5 +1,7 @@
 <?php
 
+beforeEach(fn () => config(['services.account.invitation_ownership_enabled' => true]));
+
 use App\Actions\ControlPlane\ApplyProductOperation;
 use App\Actions\People\ImportPeople;
 use App\Actions\People\RegisterPerson;
@@ -103,7 +105,9 @@ it('imports new people, reuses existing accounts, creates mappings, and preserve
     Http::fake(['account.example.test/*' => function ($request) {
         $input = $request->data();
         $state = ['shared_person_id' => Uuid::uuid5(Uuid::NAMESPACE_URL, 'shared:'.$input['operation_id'])->toString(), 'company_member_id' => Uuid::uuid5(Uuid::NAMESPACE_URL, 'member:'.$input['operation_id'])->toString()];
-        if (($input['payload']['registration_mode'] ?? null) === 'confirmed-first-mapping') {
+        if ($input['kind'] === 'person.map-existing') {
+            $state += ['mapping_complete' => true, 'local_person_id' => (string) $input['payload']['local_person_id']];
+        } elseif (($input['payload']['registration_mode'] ?? null) === 'confirmed-first-mapping') {
             $state = $input['payload'] + ['mapping_complete' => true];
         } elseif ($input['kind'] === 'person.register') {
             $state += ['workos_user_id' => 'user_import_new', 'workos_membership_id' => 'om_import_new', 'membership_status' => 'pending', 'registration_mode' => 'confirmed-first', 'registration_source' => 'import', 'actor_workos_user_id' => $input['actor_workos_user_id'], 'request_payload_hash' => ApplyProductOperation::hash($input), 'mapping_complete' => false];
@@ -111,7 +115,7 @@ it('imports new people, reuses existing accounts, creates mappings, and preserve
 
         return Http::response(array_intersect_key($input, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence', 'actor_workos_user_id'])) + ['outcome' => 'confirmed', 'confirmed_state' => $state]);
     }]);
-    $existing = User::factory()->create(['email' => 'existing@example.com']);
+    $existing = User::factory()->create(['email' => 'existing@example.com', 'workos_user_id' => 'user_import_existing']);
     $department = Department::factory()->create(['name' => 'Existing department']);
     $this->actingAs($operator);
 
@@ -171,7 +175,7 @@ it('retains mixed uncertain import rows and reuses pending registration and adop
     $company = currentCompany();
     $company->update(['workos_organization_id' => 'org_mixed_import']);
     $binding = AccountCompanyBinding::create(['account_company_uuid' => (string) Str::uuid(), 'compliance_company_id' => $company->id, 'workos_organization_id' => $company->workos_organization_id]);
-    $existing = User::factory()->create(['email' => 'adopt-mixed@example.test']);
+    $existing = User::factory()->create(['email' => 'adopt-mixed@example.test', 'workos_user_id' => 'user_mixed_existing']);
     $department = Department::factory()->create();
     $recover = false;
     $envelopes = [];
@@ -191,6 +195,9 @@ it('retains mixed uncertain import rows and reuses pending registration and adop
         $shared = Uuid::uuid5(Uuid::NAMESPACE_URL, 'shared:'.$personId)->toString();
         $member = Uuid::uuid5(Uuid::NAMESPACE_URL, 'member:'.$personId)->toString();
         $state = ['shared_person_id' => $shared, 'company_member_id' => $member];
+        if ($input['kind'] === 'person.map-existing') {
+            $state += ['mapping_complete' => true, 'local_person_id' => (string) $input['payload']['local_person_id']];
+        }
         if ($input['kind'] === 'person.register') {
             $state += ['workos_user_id' => 'user_'.str_replace('-', '', $input['operation_id']), 'workos_membership_id' => 'om_'.str_replace('-', '', $input['operation_id']), 'membership_status' => 'pending', 'registration_mode' => 'confirmed-first', 'registration_source' => 'import', 'actor_workos_user_id' => $input['actor_workos_user_id'], 'request_payload_hash' => ApplyProductOperation::hash($input), 'mapping_complete' => false];
         }
@@ -209,11 +216,11 @@ it('retains mixed uncertain import rows and reuses pending registration and adop
     expect(User::where('email', 'confirmed-mixed@example.test')->sole()->departments()->whereKey($department->id)->exists())->toBeTrue()
         ->and(User::where('email', 'pending-mixed@example.test')->count())->toBe(0)->and($existing->departments()->count())->toBe(0);
     $identities = AccountRequestOperation::orderBy('id')->pluck('payload_hash', 'id')->all();
-    expect($identities)->toHaveCount(3)->and(AccountRequestOperation::find($pending->id)->state)->toBe('unknown');
+    expect($identities)->toHaveCount(4)->and(AccountRequestOperation::find($pending->id)->state)->toBe('unknown');
     $recover = true;
     $view->call('import')->assertSet('result.pending', 0)->assertSet('rows', [])->assertSee('Import completed');
     expect(AccountRequestOperation::orderBy('id')->pluck('payload_hash', 'id')->all())->toBe($identities)
-        ->and(AccountRequestOperation::where('state', 'confirmed')->count())->toBe(3)
+        ->and(AccountRequestOperation::where('state', 'confirmed')->count())->toBe(4)
         ->and(User::whereIn('email', array_column($rows, 'email'))->count())->toBe(3)
         ->and(User::where('email', 'pending-mixed@example.test')->sole()->departments()->whereKey($department->id)->exists())->toBeTrue()->and($existing->fresh()->departments()->whereKey($department->id)->exists())->toBeTrue();
     $puts = collect(Http::recorded())->filter(fn ($pair) => $pair[0]->method() === 'PUT');

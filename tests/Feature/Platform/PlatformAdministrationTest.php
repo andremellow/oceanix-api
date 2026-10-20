@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
 use Livewire\Exceptions\MethodNotFoundException;
 use Livewire\Mechanisms\PersistentMiddleware\PersistentMiddleware;
+use Tests\Support\AccountIntegrationFixture;
 
 it('denies the platform area to a company administrator', function (): void {
     $this->actingAs(adminUser())
@@ -486,6 +487,7 @@ it('lets a platform administrator explicitly create access to an existing compan
     $company->update(['workos_organization_id' => 'org_company']);
     $account = Account::factory()->platformAdmin()->create(['email' => 'platform-owner@example.com']);
     $this->withSession(['platform_account_id' => $account->id]);
+    AccountIntegrationFixture::fakePlatformConnection($company);
     Http::fake([
         'api.workos.com/user_management/organization_memberships*' => Http::sequence()
             ->push(['data' => []])
@@ -501,6 +503,7 @@ it('lets a platform administrator explicitly create access to an existing compan
 
     expect($person->hasRole('admin'))->toBeTrue()
         ->and(AuditLog::query()->where('action', 'platform.company_admin_access_granted')->exists())->toBeTrue();
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
 });
 
 it('creates a membership instead of inviting an existing WorkOS user', function (): void {
@@ -515,6 +518,7 @@ it('creates a membership instead of inviting an existing WorkOS user', function 
         'workos_user_id' => 'user_existing',
     ]);
     $this->withSession(['platform_account_id' => $platformAccount->id]);
+    AccountIntegrationFixture::fakePlatformConnection($company);
     Http::fake([
         'api.workos.com/user_management/organization_memberships*' => Http::sequence()
             ->push(['data' => []])
@@ -534,11 +538,9 @@ it('creates a membership instead of inviting an existing WorkOS user', function 
     expect($person->hasRole('admin'))->toBeTrue()
         ->and($person->workos_invitation_id)->toBeNull();
 
-    Http::assertSent(fn ($request): bool => $request->method() === 'POST'
-        && $request->url() === 'https://api.workos.com/user_management/organization_memberships'
-        && $request['user_id'] === 'user_existing'
-        && $request['organization_id'] === 'org_company');
+    Http::assertSent(fn ($request): bool => $request->method() === 'PUT' && $request['kind'] === 'person.membership.ensure' && $request['payload']['workos_user_id'] === 'user_existing' && $request['workos_organization_id'] === 'org_company');
     Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/invitations'));
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
 });
 
 it('lets a platform administrator invite another company administrator', function (): void {
@@ -547,6 +549,7 @@ it('lets a platform administrator invite another company administrator', functio
     $company->update(['workos_organization_id' => 'org_company']);
     $account = Account::factory()->platformAdmin()->create();
     $this->withSession(['platform_account_id' => $account->id]);
+    AccountIntegrationFixture::fakePlatformConnection($company);
     Http::fake([
         'api.workos.com/user_management/invitations' => Http::response(['id' => 'inv_admin', 'email' => 'tenant-admin@example.com', 'organization_id' => 'org_company', 'state' => 'pending', 'created_at' => '2026-10-01T00:00:00Z'], 201),
     ]);
@@ -561,11 +564,12 @@ it('lets a platform administrator invite another company administrator', functio
     $person = User::query()->where('email', 'tenant-admin@example.com')->firstOrFail();
 
     expect($person->hasRole('admin'))->toBeTrue()
-        ->and($person->workos_invitation_id)->toBe('inv_admin')
+        ->and($person->workos_invitation_id)->toBe('invitation_admin')
         ->and(AuditLog::query()->where('action', 'platform.company_administrator_granted')->exists())->toBeTrue();
 
-    Http::assertSent(fn ($request): bool => $request['email'] === 'tenant-admin@example.com'
-        && $request['organization_id'] === 'org_company');
+    Http::assertSent(fn ($request): bool => $request['payload']['email'] === 'tenant-admin@example.com'
+        && $request['workos_organization_id'] === 'org_company');
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
 });
 
 it('lists every administrator for the selected company and no one from another company', function (): void {

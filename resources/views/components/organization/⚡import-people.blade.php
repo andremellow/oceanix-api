@@ -26,7 +26,6 @@ new class extends Component
 
     public ?array $result = null;
 
-
     public function preview(PeopleSpreadsheetParser $parser, PeopleImportPreview $preview): void
     {
         Gate::authorize(Permission::PeopleImport->value);

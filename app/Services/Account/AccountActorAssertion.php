@@ -3,13 +3,14 @@
 namespace App\Services\Account;
 
 use App\Actions\ControlPlane\ApplyProductOperation;
+use App\Models\Account;
 use App\Models\User;
 use Illuminate\Support\Str;
 use RuntimeException;
 
 class AccountActorAssertion
 {
-    public function sign(User $actor, array $envelope): array
+    public function sign(User|Account $actor, array $envelope): array
     {
         if (! $actor->workos_user_id || $actor->workos_user_id !== $envelope['actor_workos_user_id']) {
             throw new RuntimeException('The initiating actor requires a verified stable identity.', 403);

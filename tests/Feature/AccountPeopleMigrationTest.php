@@ -11,6 +11,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
 use App\Tenancy\TenantContext;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Tests\Support\AccountIntegrationFixture;
@@ -68,6 +69,7 @@ it('previews without writes and creates only invited genuine absences without em
 
 it('rejects tenant capability hash and email-only collisions with no effects', function () {
     [$company, $person, $principal, $token, $input] = migrationReceiver();
+    $valid = $input;
     $this->withToken($token)->withHeader('Idempotency-Key', $input['operation_id']);
     $url = '/api/control-plane/migrations/v1/people/'.$input['operation_id'];
     $this->putJson($url, array_replace($input, ['name' => 'Changed']))->assertConflict();
@@ -76,9 +78,16 @@ it('rejects tenant capability hash and email-only collisions with no effects', f
     unset($input['payload_hash']);
     $input['payload_hash'] = ApplyProductOperation::hash($input);
     $this->putJson($url, $input)->assertConflict();
-    $principal->update(['company_uuids' => []]);
-    $this->putJson($url, $input)->assertForbidden();
+    $input = $valid;
+    $input['preview'] = true;
+    unset($input['payload_hash']);
+    $input['payload_hash'] = ApplyProductOperation::hash($input);
+    $this->putJson($url, $input)->assertOk()->assertJsonPath('outcome', 'ready');
     expect(PersonAccountLink::count())->toBe(0)->and(ProductOperationReceipt::count())->toBe(0);
+    DB::table('account_company_bindings')->where('compliance_company_id', $company->id)->update(['workos_organization_id' => 'org_revoked_binding']);
+    $this->putJson($url, $input)->assertConflict();
+    expect(PersonAccountLink::count())->toBe(0)->and(ProductOperationReceipt::count())->toBe(0);
+    Http::assertNothingSent();
 });
 
 it('links exact invitation-only identities and creates no replacement or role changes', function () {

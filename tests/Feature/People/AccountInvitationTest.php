@@ -1,5 +1,7 @@
 <?php
 
+beforeEach(fn () => config(['services.account.invitation_ownership_enabled' => true]));
+
 use App\Actions\ControlPlane\ApplyProductOperation;
 use App\Actions\People\SendWorkosInvitation;
 use App\Enums\Permission;

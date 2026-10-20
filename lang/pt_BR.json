@@ -984,5 +984,9 @@
     "Your access to this product has been removed.": "Seu acesso a este produto foi removido.",
     "Confirmed rows are saved. Retry the import to check incomplete rows using the same requests. No invitation is sent automatically.": "As linhas confirmadas foram salvas. Tente importar novamente para verificar as linhas incompletas usando as mesmas solicitações. Nenhum convite é enviado automaticamente.",
     "Import row outcomes": "Resultados das linhas da importação",
-    "Row :row": "Linha :row"
+    "Row :row": "Linha :row",
+    "An exact existing-person mapping is required. Review the company and provider identity.": "É necessário um vínculo exato com a pessoa existente. Revise a empresa e a identidade do provedor.",
+    "Legacy invitation work needs review before retrying.": "Os convites antigos precisam de revisão antes de tentar novamente.",
+    "Automatic retries stopped. Review the Account communication.": "As tentativas automáticas pararam. Revise a comunicação no Account.",
+    "The invitation is awaiting confirmation from Account.": "O convite aguarda confirmação do Account."
 }

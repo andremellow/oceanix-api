@@ -1,7 +1,6 @@
 <?php
 
 use App\Actions\People\QueueWorkosInvitations;
-use App\Actions\People\ReconcileWorkosInvitations;
 use App\Actions\People\SendWorkosInvitation;
 use App\Enums\Permission;
 use App\Enums\UserStatus;
@@ -19,7 +18,7 @@ use Tests\Support\AccountIntegrationFixture as Fixture;
 
 beforeEach(function () {
     currentCompany()->update(['workos_organization_id' => 'org_current']);
-    config(['services.workos.api_key' => 'test-key', 'services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
+    config(['services.account.invitation_ownership_enabled' => true, 'services.workos.api_key' => 'test-key', 'services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
     $this->actingAs(userWithPermissions([Permission::PeopleInvite]));
     auth()->user()->forceFill(['workos_user_id' => 'user_recovery_actor', 'account_id' => Account::factory()->create()->id])->save();
     Queue::fake();
@@ -43,9 +42,11 @@ it('skips accepted members and blocked people with an eligible positive control'
     $blocked = User::factory()->suspended()->create(['workos_user_id' => null]);
     $good = User::factory()->create(['workos_user_id' => null]);
     Fixture::invitationLink($good);
+    Fixture::invitationLink($accepted);
+    Fixture::invitationLink($member);
     Http::fake(function ($r) use ($accepted, $member, $good) {
         if (str_contains($r->url(), 'account.example.test')) {
-            return Http::response(Fixture::invitationReceipt($r->data(), invitationFixture($good)));
+            return Http::response(Fixture::invitationReceipt($r->data(), invitationFixture($r['payload']['local_person_id'] === $accepted->id ? $accepted : ($r['payload']['local_person_id'] === $member->id ? $member : $good)), $r['payload']['local_person_id'] === $good->id, $r['payload']['local_person_id'] === $member->id));
         }
         if (str_contains($r->url(), '/users/')) {
             return Http::response(['id' => 'user_member', 'email' => $member->email]);
@@ -63,7 +64,8 @@ it('skips accepted members and blocked people with an eligible positive control'
     WorkosInvitationAttempt::all()->each(fn ($attempt) => app(SendWorkosInvitation::class)->execute($attempt));
     expect(WorkosInvitationAttempt::where('status', 'succeeded')->count())->toBe(1)->and(WorkosInvitationAttempt::where('status', 'skipped')->count())->toBe(3);
     Http::assertSent(fn ($r) => $r->method() === 'PUT' && $r['payload']['local_person_id'] === $good->id);
-    expect(collect(Http::recorded())->filter(fn ($pair) => $pair[0]->method() === 'PUT'))->toHaveCount(1);
+    expect(collect(Http::recorded())->filter(fn ($pair) => $pair[0]->method() === 'PUT'))->toHaveCount(3);
+    Http::assertNotSent(fn ($r) => str_contains($r->url(), 'api.workos.com'));
 });
 
 it('distinguishes default and explicit revoked recovery', function () {
@@ -122,7 +124,9 @@ it('preserves a newer invitation after a successful but stale POST and restores 
     $company = currentCompany();
     $other = Company::factory()->create();
     app(TenantContext::class)->set($other);
-    (new App\Jobs\SendWorkosInvitation($company->id, $person->id, $attempt->actor_id, $attempt->id))->handle(app(SendWorkosInvitation::class));
+    $job = new App\Jobs\SendWorkosInvitation($company->id, $person->id, $attempt->actor_id, $attempt->id);
+    $job->protocolVersion = 2;
+    $job->handle(app(SendWorkosInvitation::class));
     expect(app(TenantContext::class)->id())->toBe($other->id);
     app(TenantContext::class)->set($company);
     expect($attempt->fresh()->status)->toBe(WorkosOperationStatus::DeliveryUnconfirmed)->and($person->fresh()->workos_invitation_id)->toBe('inv_newer');
@@ -148,12 +152,12 @@ it('fails malformed recovery before POST and preserves prior verification', func
     Http::fake(['*' => Http::response(['data' => [123]])]);
     $attempt = WorkosInvitationAttempt::firstOrFail();
     app(SendWorkosInvitation::class)->execute($attempt);
-    expect($attempt->fresh()->status)->toBe(WorkosOperationStatus::Failed)->and($attempt->fresh()->reason)->toBe('provider_verification_failed')->and($person->fresh()->invitation_verified_at->equalTo($verified))->toBeTrue()->and($person->fresh()->invitation_state)->toBe(WorkosInvitationState::Pending);
+    expect($attempt->fresh()->status)->toBe(WorkosOperationStatus::Failed)->and($attempt->fresh()->reason)->toBe('mapping_required')->and($person->fresh()->invitation_verified_at->equalTo($verified))->toBeTrue()->and($person->fresh()->invitation_state)->toBe(WorkosInvitationState::Pending);
     Http::assertNotSent(fn ($r) => $r->method() === 'POST');
 });
 
 it('recovers an interrupted sending intent using reads only and honest audit', function () {
-    $person = User::factory()->create(['workos_user_id' => null]);
+    $person = User::factory()->create(['workos_user_id' => null, 'invitation_state' => WorkosInvitationState::Pending]);
     app(QueueWorkosInvitations::class)->handle([$person->id]);
     $attempt = WorkosInvitationAttempt::firstOrFail();
     $attempt->update(['status' => WorkosOperationStatus::Sending, 'send_started_at' => now()->subMinute()]);
@@ -216,12 +220,12 @@ it('executes exact default partitions with fresh exclusions and server send evid
 
         return [$state => $person];
     });
-    $people->only(['pending', 'expired', 'unverified', 'not_invited', 'null'])->each(fn ($person) => Fixture::invitationLink($person));
+    $people->only(['pending', 'expired', 'unverified', 'not_invited', 'null', 'fresh_accepted', 'fresh_member'])->each(fn ($person) => Fixture::invitationLink($person));
     Http::fake(function ($r) use ($people) {
         if (str_contains($r->url(), 'account.example.test')) {
             $person = $people->firstWhere('id', $r['payload']['local_person_id']);
 
-            return Http::response(Fixture::invitationReceipt($r->data(), invitationFixture($person, 'pending', 'inv_result_'.$person->id)));
+            return Http::response(Fixture::invitationReceipt($r->data(), invitationFixture($person, 'pending', 'inv_result_'.$person->id), ! in_array($person->id, [$people['fresh_accepted']->id, $people['fresh_member']->id]), $person->id === $people['fresh_member']->id));
         }
         if (str_contains($r->url(), '/users/')) {
             return Http::response(['id' => 'user_fresh_member', 'email' => $people['fresh_member']->email]);
@@ -242,7 +246,7 @@ it('executes exact default partitions with fresh exclusions and server send evid
     WorkosInvitationAttempt::all()->each(fn ($attempt) => app(SendWorkosInvitation::class)->execute($attempt));
     expect(WorkosInvitationAttempt::where('person_id', $people['fresh_accepted']->id)->first()->reason)->toBe('already_accepted')->and(WorkosInvitationAttempt::where('person_id', $people['fresh_member']->id)->first()->reason)->toBe('current_member');
     $posts = collect(Http::recorded())->filter(fn ($pair) => $pair[0]->method() === 'PUT');
-    expect($posts)->toHaveCount(5, WorkosInvitationAttempt::get(['person_id', 'status', 'reason'])->toJson());
+    expect($posts)->toHaveCount(7, WorkosInvitationAttempt::get(['person_id', 'status', 'reason'])->toJson());
     foreach ($people->only(['pending', 'expired', 'unverified', 'not_invited', 'null']) as $state => $person) {
         $fresh = $person->fresh();
         $id = $state === 'pending' ? 'inv_source_'.$person->id : 'inv_result_'.$person->id;
@@ -257,11 +261,11 @@ it('prevents recovery for a contradictory accepted provider identity', function 
     app(QueueWorkosInvitations::class)->handle([$person->id]);
     Http::fake(fn ($r) => Http::response(str_contains($r->url(), '/users/') ? ['id' => 'user_wrong', 'email' => 'other@example.com'] : ['data' => [invitationFixture($person, 'accepted', 'inv_wrong', ['accepted_user_id' => 'user_wrong'])]]));
     app(SendWorkosInvitation::class)->execute(WorkosInvitationAttempt::first());
-    expect(WorkosInvitationAttempt::first()->reason)->toBe('provider_verification_failed')->and($person->fresh()->first_access_at)->toBeNull()->and($person->fresh()->account_id)->toBeNull()->and($person->fresh()->status->value)->toBe('invited');
+    expect(WorkosInvitationAttempt::first()->reason)->toBe('mapping_required')->and($person->fresh()->first_access_at)->toBeNull()->and($person->fresh()->account_id)->toBeNull()->and($person->fresh()->status->value)->toBe('invited');
     Http::assertNotSent(fn ($r) => $r->method() === 'POST');
 });
 
-it('checks accepted history membership before recovering an unlinked person', function ($state, $outcome) {
+it('requires exact mapping evidence before inspecting any unlinked person history', function ($state, $outcome) {
     $person = User::factory()->create(['status' => UserStatus::Invited, 'workos_user_id' => null, 'account_id' => null]);
     Http::preventStrayRequests();
     Http::fake(function ($r) use ($person, $state) {
@@ -285,25 +289,8 @@ it('checks accepted history membership before recovering an unlinked person', fu
     });
     app(QueueWorkosInvitations::class)->handle([$person->id]);
     $attempt = WorkosInvitationAttempt::firstOrFail();
-    if ($state === 'inactive') {
-        // Read-only legacy evidence is retained before explicit synthetic adoption.
-        app(ReconcileWorkosInvitations::class)->refresh($person, $attempt->actor_id);
-        Fixture::invitationLink($person);
-    }
     app(SendWorkosInvitation::class)->execute($attempt);
-    expect($attempt->fresh()->status->value)->toBe($outcome)
-        ->and($person->fresh()->status)->toBe(UserStatus::Invited)
-        ->and($person->fresh()->workos_user_id)->toBeNull()->and($person->fresh()->account_id)->toBeNull()
-        ->and($person->fresh()->first_access_at)->toBeNull()->and($person->fresh()->last_access_at)->toBeNull();
-    if ($state === 'inactive') {
-        Http::assertSent(fn ($r) => $r->method() === 'PUT' && $r['kind'] === 'person.invite');
-        Http::assertNotSent(fn ($r) => $r->method() === 'POST');
-        expect($person->fresh()->workos_active_membership)->toBeFalse();
-    } else {
-        Http::assertNotSent(fn ($r) => $r->method() === 'POST');
-        expect($attempt->fresh()->reason)->toBe($state === 'active' ? 'current_member' : 'provider_verification_failed');
-    }
-    if ($state === 'active') {
-        expect($person->fresh()->workos_active_membership)->toBeTrue()->and($person->fresh()->invitation_state)->toBe(WorkosInvitationState::Expired)->and($person->fresh()->invitation_accepted_history_at)->not->toBeNull();
-    }
+    expect($attempt->fresh()->status)->toBe(WorkosOperationStatus::Failed)->and($attempt->fresh()->reason)->toBe('mapping_required')
+        ->and($person->fresh()->status)->toBe(UserStatus::Invited)->and($person->fresh()->workos_user_id)->toBeNull()->and($person->fresh()->account_id)->toBeNull()->and($person->fresh()->first_access_at)->toBeNull()->and($person->fresh()->last_access_at)->toBeNull()->and($person->fresh()->workos_active_membership)->toBeFalse();
+    Http::assertNothingSent();
 })->with([['active', 'skipped'], ['inactive', 'succeeded'], ['failure', 'failed'], ['mismatch', 'failed']]);

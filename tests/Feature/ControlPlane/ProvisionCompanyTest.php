@@ -11,10 +11,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Tests\Support\AccountIntegrationFixture;
 
 beforeEach(function () {
     Http::preventStrayRequests();
-    Http::fake();
+    AccountIntegrationFixture::fakeAccountActorAuthorization();
 });
 
 function provisionToken(array $abilities = [], mixed $expires = null): string
@@ -39,7 +40,7 @@ it('SC-07 provisions a tenant with a scoped machine token and no human role gran
     $this->withToken(provisionToken())->withHeader('Idempotency-Key', $key)->putJson(provisionUrl($uuid), $payload)->assertCreated()->assertJsonPath('account_company_uuid', $uuid)->assertJsonPath('workos_organization_id', 'org_receiver')->assertJsonPath('operation_id', $key)->assertJsonPath('outcome', 'created');
     expect(Company::count())->toBe($before + 1)->and(AccountCompanyBinding::count())->toBe(1)->and(ProvisioningReceipt::count())->toBe(1)->and(User::withoutGlobalScopes()->count())->toBe(0)->and(DB::table('role_user')->count())->toBe(0);
     expect(app(TenantContext::class)->id())->toBe($context);
-    Http::assertNothingSent();
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
 });
 
 it('SC-08 adopts an existing tenant without rekeying or modifying published evidence', function () {
@@ -77,7 +78,7 @@ it('SC-11 rejects missing invalid expired and human tokens without mutations', f
     $human = adminUser();
     $this->withToken($human->createToken('human', ['companies:provision'])->plainTextToken)->putJson(provisionUrl($uuid), $payload)->assertForbidden();
     expect(Company::count())->toBe($count)->and(AccountCompanyBinding::count())->toBe(0);
-    Http::assertNothingSent();
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
 });
 
 it('SC-11 rejects conflicting Account bindings and occupied slugs without modifying tenants', function () {

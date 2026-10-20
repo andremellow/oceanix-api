@@ -188,3 +188,17 @@ If any destination remains unknown, keep the requested and last-confirmed access
 ## 8. Package extraction after validation
 
 After both applications pass the above flow, define package boundaries for Account transport/identity/mapping, reusable person/access communication UI and shared UI tokens/components (including company theme overrides). Keep product-domain/training behavior outside the shared package. The next-system boilerplate and package implementation are a separate task; this release does not silently extract them.
+
+## Account-owned invitations (protocol 2, October 2026)
+
+Deploy the compatible Account and Compliance versions together for operational invitations. Keep `ACCOUNT_OWNED_INVITATIONS_ENABLED=false` in Compliance until paired verification succeeds. Configure the Account URL, system bearer credential and shared actor assertion secret through the existing secure configuration mechanism. Do not publish credential values. Service principals authenticate a system/product/environment; `company_uuids` is deprecated compatibility data and does not authorize companies. Account-to-Compliance bearer abilities do not replace or add action capability checks. Real company UUID, WorkOS organization and stored company binding must agree, and every new effect requires current human authority.
+
+Account's one-off `workos:import-people` preview/apply can run independently before this release, with no Compliance connection. Imported association is a declaration, never verified product access. Do not repair old unknown import outcomes by resending legacy migration requests.
+
+Before cutover, stop old workers and inventory pending invitation attempts and sync runs. Run `php artisan account:quarantine-legacy-invitations` for a read-only count, and use `--apply` only during an authorized cutover to retain and mark legacy work for review. New job objects carry protocol version 2; old serialized payloads fail closed. A send that already started remains delivery-unconfirmed; do not erase its marker or blindly resend. Preserve all jobs, original operations and receipts as operational evidence.
+
+Verify both inbound system identities, exact company bindings, reciprocal person mapping, current actor callback, database queue, scheduler, and queue `retry_after > 120` before enabling either side. Workers use a 60-second timeout and 120-second claim lease. Enable the Compliance configuration only after the Account registry is explicitly ready. Missing/older receivers must remain unavailable without any direct operational WorkOS fallback. AuthKit login continues using its existing provider client.
+
+First-use invitation sync/send maps an existing person by exact company and stable WorkOS ID, or exact invitation ID for an invitation-only person. Mapping failures require correcting the identity/binding evidence; never merge by email or create a duplicate person to bypass a conflict. Mapping and status observations do not change roles, product access or training evidence.
+
+A successful Account read and failed Compliance projection are separate results. Retry the failed projection with its original UUID and payload; retain the last verified invitation state. Ambiguous HTTP writes retrieve their stored receipt before replay. Account automatically bounds target attempts; after exhaustion use the existing authorized person/Communication retry control. Repair forward. Do not downgrade to an older worker that performs operational WorkOS calls or remove the new evidence fields.

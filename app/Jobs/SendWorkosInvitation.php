@@ -17,6 +17,8 @@ class SendWorkosInvitation implements ShouldBeUnique, ShouldQueue
 
     public int $tries = 1;
 
+    public int $protocolVersion = 1;
+
     public int $uniqueFor = 600;
 
     public function __construct(public readonly int $companyId, public readonly int $personId, public readonly ?int $initiatedBy, public readonly ?int $attemptId = null) {}
@@ -38,6 +40,11 @@ class SendWorkosInvitation implements ShouldBeUnique, ShouldQueue
         try {
             $context->set(Company::query()->findOrFail($this->companyId));
             $attempt = WorkosInvitationAttempt::query()->whereKey($this->attemptId)->where('person_id', $this->personId)->where('actor_id', $this->initiatedBy)->first();
+            if ($attempt && $this->protocolVersion < 2) {
+                $attempt->update(['status' => WorkosOperationStatus::DeliveryUnconfirmed, 'reason' => 'legacy_cutover_review', 'finished_at' => now()]);
+
+                return;
+            }
             if ($attempt) {
                 $action->execute($attempt);
             }

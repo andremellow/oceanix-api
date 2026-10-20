@@ -1,30 +1,114 @@
 <?php
-use App\Enums\UserStatus;
-use App\Enums\WorkosInvitationState;
-use App\Enums\Permission;
 use App\Actions\People\QueueWorkosInvitations;
 use App\Actions\People\QueueWorkosSynchronization;
+use App\Actions\People\ReconcileWorkosInvitations;
+use App\Enums\Permission;
+use App\Enums\UserStatus;
+use App\Enums\WorkosInvitationState;
 use App\Services\People\PeopleDirectory;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
-new class extends Component {
- use WithPagination;
- public string $search='';public string $department_id='';public string $job_function_id='';public string $status='';public string $invitation_status='';public bool $no_access=false;
- public array $selected=[];public bool $confirmingInvitations=false;public bool $allPending=false;
- public function boot(): void {$this->authorize(Permission::PeopleView->value);}
- public function updated(string $property): void {if($property==='selected')return;if(in_array($property,['search','department_id','job_function_id','status','invitation_status','no_access'],true)){$this->resetPage();$this->selected=[];}}
- public function updatingPaginators(): void {$this->selected=[];}
- public function clearFilters(): void {$this->reset('search','department_id','job_function_id','status','invitation_status','no_access','selected');$this->resetPage();}
- public function clearSelection(): void {$this->selected=[];}
- public function synchronize(QueueWorkosSynchronization $action): void {$this->authorize(Permission::PeopleSyncWorkos->value);$action->handle();session()->flash('status',__('Synchronization queued. No invitations will be sent.'));}
- public function inviteSelected(): void {$this->authorize(Permission::PeopleInvite->value);$this->allPending=false;$this->confirmingInvitations=true;}
- public function inviteAllPending(): void {$this->authorize(Permission::PeopleInvite->value);$this->allPending=true;$this->confirmingInvitations=true;}
- public function queueInvitations(QueueWorkosInvitations $action): void {
- $this->authorize(Permission::PeopleInvite->value);
- $this->validate(['selected'=>'array|max:500','selected.*'=>'integer|min:1|distinct']);
- try{$count=$action->handle($this->selected,$this->allPending);$this->selected=[];$this->confirmingInvitations=false;session()->flash('status',trans_choice(':count invitation queued|:count invitations queued',$count,['count'=>$count]));}catch(\RuntimeException $e){$this->addError('invitations',$e->getMessage());}
- }
- public function with(PeopleDirectory $directory): array { $this->validate(['status'=>['nullable',Illuminate\Validation\Rule::enum(UserStatus::class)], 'invitation_status'=>['nullable',Illuminate\Validation\Rule::enum(WorkosInvitationState::class)], 'department_id'=>'nullable|integer', 'job_function_id'=>'nullable|integer']); return $directory->data($this->only(['search','department_id','job_function_id','status','invitation_status','no_access']));}
+
+new class extends Component
+{
+    use WithPagination;
+
+    public string $search = '';
+
+    public string $department_id = '';
+
+    public string $job_function_id = '';
+
+    public string $status = '';
+
+    public string $invitation_status = '';
+
+    public bool $no_access = false;
+
+    public array $selected = [];
+
+    public bool $confirmingInvitations = false;
+
+    public bool $allPending = false;
+
+    public function boot(): void
+    {
+        $this->authorize(Permission::PeopleView->value);
+    }
+
+    public function updated(string $property): void
+    {
+        if ($property === 'selected') {
+            return;
+        }if (in_array($property, ['search', 'department_id', 'job_function_id', 'status', 'invitation_status', 'no_access'], true)) {
+            $this->resetPage();
+            $this->selected = [];
+        }
+    }
+
+    public function updatingPaginators(): void
+    {
+        $this->selected = [];
+    }
+
+    public function clearFilters(): void
+    {
+        $this->reset('search', 'department_id', 'job_function_id', 'status', 'invitation_status', 'no_access', 'selected');
+        $this->resetPage();
+    }
+
+    public function clearSelection(): void
+    {
+        $this->selected = [];
+    }
+
+    public function synchronize(QueueWorkosSynchronization $action): void
+    {
+        $this->authorize(Permission::PeopleSyncWorkos->value);
+        $action->handle();
+        session()->flash('status', __('Synchronization queued. No invitations will be sent.'));
+    }
+
+    public function inviteSelected(): void
+    {
+        $this->authorize(Permission::PeopleInvite->value);
+        $this->allPending = false;
+        $this->confirmingInvitations = true;
+    }
+
+    public function inviteAllPending(): void
+    {
+        $this->authorize(Permission::PeopleInvite->value);
+        $this->allPending = true;
+        $this->confirmingInvitations = true;
+    }
+
+    public function queueInvitations(QueueWorkosInvitations $action): void
+    {
+        $this->authorize(Permission::PeopleInvite->value);
+        $this->validate(['selected' => 'array|max:500', 'selected.*' => 'integer|min:1|distinct']);
+        try {
+            $count = $action->handle($this->selected, $this->allPending);
+            $this->selected = [];
+            $this->confirmingInvitations = false;
+            session()->flash('status', trans_choice(':count invitation queued|:count invitations queued', $count, ['count' => $count]));
+        } catch (RuntimeException $e) {
+            $this->addError('invitations', $e->getMessage());
+        }
+    }
+
+    public function refreshOperations(): void
+    {
+        app(ReconcileWorkosInvitations::class)->refreshPending(auth()->user());
+    }
+
+    public function with(PeopleDirectory $directory): array
+    {
+        $this->validate(['status' => ['nullable', Rule::enum(UserStatus::class)], 'invitation_status' => ['nullable', Rule::enum(WorkosInvitationState::class)], 'department_id' => 'nullable|integer', 'job_function_id' => 'nullable|integer']);
+
+        return $directory->data($this->only(['search', 'department_id', 'job_function_id', 'status', 'invitation_status', 'no_access']));
+    }
 };
 ?>
 
@@ -43,7 +127,7 @@ new class extends Component {
         </div>
     </x-page-hero>
 
-    <section class="form-panel space-y-4 p-5 sm:p-6" @if($operationsActive) wire:poll.3s @endif aria-label="{{ __('WorkOS invitations') }}">
+    <section class="form-panel space-y-4 p-5 sm:p-6" @if($operationsActive) wire:poll.3s="refreshOperations" @endif aria-label="{{ __('WorkOS invitations') }}">
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div><h2 class="detail-card-title">{{ __('WorkOS invitations') }}</h2><p class="text-sm text-secondary">{{ __('Synchronization checks this company without sending emails.') }}</p></div>
             <div class="flex min-w-0 max-w-full flex-wrap gap-2">

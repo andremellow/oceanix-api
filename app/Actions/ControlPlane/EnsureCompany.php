@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\Company;
 use App\Models\ProvisioningReceipt;
 use App\Models\ServicePrincipal;
+use App\Services\Account\AccountUserClient;
 use App\Tenancy\TenantContext;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
@@ -17,7 +18,7 @@ class EnsureCompany
 {
     public function __construct(private TenantContext $context) {}
 
-    public function handle(ServicePrincipal $principal, array $input): ProvisioningReceipt
+    public function handle(ServicePrincipal $principal, array $input, bool $actorVerified = false): ProvisioningReceipt
     {
         $payload = [
             'account_company_uuid' => strtolower($input['account_company_uuid']), 'workos_organization_id' => $input['workos_organization_id'],
@@ -25,6 +26,9 @@ class EnsureCompany
         ];
         $hash = hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR));
         $operationId = strtolower($input['operation_id']);
+        if (! $actorVerified && ! ProvisioningReceipt::where('service_principal_id', $principal->id)->where('operation_id', $operationId)->exists()) {
+            app(AccountUserClient::class)->authorizeAccountOperation(['protocol_version' => 2, 'operation_id' => $operationId, 'kind' => 'company.provision', 'product' => 'compliance', 'account_company_uuid' => $payload['account_company_uuid'], 'workos_organization_id' => $payload['workos_organization_id'], 'subject_id' => $payload['account_company_uuid'], 'resource_sequence' => 1, 'actor_workos_user_id' => $payload['actor_workos_user_id'], 'payload' => ['name' => $payload['name'], 'slug' => $payload['slug'], 'enabled' => true]]);
+        }
         for ($attempt = 0; $attempt < 3; $attempt++) {
             try {
                 return DB::transaction(function () use ($principal, $payload, $hash, $operationId) {

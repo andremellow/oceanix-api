@@ -14,7 +14,6 @@ use App\Models\PersonAccountLink;
 use App\Models\User;
 use App\Models\WorkosInvitationAttempt;
 use App\Services\Account\AccountUserClient;
-use App\Services\Workos\WorkosInvitationService;
 use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -22,7 +21,7 @@ use Ramsey\Uuid\Uuid;
 
 class SendWorkosInvitation
 {
-    public function __construct(private readonly ReconcileWorkosInvitations $reconcile, private readonly WorkosInvitationService $workos) {}
+    public function __construct(private readonly ReconcileWorkosInvitations $reconcile) {}
 
     public function handle(User $person): User
     {
@@ -50,7 +49,7 @@ class SendWorkosInvitation
 
             return;
         }
-        if ($attempt->status === WorkosOperationStatus::Sending) {
+        if ($attempt->status === WorkosOperationStatus::Sending || $attempt->send_started_at !== null) {
             $this->recover($person, $attempt);
 
             return;
@@ -60,32 +59,11 @@ class SendWorkosInvitation
 
             return;
         }
-        $linked = PersonAccountLink::where('company_id', $person->company_id)->where('user_id', $person->id)->exists();
         try {
-            if (! $linked && ! $this->reconcile->refresh($person, $attempt->actor_id)) {
-                $this->finish($attempt, WorkosOperationStatus::Skipped, 'superseded');
-
-                return;
-            }
+            $actor = User::whereKey($attempt->actor_id)->firstOrFail();
+            app(AdoptPeopleIntoAccount::class)->ensure($actor, $person, 'person.invite');
         } catch (\Throwable) {
-            $this->reconcile->markUnavailable($person);
-            $this->finish($attempt, WorkosOperationStatus::Failed, 'provider_verification_failed');
-
-            return;
-        }
-        $person->refresh();
-        if (! $linked && $person->workos_active_membership) {
-            $this->finish($attempt, WorkosOperationStatus::Skipped, 'current_member');
-
-            return;
-        }
-        if (! $linked && $person->invitation_state === WorkosInvitationState::Accepted) {
-            $this->finish($attempt, WorkosOperationStatus::Skipped, 'already_accepted');
-
-            return;
-        }
-        if (! $linked && $person->invitation_state === WorkosInvitationState::Unverified) {
-            $this->finish($attempt, WorkosOperationStatus::Skipped, 'invitation_unavailable');
+            $this->finish($attempt, WorkosOperationStatus::Failed, 'mapping_required');
 
             return;
         }

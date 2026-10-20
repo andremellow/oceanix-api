@@ -13,6 +13,7 @@ use App\Models\UserTrainingAssignment;
 use App\Services\Requirements\AssignmentMaterializationService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Tests\Support\AccountIntegrationFixture;
 
 it('preserves obligation evidence during legacy transition', function () {
     $legacy = adminUser();
@@ -37,12 +38,14 @@ it('imports new people invited without changing existing protected statuses', fu
     $this->actingAs($actor);
     currentCompany()->update(['workos_organization_id' => 'org_import_status']);
     AccountCompanyBinding::create(['account_company_uuid' => (string) Str::uuid(), 'compliance_company_id' => currentCompany()->id, 'workos_organization_id' => 'org_import_status']);
-    config(['services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
+    config(['services.account.invitation_ownership_enabled' => true, 'services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
     Http::preventStrayRequests();
     Http::fake(['account.example.test/*' => function ($request) {
         $data = $request->data();
         $state = ['enabled' => true, 'shared_person_id' => (string) Str::uuid(), 'company_member_id' => (string) Str::uuid()];
-        if (($data['payload']['registration_mode'] ?? null) === 'confirmed-first-mapping') {
+        if ($data['kind'] === 'person.map-existing') {
+            $state += ['mapping_complete' => true, 'local_person_id' => (string) $data['payload']['local_person_id']];
+        } elseif (($data['payload']['registration_mode'] ?? null) === 'confirmed-first-mapping') {
             $state = $data['payload'] + ['mapping_complete' => true];
         } elseif ($data['kind'] === 'person.register') {
             $state += ['registration_mode' => 'confirmed-first', 'registration_source' => 'import', 'actor_workos_user_id' => $data['actor_workos_user_id'], 'request_payload_hash' => ApplyProductOperation::hash($data), 'workos_user_id' => 'user_import_status_new', 'workos_membership_id' => 'om_import_status_new', 'membership_status' => 'pending', 'mapping_complete' => false];
@@ -50,7 +53,7 @@ it('imports new people invited without changing existing protected statuses', fu
 
         return Http::response(array_intersect_key($data, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence', 'actor_workos_user_id'])) + ['outcome' => 'confirmed', 'confirmed_state' => $state]);
     }]);
-    $protected = User::factory()->suspended()->create(['email' => 'protected@example.com']);
+    $protected = User::factory()->suspended()->create(['email' => 'protected@example.com', 'workos_user_id' => 'user_import_status_existing']);
     $result = app(ImportPeople::class)->handle([
         ['row' => 2, 'name' => 'New Person', 'email' => 'new@example.com', 'job_function' => '', 'department' => ''],
         ['row' => 3, 'name' => 'Protected', 'email' => 'protected@example.com', 'job_function' => '', 'department' => ''],
@@ -66,10 +69,11 @@ it('grants a new tenant administrator invited and preserves existing suspended s
     config(['services.workos.api_key' => 'test-key']);
     $account = Account::factory()->platformAdmin()->create();
     $this->withSession(['platform_account_id' => $account->id]);
-    Http::fake(['*' => Http::sequence()->push(['data' => []])->push(['id' => 'membership_admin'])->push(['data' => []])->push(['id' => 'membership_again'])]);
+    AccountIntegrationFixture::fakePlatformConnection(currentCompany());
     $action = app(GrantPlatformCompanyAccess::class);
     $person = $action->handle(currentCompany());
     expect($person->status)->toBe(UserStatus::Invited)->and($person->first_access_at)->toBeNull()->and($person->hasRole('admin'))->toBeTrue();
     $person->forceFill(['status' => UserStatus::Suspended])->save();
     expect($action->handle(currentCompany())->status)->toBe(UserStatus::Suspended);
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
 });

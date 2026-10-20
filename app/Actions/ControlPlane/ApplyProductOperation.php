@@ -11,6 +11,7 @@ use App\Models\ProductOperationReceipt;
 use App\Models\Role;
 use App\Models\ServicePrincipal;
 use App\Models\User;
+use App\Services\Account\AccountUserClient;
 use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -39,12 +40,14 @@ class ApplyProductOperation
     public function handle(ServicePrincipal $principal, array $input): ProductOperationReceipt
     {
         $hash = self::hash($input);
+        if (in_array($input['kind'], ['company.provision', 'person.map-existing', 'person.invitation.observed'], true) && ! ProductOperationReceipt::where('service_principal_id', $principal->id)->where('operation_id', $input['operation_id'])->exists()) {
+            app(AccountUserClient::class)->authorizeAccountOperation($input);
+        }
 
         return DB::transaction(function () use ($principal, $input, $hash) {
             $principal = ServicePrincipal::whereKey($principal->id)->lockForUpdate()->firstOrFail();
             abort_unless($principal->active && $principal->environment === app()->environment() && $principal->product === $input['product']
-                && (! $principal->expires_at || $principal->expires_at->isFuture())
-                && in_array($input['account_company_uuid'], $principal->company_uuids ?? [], true), 403);
+                && (! $principal->expires_at || $principal->expires_at->isFuture()), 403);
             if ($input['kind'] === 'company.provision') {
                 $prior = ProductOperationReceipt::where('service_principal_id', $principal->id)->where('operation_id', $input['operation_id'])->first();
                 if ($prior) {
@@ -56,7 +59,7 @@ class ApplyProductOperation
                     'account_company_uuid' => $input['account_company_uuid'], 'workos_organization_id' => $input['workos_organization_id'],
                     'name' => $input['payload']['name'], 'slug' => $input['payload']['slug'], 'actor_workos_user_id' => $input['actor_workos_user_id'],
                     'operation_id' => $input['operation_id'], 'correlation_id' => $input['operation_id'],
-                ]);
+                ], actorVerified: true);
                 $binding = AccountCompanyBinding::where('account_company_uuid', $input['account_company_uuid'])->firstOrFail();
                 $company = Company::whereKey($binding->compliance_company_id)->lockForUpdate()->firstOrFail();
                 abort_unless($company->compliance_access_version === 0 && $input['resource_sequence'] === 1, 409);
@@ -80,7 +83,11 @@ class ApplyProductOperation
             try {
                 $this->context->set($company);
                 $payload = $input['payload'];
-                if ($input['kind'] === 'company.access') {
+                if ($input['kind'] === 'person.map-existing') {
+                    $state = app(MapExistingAccountPerson::class)->handle($company, $input);
+                } elseif ($input['kind'] === 'person.invitation.observed') {
+                    $state = app(ApplyInvitationObservation::class)->handle($company, $input);
+                } elseif ($input['kind'] === 'company.access') {
                     abort_unless($input['subject_id'] === $company->public_id && $input['resource_sequence'] === $company->compliance_access_version + 1, 409);
                     $company->update(['compliance_access_enabled' => $payload['enabled'], 'compliance_access_version' => $input['resource_sequence']]);
                     $state = ['enabled' => (bool) $company->compliance_access_enabled];
@@ -134,7 +141,8 @@ class ApplyProductOperation
     public function receipt(ServicePrincipal $principal, string $operationId): ProductOperationReceipt
     {
         $receipt = ProductOperationReceipt::where('service_principal_id', $principal->id)->where('operation_id', $operationId)->firstOrFail();
-        abort_unless(in_array($receipt->response['account_company_uuid'], $principal->company_uuids ?? [], true), 403);
+        abort_unless($principal->active && $principal->environment === app()->environment() && $principal->product === ($receipt->response['product'] ?? null) && (! $principal->expires_at || $principal->expires_at->isFuture()), 403);
+        abort_unless(AccountCompanyBinding::where('account_company_uuid', $receipt->response['account_company_uuid'])->where('workos_organization_id', $receipt->response['workos_organization_id'])->where('compliance_company_id', $receipt->company_id)->exists(), 409);
 
         return $receipt;
     }

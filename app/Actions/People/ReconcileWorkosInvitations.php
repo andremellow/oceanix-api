@@ -2,22 +2,18 @@
 
 namespace App\Actions\People;
 
+use App\Actions\ControlPlane\ApplyInvitationObservation;
 use App\Actions\ControlPlane\ApplyProductOperation;
-use App\Data\WorkosInvitationSnapshot;
 use App\Enums\Permission;
-use App\Enums\WorkosInvitationState;
 use App\Enums\WorkosOperationStatus;
 use App\Models\AccountRequestOperation;
 use App\Models\AuditLog;
 use App\Models\Company;
-use App\Models\PersonAccountLink;
 use App\Models\User;
+use App\Models\WorkosInvitationAttempt;
 use App\Models\WorkosSyncRun;
 use App\Services\Account\AccountUserClient;
-use App\Services\Workos\WorkosInvitationService;
-use App\Services\Workos\WorkosOrganizationMembershipService;
 use App\Tenancy\TenantContext;
-use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Ramsey\Uuid\Uuid;
@@ -25,8 +21,6 @@ use RuntimeException;
 
 class ReconcileWorkosInvitations
 {
-    public function __construct(private readonly WorkosInvitationService $invitations, private readonly WorkosOrganizationMembershipService $memberships) {}
-
     public function authorizedActor(int $companyId, ?int $actorId, Permission $permission): ?User
     {
         $actor = User::withoutGlobalScope('company')->where('company_id', $companyId)->whereKey($actorId)->first();
@@ -65,7 +59,10 @@ class ReconcileWorkosInvitations
                 $outcome = 'failed';
                 try {
                     $outcome = $this->refresh($person, $run->actor_id, $run) ? 'succeeded' : 'skipped';
-                } catch (\Throwable) {
+                } catch (\Throwable $error) {
+                    if ($error->getMessage() === 'account_sync_pending') {
+                        continue;
+                    }
                     $this->markUnavailable($person);
                 }
                 if ($outcome === 'succeeded') {
@@ -82,6 +79,9 @@ class ReconcileWorkosInvitations
         if ($run->status === WorkosOperationStatus::Failed) {
             return;
         }
+        if ($run->processed < $run->total) {
+            return;
+        }
         DB::transaction(function () use ($run) {
             $run->update(['status' => ($run->failed > 0 || $run->skipped > 0) ? ($run->succeeded > 0 ? WorkosOperationStatus::PartialFailure : WorkosOperationStatus::Failed) : WorkosOperationStatus::Completed, 'finished_at' => now(), 'reason' => $run->failed > 0 ? 'provider_verification_failed' : ($run->skipped > 0 ? 'superseded' : null)]);
             AuditLog::query()->create(['company_id' => $run->company_id, 'actor_id' => $run->actor_id, 'action' => 'people.workos_synchronization_finished', 'metadata' => ['status' => $run->status->value, 'succeeded' => $run->succeeded, 'skipped' => $run->skipped, 'failed' => $run->failed]]);
@@ -90,94 +90,7 @@ class ReconcileWorkosInvitations
 
     public function read(User $person): array
     {
-        abort_unless($person->company_id === app(TenantContext::class)->id(), 403);
-        $org = Company::query()->whereKey($person->company_id)->value('workos_organization_id');
-        if (blank($org)) {
-            throw new RuntimeException('provider_not_configured');
-        }
-        $email = strtolower(trim($person->email));
-        $stored = null;
-        $storedUnavailable = false;
-        if (filled($person->workos_invitation_id)) {
-            $data = $this->invitations->get($person->workos_invitation_id);
-            if ($data !== null) {
-                try {
-                    $stored = WorkosInvitationSnapshot::from($data, $email, $org);
-                    if ($stored->id !== $person->workos_invitation_id) {
-                        throw new RuntimeException;
-                    }
-                } catch (\Throwable) {
-                    $stored = null;
-                    $storedUnavailable = true;
-                }
-            } else {
-                $storedUnavailable = true;
-            }
-        }
-        $acceptedUserIds = [];
-        if ($stored?->acceptedUserId) {
-            $acceptedUserIds[$stored->acceptedUserId] = true;
-        }
-        $current = $stored;
-        $acceptedHistory = $stored?->acceptedAt;
-        $after = null;
-        $seen = [];
-        do {
-            $page = $this->invitations->listPage($org, $email, $after);
-            foreach ($page['data'] as $data) {
-                // Provider filters are advisory: enforce organization and normalized exact email locally.
-                if (! is_array($data) || ! is_string($data['organization_id'] ?? null) || ! is_string($data['email'] ?? null)) {
-                    throw new RuntimeException('provider_verification_failed');
-                }
-                $candidate = WorkosInvitationSnapshot::from($data, $data['email'], $data['organization_id']);
-                if ($data['organization_id'] !== $org || strtolower(trim($data['email'])) !== $email) {
-                    continue;
-                }
-                if ($candidate->acceptedUserId) {
-                    $acceptedUserIds[$candidate->acceptedUserId] = true;
-                }
-                if ($candidate->state === WorkosInvitationState::Accepted && $candidate->acceptedAt && (! $acceptedHistory || $candidate->acceptedAt->greaterThan($acceptedHistory))) {
-                    $acceptedHistory = $candidate->acceptedAt;
-                }
-                if (! $stored && (! $current || [$candidate->createdAt->getTimestamp(), $candidate->id] > [$current->createdAt->getTimestamp(), $current->id])) {
-                    $current = $candidate;
-                }
-            }
-            $after = $page['list_metadata']['after'] ?? null;
-            if ($after !== null && (! is_string($after) || isset($seen[$after]))) {
-                throw new RuntimeException('provider_verification_failed');
-            }
-            if ($after !== null) {
-                $seen[$after] = true;
-            }
-        } while ($after !== null && $after !== '');
-        if ($current?->acceptedUserId) {
-            $acceptedUserIds[$current->acceptedUserId] = true;
-        }
-        $userId = $person->workos_user_id ?: $person->account?->workos_user_id;
-        $external = null;
-        $active = false;
-        if (filled($userId)) {
-            $remote = $this->invitations->user($userId, $email);
-            $acceptedUserIds[$userId] = true;
-            if (filled($remote['last_sign_in_at'] ?? null)) {
-                try {
-                    $external = CarbonImmutable::parse($remote['last_sign_in_at'])->utc();
-                } catch (\Throwable) {
-                    throw new RuntimeException('provider_verification_failed');
-                }
-            }
-        }
-
-        foreach (array_keys($acceptedUserIds) as $acceptedUserId) {
-            if ($acceptedUserId !== $userId) {
-                $this->invitations->user($acceptedUserId, $email);
-            }
-            $member = $this->memberships->activeMembership($acceptedUserId, $org);
-            $active = $active || $member;
-        }
-
-        return ['snapshot' => $current, 'history' => $acceptedHistory, 'membership' => $active, 'external' => $external, 'unavailable' => $storedUnavailable && ! $current];
+        throw new RuntimeException('Use Account invitation synchronization.');
     }
 
     public function token(User $person): array
@@ -187,41 +100,23 @@ class ReconcileWorkosInvitations
 
     public function refresh(User $person, ?int $actorId = null, ?WorkosSyncRun $run = null): bool
     {
-        $token = $this->token($person);
-        $read = PersonAccountLink::where('company_id', $person->company_id)->where('user_id', $person->id)->exists()
-            ? $this->readThroughAccount($person, $actorId, $run)
-            : $this->read($person);
+        $this->readThroughAccount($person, $actorId, $run);
+        if ($run) {
+            DB::transaction(function () use ($run) {
+                $locked = WorkosSyncRun::whereKey($run->id)->lockForUpdate()->firstOrFail();
+                $locked->increment('processed');
+                $locked->increment('succeeded');
+            });
+        }
 
-        return DB::transaction(function () use ($person, $token, $read, $actorId, $run) {
-            Company::query()->whereKey($person->company_id)->lockForUpdate()->firstOrFail();
-            $locked = User::query()->whereKey($person->id)->lockForUpdate()->firstOrFail();
-            if ($this->token($locked) !== $token) {
-                return false;
-            }
-            $attributes = $read['snapshot']?->attributes() ?? ['invitation_state' => $read['unavailable'] ? WorkosInvitationState::Unverified : WorkosInvitationState::NotInvited];
-            $history = $locked->invitation_accepted_history_at;
-            $new = $read['history'];
-            if ($new && (! $history || $new->greaterThan($history))) {
-                $history = $new;
-            }
-            $locked->forceFill($attributes + ['invitation_accepted_history_at' => $history, 'workos_active_membership' => $read['membership'], 'workos_last_sign_in_at' => $read['external'], 'invitation_verified_at' => now(), 'invitation_check_error' => $read['unavailable'] ? 'invitation_unavailable' : null, 'invitation_generation' => $read['generation'] ?? ($locked->invitation_generation + 1)])->save();
-            AuditLog::query()->create(['company_id' => $locked->company_id, 'actor_id' => $actorId, 'action' => 'person.workos_invitation_reconciled', 'auditable_type' => User::class, 'auditable_id' => $locked->id, 'after' => ['state' => $locked->invitation_state->value, 'active_membership' => $locked->workos_active_membership]]);
-
-            if ($run !== null) {
-                $operation = WorkosSyncRun::query()->whereKey($run->id)->lockForUpdate()->firstOrFail();
-                $operation->increment('processed');
-                $operation->increment('succeeded');
-            }
-
-            return true;
-        });
+        return true;
     }
 
     private function readThroughAccount(User $person, ?int $actorId, ?WorkosSyncRun $run): array
     {
         $actor = $this->authorizedActor($person->company_id, $actorId, Permission::PeopleSyncWorkos);
         abort_unless($actor && $actor->workos_user_id, 403);
-        $link = PersonAccountLink::where('company_id', $person->company_id)->where('user_id', $person->id)->sole();
+        $link = app(AdoptPeopleIntoAccount::class)->ensure($actor, $person, 'person.invitation.reconcile');
         $id = (string) Uuid::uuid5(Uuid::NAMESPACE_URL, 'compliance:'.$person->company_id.':reconcile:'.($run?->id ?? $person->invitation_generation).':'.$person->id);
         $payload = ['protocol_version' => 2, 'operation_id' => $id, 'kind' => 'person.invitation.reconcile', 'product' => 'compliance', 'account_company_uuid' => $link->account_company_uuid, 'workos_organization_id' => $person->company->workos_organization_id, 'subject_id' => $link->company_member_id, 'resource_sequence' => $person->invitation_generation + 1, 'actor_workos_user_id' => $actor->workos_user_id, 'payload' => ['local_person_id' => $person->id, 'invitation_id' => $person->workos_invitation_id, 'generation' => $person->invitation_generation]];
         $operation = AccountRequestOperation::firstOrCreate(['id' => $id], ['company_id' => $person->company_id, 'user_id' => $person->id, 'actor_id' => $actor->id, 'kind' => 'person.invitation.reconcile', 'actor_workos_user_id' => $actor->workos_user_id, 'payload' => $payload, 'payload_hash' => ApplyProductOperation::hash($payload)]);
@@ -234,15 +129,94 @@ class ReconcileWorkosInvitations
         }
         $operation->update(['state' => $receipt['outcome'], 'receipt' => $receipt]);
         if ($receipt['outcome'] !== 'confirmed') {
-            throw new RuntimeException('provider_verification_failed');
+            throw new RuntimeException('account_sync_pending');
         }
         $state = $receipt['confirmed_state'];
-        $invitation = $state['invitation'] ?? null;
-        $snapshot = ! empty($invitation['id']) ? WorkosInvitationSnapshot::from($invitation, $person->email, $person->company->workos_organization_id) : null;
+        $snapshot = $state['observation'] ?? null;
+        abort_unless(is_array($snapshot), 409, 'observation_required');
+        DB::transaction(function () use ($person, $payload, $snapshot) {
+            $company = Company::whereKey($person->company_id)->lockForUpdate()->firstOrFail();
+            app(ApplyInvitationObservation::class)->handle($company, [...$payload, 'payload' => $snapshot]);
+        });
 
-        abort_unless(is_int($state['generation'] ?? null) && $state['generation'] >= 0, 409);
+        return $state;
+    }
 
-        return ['generation' => $state['generation'], 'snapshot' => $snapshot, 'history' => empty($state['accepted_history_at']) ? null : CarbonImmutable::parse($state['accepted_history_at']), 'membership' => (bool) ($state['active_membership'] ?? false), 'external' => empty($state['external_last_sign_in_at']) ? null : CarbonImmutable::parse($state['external_last_sign_in_at']), 'unavailable' => (bool) ($state['unavailable'] ?? false)];
+    public function refreshPending(User $viewer): void
+    {
+        abort_unless($viewer->company_id === app(TenantContext::class)->id(), 403);
+        $operations = AccountRequestOperation::where('company_id', $viewer->company_id)->where('actor_id', $viewer->id)->whereIn('kind', ['person.invitation.reconcile', 'person.invite'])->whereIn('state', ['pending', 'unknown'])->whereNotNull('dispatched_at')->limit(50)->get();
+        foreach ($operations as $operation) {
+            $permission = $operation->kind === 'person.invite' ? Permission::PeopleInvite : Permission::PeopleSyncWorkos;
+            if (! $this->authorizedActor($viewer->company_id, $viewer->id, $permission)) {
+                continue;
+            }
+            try {
+                $receipt = app(AccountUserClient::class)->receipt($operation->payload);
+                if ($receipt && $receipt['outcome'] !== 'confirmed' && ! empty($receipt['safe_error'])) {
+                    DB::transaction(function () use ($operation, $receipt) {
+                        Company::whereKey($operation->company_id)->lockForUpdate()->firstOrFail();
+                        User::whereKey($operation->user_id)->lockForUpdate()->firstOrFail();
+                        $current = AccountRequestOperation::whereKey($operation->id)->lockForUpdate()->firstOrFail();
+                        if ($current->state === 'needs_attention') {
+                            return;
+                        }
+                        $current->update(['state' => 'needs_attention', 'receipt' => $receipt, 'safe_error' => $receipt['safe_error']]);
+                        foreach (WorkosSyncRun::where('company_id', $operation->company_id)->where('actor_id', $operation->actor_id)->whereIn('status', ['queued', 'running'])->lockForUpdate()->get() as $run) {
+                            $expected = (string) Uuid::uuid5(Uuid::NAMESPACE_URL, 'compliance:'.$operation->company_id.':reconcile:'.$run->id.':'.$operation->user_id);
+                            if ($expected !== $operation->id) {
+                                continue;
+                            }
+                            $run->increment('processed');
+                            $run->increment('failed');
+                            if ($run->processed >= $run->total) {
+                                $run->update(['status' => $run->succeeded > 0 ? WorkosOperationStatus::PartialFailure : WorkosOperationStatus::Failed, 'reason' => $receipt['safe_error'], 'finished_at' => now()]);
+                            }
+                        }
+                    });
+
+                    continue;
+                }
+                if (! $receipt || $receipt['outcome'] !== 'confirmed') {
+                    continue;
+                }
+                $snapshot = $receipt['confirmed_state']['observation'] ?? null;
+                if (! is_array($snapshot)) {
+                    continue;
+                }
+                DB::transaction(function () use ($operation, $receipt, $snapshot) {
+                    $company = Company::whereKey($operation->company_id)->lockForUpdate()->firstOrFail();
+                    User::whereKey($operation->user_id)->lockForUpdate()->firstOrFail();
+                    $current = AccountRequestOperation::whereKey($operation->id)->lockForUpdate()->firstOrFail();
+                    if ($current->state === 'confirmed') {
+                        return;
+                    }
+                    app(ApplyInvitationObservation::class)->handle($company, [...$current->payload, 'payload' => $snapshot]);
+                    $current->update(['state' => 'confirmed', 'receipt' => $receipt, 'safe_error' => null]);
+                    if ($operation->kind === 'person.invitation.reconcile') {
+                        foreach (WorkosSyncRun::where('company_id', $company->id)->where('actor_id', $operation->actor_id)->whereIn('status', ['queued', 'running'])->lockForUpdate()->get() as $run) {
+                            $expected = (string) Uuid::uuid5(Uuid::NAMESPACE_URL, 'compliance:'.$company->id.':reconcile:'.$run->id.':'.$operation->user_id);
+                            if ($expected !== $operation->id) {
+                                continue;
+                            }
+                            $run->increment('processed');
+                            $run->increment('succeeded');
+                            if ($run->processed >= $run->total) {
+                                $run->update(['status' => $run->failed > 0 ? WorkosOperationStatus::PartialFailure : WorkosOperationStatus::Completed, 'finished_at' => now()]);
+                            }
+                        }
+                    } else {
+                        foreach (WorkosInvitationAttempt::where('company_id', $company->id)->where('person_id', $operation->user_id)->where('actor_id', $operation->actor_id)->whereIn('status', ['queued', 'running', 'sending', 'delivery_unconfirmed'])->lockForUpdate()->get() as $attempt) {
+                            $expected = (string) Uuid::uuid5(Uuid::NAMESPACE_URL, 'compliance:'.$company->id.':invitation:'.$attempt->id);
+                            if ($expected === $operation->id) {
+                                $attempt->update(['status' => ($receipt['confirmed_state']['sent'] ?? false) ? WorkosOperationStatus::Succeeded : WorkosOperationStatus::Skipped, 'resulting_invitation_id' => $snapshot['invitation']['id'], 'finished_at' => now(), 'reason' => null]);
+                            }
+                        }
+                    }
+                });
+            } catch (\Throwable) { /* Preserve the last verified projection on a reporting failure. */
+            }
+        }
     }
 
     public function markUnavailable(User $person): void

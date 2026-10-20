@@ -17,6 +17,8 @@ class ReconcileWorkosInvitations implements ShouldBeUnique, ShouldQueue
 
     public int $tries = 1;
 
+    public int $protocolVersion = 1;
+
     public int $uniqueFor = 3600;
 
     public function __construct(public readonly int $companyId, public readonly ?int $actorId, public readonly int $runId) {}
@@ -39,6 +41,11 @@ class ReconcileWorkosInvitations implements ShouldBeUnique, ShouldQueue
             $company = Company::query()->findOrFail($this->companyId);
             $context->set($company);
             $run = WorkosSyncRun::query()->whereKey($this->runId)->where('actor_id', $this->actorId)->firstOrFail();
+            if ($this->protocolVersion < 2) {
+                $run->update(['status' => WorkosOperationStatus::Failed, 'reason' => 'legacy_cutover_review', 'finished_at' => now()]);
+
+                return;
+            }
             $action->handle($run);
         } finally {
             $previous === null ? $context->clear() : $context->set($previous);

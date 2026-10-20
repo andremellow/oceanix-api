@@ -35,7 +35,7 @@ return [
         ],
     ],
 
-    'account' => ['url' => env('ACCOUNT_URL'), 'token' => env('ACCOUNT_TOKEN'), 'actor_assertion_secret' => env('ACCOUNT_ACTOR_ASSERTION_SECRET')],
+    'account' => ['invitation_ownership_enabled' => (bool) env('ACCOUNT_OWNED_INVITATIONS_ENABLED', false), 'url' => env('ACCOUNT_URL'), 'token' => env('ACCOUNT_TOKEN'), 'actor_assertion_secret' => env('ACCOUNT_ACTOR_ASSERTION_SECRET')],
 
     'workos' => [
         'client_id' => env('WORKOS_CLIENT_ID'),

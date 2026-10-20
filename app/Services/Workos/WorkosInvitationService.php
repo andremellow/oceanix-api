@@ -80,6 +80,7 @@ class WorkosInvitationService
 
     private function client(): PendingRequest
     {
+        throw new RuntimeException('Operational WorkOS requests belong to Account.', 409);
         $key = (string) config('services.workos.api_key');
         if ($key === '') {
             throw new RuntimeException('provider_not_configured');

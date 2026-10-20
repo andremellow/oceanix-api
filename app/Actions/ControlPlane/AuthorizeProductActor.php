@@ -3,6 +3,7 @@
 namespace App\Actions\ControlPlane;
 
 use App\Enums\Permission;
+use App\Models\Account;
 use App\Models\AccountCompanyBinding;
 use App\Models\AccountRequestOperation;
 use App\Models\Company;
@@ -17,13 +18,19 @@ class AuthorizeProductActor
 {
     public function handle(ServicePrincipal $principal, array $input): array
     {
-        abort_unless($principal->active && $principal->environment === app()->environment() && $principal->product === $input['product']
-            && in_array($input['account_company_uuid'], $principal->company_uuids ?? [], true), 403);
+        abort_unless($principal->active && $principal->environment === app()->environment() && $principal->product === $input['product'] && (! $principal->expires_at || $principal->expires_at->isFuture()), 403);
         $hash = $input['payload_hash'];
         unset($input['payload_hash']);
         abort_unless(hash_equals(ApplyProductOperation::hash($input), $hash), 403);
         $binding = AccountCompanyBinding::where('account_company_uuid', $input['account_company_uuid'])->where('workos_organization_id', $input['workos_organization_id'])->first();
         abort_unless($binding, 403);
+        if (($input['payload']['actor_context'] ?? null) === 'platform-account') {
+            $operation = AccountRequestOperation::find($input['operation_id']);
+            $account = Account::find($input['payload']['platform_account_id'] ?? null);
+            abort_unless($account && $account->is_platform_admin && $account->status === 'active' && $account->workos_user_id === $input['actor_workos_user_id'] && $operation && $operation->company_id === $binding->compliance_company_id && $operation->actor_id === null && hash_equals($operation->payload_hash, $hash) && in_array($input['kind'], ['person.membership.ensure', 'person.invite'], true), 403);
+
+            return app(AccountActorAssertion::class)->sign($account, $input);
+        }
         $context = app(TenantContext::class);
         $previous = $context->get();
         try {
@@ -32,8 +39,15 @@ class AuthorizeProductActor
             $context->set($company);
             $actor = User::where('workos_user_id', $input['actor_workos_user_id'])->first();
             abort_unless($actor && $actor->status->canAccessTenant() && app(PersonProductAccess::class)->allows($actor), 403);
-            $permission = match ($input['kind']) {
+            if ($input['kind'] === 'person.map-existing') {
+                $source = AccountRequestOperation::find($input['payload']['source_operation_id'] ?? null);
+                $mapping = AccountRequestOperation::find($input['operation_id']);
+                abort_unless($source && $mapping && hash_equals($mapping->payload_hash, $hash) && $source->actor_id === $actor->id && $source->company_id === $actor->company_id && $source->user_id === ($input['payload']['local_person_id'] ?? null) && $source->kind === ($input['payload']['source_kind'] ?? null) && hash_equals($source->payload_hash, $input['payload']['source_payload_hash'] ?? '') && $source->payload['subject_id'] === $input['subject_id'], 403);
+            }
+            $sourceKind = $input['kind'] === 'person.map-existing' ? $input['payload']['source_kind'] : $input['kind'];
+            $permission = match ($sourceKind) {
                 'person.register' => ($input['payload']['registration_source'] ?? 'form') === 'import' ? Permission::PeopleImport : Permission::PeopleManage,
+                'person.import' => Permission::PeopleImport,
                 'person.adopt' => ($input['payload']['adoption_source'] ?? 'command') === 'import' ? Permission::PeopleImport : Permission::PeopleManage,
                 'person.access.remove' => Permission::PeopleManage,
                 'person.invite' => Permission::PeopleInvite,
