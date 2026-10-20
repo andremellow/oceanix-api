@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Ramsey\Uuid\Uuid;
 
-it('recovers an accepted Account invitation receipt without sending again or changing first access', function (bool $requeued, bool $missing) {
+it('recovers an accepted Account invitation receipt without sending again or changing first access', function (bool $requeued, bool $missing, ?string $newer) {
     Http::preventStrayRequests();
     config(['services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
     $company = currentCompany();
@@ -40,11 +40,19 @@ it('recovers an accepted Account invitation receipt without sending again or cha
         expect($attempt->fresh()->status)->toBe(WorkosOperationStatus::Queued);
     }
     Http::fake(['account.example.test/*' => fn ($request) => $missing && $request->method() === 'GET' ? Http::response([], 404) : Http::response(array_intersect_key($envelope, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => ['generation' => 5, 'sent' => true, 'invitation' => ['id' => 'inv_cutover', 'email' => $person->email, 'organization_id' => 'org_cutover', 'state' => 'pending', 'created_at' => now()->toIso8601String()]]])]);
+    $projection = null;
+    if ($newer) {
+        $person->forceFill(['invitation_generation' => 5, 'workos_invitation_id' => 'inv_cutover', 'invitation_state' => $newer, 'invitation_observation_sequence' => 2, 'invitation_observation_hash' => str_repeat('a', 64), 'invitation_accepted_at' => now()->subDay(), 'invitation_accepted_history_at' => now()->subDay(), 'invitation_verified_at' => now()->subMinute()])->save();
+        $projection = $person->fresh()->getAttributes();
+    }
     app(SendWorkosInvitation::class)->execute($attempt);
     expect($attempt->fresh()->status)->toBe(WorkosOperationStatus::Succeeded)
         ->and($person->fresh()->workos_invitation_id)->toBe('inv_cutover')
         ->and($person->fresh()->invitation_generation)->toBe(5)
         ->and($person->fresh()->first_access_at->equalTo($firstAccess))->toBeTrue();
+    if ($newer) {
+        expect($person->fresh()->getAttributes())->toBe($projection);
+    }
     Http::assertSentCount($missing ? 2 : 1);
     if ($missing) {
         Http::assertSent(fn ($request) => $request->method() === 'PUT' && $request['operation_id'] === $id && ApplyProductOperation::hash($request->data()) === ApplyProductOperation::hash($envelope));
@@ -53,7 +61,7 @@ it('recovers an accepted Account invitation receipt without sending again or cha
     }
     app(SendWorkosInvitation::class)->execute($attempt->fresh());
     Http::assertSentCount($missing ? 2 : 1);
-})->with(['sending receipt' => [false, false], 'queued committed receipt' => [true, false], 'queued missing receipt' => [true, true]]);
+})->with(['sending receipt' => [false, false, null], 'queued committed receipt' => [true, false, null], 'queued missing receipt' => [true, true, null], 'newer accepted' => [true, false, 'accepted'], 'newer expired' => [true, false, 'expired'], 'newer revoked' => [true, false, 'revoked']]);
 
 it('keeps generation and send audit unchanged when Account confirms an already active member', function () {
     Http::preventStrayRequests();

@@ -164,7 +164,9 @@ class SendWorkosInvitation
 
                     return;
                 }
-                $locked->forceFill(($snapshot?->attributes() ?? []) + ['invitation_sent_at' => $sent ? now() : $locked->invitation_sent_at, 'invitation_verified_at' => now(), 'invitation_check_error' => null, 'workos_active_membership' => $active, 'invitation_generation' => (int) ($receipt['confirmed_state']['generation'] ?? ($intent->generation + ($sent ? 1 : 0)))])->save();
+                if (! $alreadyApplied) {
+                    $locked->forceFill(($snapshot?->attributes() ?? []) + ['invitation_sent_at' => $sent ? now() : $locked->invitation_sent_at, 'invitation_verified_at' => now(), 'invitation_check_error' => null, 'workos_active_membership' => $active, 'invitation_generation' => (int) ($receipt['confirmed_state']['generation'] ?? ($intent->generation + ($sent ? 1 : 0)))])->save();
+                }
                 $operation->update(['state' => 'confirmed', 'receipt' => $receipt]);
                 $intent->update(['status' => $sent ? WorkosOperationStatus::Succeeded : WorkosOperationStatus::Skipped, 'resulting_invitation_id' => $snapshot?->id, 'finished_at' => now(), 'reason' => $sent ? null : ($active ? 'current_member' : 'already_accepted')]);
                 AuditLog::create(['company_id' => $intent->company_id, 'actor_id' => $intent->actor_id, 'action' => $sent ? 'person.workos_invitation_sent' : 'person.workos_invitation_outcome', 'auditable_type' => User::class, 'auditable_id' => $person->id, 'after' => ['state' => $snapshot?->state->value]]);

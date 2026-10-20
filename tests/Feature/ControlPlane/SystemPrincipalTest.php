@@ -3,7 +3,9 @@
 use App\Actions\ControlPlane\ApplyProductOperation;
 use App\Enums\Permission;
 use App\Models\AccountRequestOperation;
+use App\Models\Company;
 use App\Models\ProductOperationReceipt;
+use App\Models\User;
 use App\Services\Account\AccountUserClient;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Http;
@@ -49,9 +51,31 @@ it('TA-01 verifies the real persisted mapping source callback and current permis
         };
         $this->postJson('/api/control-plane/v2/actor-authorizations', $bad + ['payload_hash' => ApplyProductOperation::hash($bad)])->assertForbidden();
     }
+    foreach (['subject', 'hash', 'actor', 'company', 'user', 'kind'] as $relation) {
+        $stored = AccountRequestOperation::findOrFail($source['operation_id'])->replicate();
+        $stored->id = (string) Str::uuid();
+        $stored->forceFill(match ($relation) {
+            'subject' => ['payload' => array_replace($source, ['subject_id' => 'foreign-subject'])],
+            'hash' => ['payload_hash' => str_repeat('0', 64)],
+            'actor' => ['actor_id' => User::factory()->create()->id],
+            'company' => ['company_id' => Company::factory()->create()->id],
+            'user' => ['user_id' => User::factory()->create()->id],
+            'kind' => ['kind' => 'person.invite'],
+        });
+        $stored->save();
+        $bound = $mapping;
+        $bound['operation_id'] = (string) Str::uuid();
+        $bound['payload']['source_operation_id'] = $stored->id;
+        $boundHash = ApplyProductOperation::hash($bound);
+        AccountRequestOperation::create(['id' => $bound['operation_id'], 'company_id' => $company->id, 'user_id' => $person->id, 'actor_id' => $actor->id, 'kind' => $bound['kind'], 'actor_workos_user_id' => $actor->workos_user_id, 'payload' => $bound, 'payload_hash' => $boundHash]);
+        expect(AccountRequestOperation::findOrFail($bound['operation_id'])->payload_hash)->toBe($boundHash);
+        $before = AccountRequestOperation::orderBy('id')->get()->toJson();
+        $this->postJson('/api/control-plane/v2/actor-authorizations', $bound + ['payload_hash' => $boundHash])->assertForbidden();
+        expect(AccountRequestOperation::orderBy('id')->get()->toJson())->toBe($before);
+    }
     $actor->roles()->detach();
     $this->postJson('/api/control-plane/v2/actor-authorizations', $mapping + ['payload_hash' => $hash])->assertForbidden();
-    expect(AccountRequestOperation::count())->toBe(2);
+    expect(AccountRequestOperation::count())->toBe(14);
     Http::assertNothingSent();
 });
 

@@ -42,7 +42,7 @@ Then sign into Account so its local User exists. Import the existing production 
 php artisan companies:import-workos --all --operator=user_PRODUCTION_ADMIN
 ```
 
-This command writes company records; review the production organizations before running it. Inspect the Account company UUIDs to use in the explicit service-principal allowlists below. Creating/importing companies belongs to Account; Compliance's old oceanix:create-company command intentionally refuses creation.
+This command writes company records; review the production organizations before running it. Retain Account company UUIDs for exact organization/binding checks; system credentials do not select companies. Creating/importing companies belongs to Account; Compliance's old oceanix:create-company command intentionally refuses creation.
 
 ## 3. Two distinct service tokens and one shared signing secret
 
@@ -63,12 +63,11 @@ There is currently no principal-creation Artisan command. Use a trusted producti
 Inside **Account**, create the principal receiving requests from Compliance:
 
 ```php
-$companies = App\Models\Company::pluck('uuid')->all(); // Review the exact approved company list.
-$abilities = ['person.register', 'person.adopt', 'person.access.remove', 'person.invite', 'person.invitation.reconcile', 'operations.read'];
+$abilities = ['person.register', 'person.adopt', 'person.access.remove', 'person.map-existing', 'person.invite', 'person.invitation.reconcile', 'person.membership.ensure', 'operations.read', 'actors.authorize'];
 $principal = App\Models\ServicePrincipal::create([
     'name' => 'Compliance production', 'product' => 'compliance',
     'environment' => 'production', 'active' => true,
-    'company_uuids' => $companies, 'capabilities' => $abilities,
+    'company_uuids' => [], 'capabilities' => $abilities,
 ]);
 $principal->id; // Account-local ID -> COMPLIANCE_PRINCIPAL_ID in Account.
 $principal->createToken('compliance-to-account-production', $abilities)->plainTextToken;
@@ -78,11 +77,10 @@ $principal->createToken('compliance-to-account-production', $abilities)->plainTe
 Inside **Compliance**, create the principal receiving Account calls:
 
 ```php
-$companies = ['ACCOUNT_COMPANY_UUID']; // Replace with the reviewed Account UUID allowlist.
 $principal = App\Models\ServicePrincipal::create([
     'name' => 'Account production', 'product' => 'compliance',
     'environment' => 'production', 'active' => true,
-    'company_uuids' => $companies, 'capabilities' => [],
+    'company_uuids' => [], 'capabilities' => [],
 ]);
 $principal->createToken('account-to-compliance-production', [])->plainTextToken;
 // Token above -> COMPLIANCE_API_TOKEN in Account.
@@ -90,7 +88,7 @@ $principal->createToken('account-to-compliance-production', [])->plainTextToken;
 
 Account-to-Compliance no longer requires capabilities or token abilities; the valid service identity/lifecycle and applicable company/actor/protocol checks remain. The reverse Compliance-to-Account direction still requires the operation capabilities in **both** the Account principal and its token; operations.read is required for polling. These machine credentials do not replace the initiating person's current permissions.
 
-Use actual APP_ENV values; a local/staging principal is rejected in production. Review company allowlists when adding another company. Do not use a Compliance local company ID where an Account company UUID is required.
+Use actual APP_ENV values; a local/staging principal is rejected in production. Leave deprecated company_uuids empty; establish exact company/organization bindings independently when adding a company. Do not use a Compliance local company ID where an Account company UUID is required.
 
 ## 4. Register the Compliance module in Account
 
@@ -124,7 +122,7 @@ php artisan products:register compliance https://COMPLIANCE_HOST --name=Complian
 
 In Account, open each imported company and enable Compliance. Wait for confirmation. The receiver matches an existing Compliance company by **WorkOS organization ID** or creates a new local company; conflicting existing bindings/slugs stop the operation. Check the organization ID before enabling to avoid binding the wrong company.
 
-For existing WorkOS users and invitations, run the one-time migration **from Account**, first without writes:
+For existing WorkOS users and invitations, run the independent local import **from Account**, first without writes:
 
 ```sh
 php artisan workos:import-people ACCOUNT_COMPANY_UUID --actor=user_PRODUCTION_ADMIN
@@ -132,7 +130,7 @@ php artisan workos:import-people ACCOUNT_COMPANY_UUID --actor=user_PRODUCTION_AD
 php artisan workos:import-people ACCOUNT_COMPANY_UUID --actor=user_PRODUCTION_ADMIN --apply
 ```
 
-Omit the company UUID to process all imported companies; keep --actor explicit. Preview requires reachable Compliance and an existing company binding. The migration includes existing pending/expired invitations and does not send new invitation emails. It records durable mappings; ambiguous identities/conflicts need review. Do not assume email or local numeric IDs are sufficient identity proof. Existing confirmed access evidence is preserved; a newly imported invited person is not proof of active training access.
+Omit the company UUID to process all imported companies; keep --actor explicit. Preview/apply does not require a Compliance connection, token, receipt or existing remote binding. Import includes existing pending/expired invitations and writes only Account's local identity/membership baseline and declared, unverified Compliance association. It does not send invitations, deliver mappings or grant remote access; ambiguous identities/conflicts need review. Reciprocal mapping is a separate first-use step for exact existing people after compatible receivers and bindings are ready. Do not assume email or local numeric IDs are sufficient identity proof. Existing confirmed access evidence is preserved; a newly imported invited person is not proof of active training access.
 
 If historical Compliance-local people are not present in WorkOS, the WorkOS import cannot discover them. The separate Compliance adoption preview is:
 
