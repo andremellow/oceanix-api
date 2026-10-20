@@ -153,15 +153,18 @@ class ReconcileWorkosInvitations
             }
             try {
                 $receipt = app(AccountUserClient::class)->receipt($operation->payload);
-                if ($receipt && $receipt['outcome'] !== 'confirmed' && ! empty($receipt['safe_error'])) {
+                if ($receipt && in_array($receipt['outcome'], ['needs_attention', 'rejected', 'conflict'], true)) {
                     DB::transaction(function () use ($operation, $receipt) {
                         Company::whereKey($operation->company_id)->lockForUpdate()->firstOrFail();
-                        User::whereKey($operation->user_id)->lockForUpdate()->firstOrFail();
+                        $person = User::whereKey($operation->user_id)->lockForUpdate()->firstOrFail();
+                        if ((int) $person->invitation_generation === (int) ($operation->payload['payload']['generation'] ?? -1) && $person->workos_invitation_id === ($operation->payload['payload']['invitation_id'] ?? null)) {
+                            $person->forceFill(['invitation_check_error' => $receipt['safe_error'] ?? 'invitation_confirmation_unavailable'])->save();
+                        }
                         $current = AccountRequestOperation::whereKey($operation->id)->lockForUpdate()->firstOrFail();
                         if ($current->state === 'needs_attention') {
                             return;
                         }
-                        $current->update(['state' => 'needs_attention', 'receipt' => $receipt, 'safe_error' => $receipt['safe_error']]);
+                        $current->update(['state' => 'needs_attention', 'receipt' => $receipt, 'safe_error' => $receipt['safe_error'] ?? 'invitation_confirmation_unavailable']);
                         foreach (WorkosSyncRun::where('company_id', $operation->company_id)->where('actor_id', $operation->actor_id)->whereIn('status', ['queued', 'running'])->lockForUpdate()->get() as $run) {
                             $expected = (string) Uuid::uuid5(Uuid::NAMESPACE_URL, 'compliance:'.$operation->company_id.':reconcile:'.$run->id.':'.$operation->user_id);
                             if ($expected !== $operation->id) {
@@ -169,8 +172,9 @@ class ReconcileWorkosInvitations
                             }
                             $run->increment('processed');
                             $run->increment('failed');
+                            $run->update(['reason' => $receipt['safe_error'] ?? 'invitation_confirmation_unavailable']);
                             if ($run->processed >= $run->total) {
-                                $run->update(['status' => $run->succeeded > 0 ? WorkosOperationStatus::PartialFailure : WorkosOperationStatus::Failed, 'reason' => $receipt['safe_error'], 'finished_at' => now()]);
+                                $run->update(['status' => $run->succeeded > 0 ? WorkosOperationStatus::PartialFailure : WorkosOperationStatus::Failed, 'reason' => $receipt['safe_error'] ?? 'invitation_confirmation_unavailable', 'finished_at' => now()]);
                             }
                         }
                     });

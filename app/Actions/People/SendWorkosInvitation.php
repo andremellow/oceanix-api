@@ -136,8 +136,15 @@ class SendWorkosInvitation
             return;
         }
         try {
-            // Recovery only observes the immutable accepted intent. A missing receipt never sends.
-            $receipt = app(AccountUserClient::class)->receipt($operation->payload);
+            // Recover the persisted protocol identity; a 404 may safely resubmit that exact intent.
+            $client = app(AccountUserClient::class);
+            $receipt = $client->receipt($operation->payload);
+            if (! $receipt) {
+                $actor = User::whereKey($attempt->actor_id)->firstOrFail();
+                Gate::forUser($actor)->authorize('invite', $person);
+                abort_unless((int) $person->invitation_generation === (int) $attempt->generation && $person->workos_invitation_id === ($operation->payload['payload']['invitation_id'] ?? null), 409);
+                $receipt = $client->submit($actor, $operation->payload);
+            }
             if (($receipt['outcome'] ?? null) !== 'confirmed' || ! is_array($receipt['confirmed_state']['invitation'] ?? null)) {
                 throw new \RuntimeException('delivery_unconfirmed');
             }
@@ -151,12 +158,13 @@ class SendWorkosInvitation
                 Company::whereKey($person->company_id)->lockForUpdate()->firstOrFail();
                 $locked = User::whereKey($person->id)->lockForUpdate()->firstOrFail();
                 $intent = WorkosInvitationAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
-                if ($intent->status !== WorkosOperationStatus::Sending || ! $locked->status->canAccessTenant() || (int) $locked->invitation_generation !== (int) $intent->generation || $locked->workos_invitation_id !== ($operation->payload['payload']['invitation_id'] ?? null)) {
+                $alreadyApplied = $snapshot && (int) $locked->invitation_generation === (int) ($receipt['confirmed_state']['generation'] ?? -1) && $locked->workos_invitation_id === $snapshot->id;
+                if (! in_array($intent->status, [WorkosOperationStatus::Sending, WorkosOperationStatus::Queued], true) || ! $locked->status->canAccessTenant() || (! $alreadyApplied && ((int) $locked->invitation_generation !== (int) $intent->generation || $locked->workos_invitation_id !== ($operation->payload['payload']['invitation_id'] ?? null)))) {
                     $this->finish($intent, WorkosOperationStatus::DeliveryUnconfirmed, 'superseded');
 
                     return;
                 }
-                $locked->forceFill(($snapshot?->attributes() ?? []) + ['invitation_sent_at' => $sent ? now() : $locked->invitation_sent_at, 'invitation_verified_at' => now(), 'invitation_check_error' => null, 'workos_active_membership' => $active, 'invitation_generation' => $locked->invitation_generation + ($sent ? 1 : 0)])->save();
+                $locked->forceFill(($snapshot?->attributes() ?? []) + ['invitation_sent_at' => $sent ? now() : $locked->invitation_sent_at, 'invitation_verified_at' => now(), 'invitation_check_error' => null, 'workos_active_membership' => $active, 'invitation_generation' => (int) ($receipt['confirmed_state']['generation'] ?? ($intent->generation + ($sent ? 1 : 0)))])->save();
                 $operation->update(['state' => 'confirmed', 'receipt' => $receipt]);
                 $intent->update(['status' => $sent ? WorkosOperationStatus::Succeeded : WorkosOperationStatus::Skipped, 'resulting_invitation_id' => $snapshot?->id, 'finished_at' => now(), 'reason' => $sent ? null : ($active ? 'current_member' : 'already_accepted')]);
                 AuditLog::create(['company_id' => $intent->company_id, 'actor_id' => $intent->actor_id, 'action' => $sent ? 'person.workos_invitation_sent' : 'person.workos_invitation_outcome', 'auditable_type' => User::class, 'auditable_id' => $person->id, 'after' => ['state' => $snapshot?->state->value]]);

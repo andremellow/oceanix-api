@@ -3,11 +3,15 @@
 use App\Actions\ControlPlane\ApplyProductOperation;
 use App\Enums\Permission;
 use App\Enums\WorkosInvitationState;
+use App\Enums\WorkosOperationStatus;
+use App\Jobs\ReconcileWorkosInvitations;
+use App\Models\Account;
 use App\Models\AccountCompanyBinding;
 use App\Models\AccountRequestOperation;
 use App\Models\PersonProductAccess;
 use App\Models\User;
 use App\Models\WorkosInvitationAttempt;
+use App\Models\WorkosSyncRun;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -174,3 +178,80 @@ it('uses cancellable one-person Flux recovery confirmation without native dialog
     $page->click('button[wire\\:click="confirmInvitation"]')->click('dialog[open] button[wire\\:click="sendInvitation"]')->assertMissing('dialog[open]')->assertSee('Invitation queued through WorkOS.')->assertNoJavascriptErrors();
     expect(WorkosInvitationAttempt::pluck('person_id')->all())->toBe([$person->id]);
 });
+
+it('TA-06 synchronizes populated and no-invitation people through pending polling to honest outcomes', function (int $width, bool $partial) {
+    Queue::fake();
+    Http::preventStrayRequests();
+    $company = currentCompany();
+    $company->update(['workos_organization_id' => 'org_browser_sync']);
+    $actor = userWithPermissions([Permission::PeopleView, Permission::PeopleSyncWorkos]);
+    $actor->forceFill(['workos_user_id' => 'user_browser_sync_actor', 'account_id' => Account::factory()->create()->id])->save();
+    $this->actingAs($actor);
+    Fixture::invitationLink($actor);
+    $person = User::factory()->create(['name' => 'Browser synchronization target', 'workos_user_id' => 'user_browser_sync_target', 'workos_invitation_id' => 'invitation_browser_sync', 'invitation_generation' => 1, 'invitation_state' => WorkosInvitationState::Pending]);
+    $person->forceFill(['invitation_verified_at' => now()->subDay(), 'invitation_accepted_history_at' => now()->subDays(3)])->save();
+    Fixture::invitationLink($person);
+    $empty = User::factory()->create(['name' => 'Empty invitation peer', 'workos_user_id' => 'user_browser_empty']);
+    Fixture::invitationLink($empty);
+    $before = $person->fresh()->only(['status', 'workos_active_membership', 'first_access_at', 'invitation_accepted_history_at']);
+    $verified = $person->fresh()->invitation_verified_at;
+    config(['services.account.invitation_ownership_enabled' => true, 'services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic', 'services.account.actor_assertion_secret' => 'synthetic-actor-proof']);
+    $complete = false;
+    $inputs = [];
+    Http::fake(['account.example.test/*' => function ($request) use (&$complete, &$inputs, $partial, $person) {
+        $id = basename(parse_url($request->url(), PHP_URL_PATH));
+        if ($request->method() === 'PUT') {
+            $inputs[$id] = $request->data();
+        }$input = $inputs[$id];
+        if (! $complete) {
+            return Http::response(array_intersect_key($input, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'unknown', 'confirmed_state' => [], 'safe_error' => 'invitation_confirmation_unavailable']);
+        }if ($partial && $input['payload']['local_person_id'] === $person->id) {
+            return Http::response(array_intersect_key($input, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'needs_attention', 'confirmed_state' => [], 'safe_error' => 'invitation_confirmation_unavailable']);
+        }$target = User::findOrFail($input['payload']['local_person_id']);
+
+        return Http::response(Fixture::observationReceipt($input, $target, $target->workos_invitation_id ? 'expired' : 'none'));
+    }]);
+    $button = 'button[wire\\:click="synchronize"]';
+    $search = 'input[placeholder="Name, email or employee ID"]';
+    $page = visit(route('people.index', [], false))->resize($width, 900)->click($button)->assertSee('Synchronization queued. No invitations will be sent.')->assertSee('Waiting to start')->assertDisabled($button);
+    $run = WorkosSyncRun::sole();
+    $job = new ReconcileWorkosInvitations($company->id, $actor->id, $run->id);
+    $job->protocolVersion = 2;
+    $job->handle(app(App\Actions\People\ReconcileWorkosInvitations::class));
+    $page->assertSee('Synchronization: Running')->assertDisabled($button)->fill($search, 'Browser synchronization target')->assertSee($person->name);
+    expect($run->fresh()->status)->toBe(WorkosOperationStatus::Running)->and($person->fresh()->invitation_verified_at->equalTo($verified))->toBeTrue();
+    $complete = true;
+    $page->assertSee($partial ? 'Synchronization: Partial failure' : 'Synchronization: Completed')->assertSee('Processed 3 of 3')->assertEnabled($button)->assertValue($search, 'Browser synchronization target')->assertAttribute('section[aria-label="WorkOS invitations"] [role="status"]', 'aria-live', 'polite')->assertScript("document.activeElement.getAttribute('placeholder')", 'Name, email or employee ID')->assertNoJavascriptErrors();
+    expect($page->script('document.documentElement.scrollWidth <= window.innerWidth'))->toBeTrue();
+    expect($person->fresh()->only(array_keys($before)))->toEqual($before)->and($empty->fresh()->invitation_state)->toBe(WorkosInvitationState::NotInvited);
+    if ($partial) {
+        $page->assertSee('Automatic retries stopped. Review the Account communication.')->assertSee('Latest check failed');
+        expect($person->fresh()->invitation_verified_at->equalTo($verified))->toBeTrue();
+    } else {
+        $page->assertSee('Expired');
+        expect($person->fresh()->invitation_state)->toBe(WorkosInvitationState::Expired);
+    }
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
+})->with([390, 1440])->with([false, true]);
+
+it('TA-06 hides view-only controls and stops queued synchronization after permission revocation', function (int $width) {
+    Queue::fake();
+    Http::preventStrayRequests();
+    $company = currentCompany();
+    $company->update(['workos_organization_id' => 'org_browser_revoked']);
+    $actor = userWithPermissions([Permission::PeopleView, Permission::PeopleSyncWorkos]);
+    $actor->forceFill(['workos_user_id' => 'user_revoked_browser', 'account_id' => Account::factory()->create()->id])->save();
+    $this->actingAs($actor);
+    $page = visit(route('people.index', [], false))->resize($width, 900)->click('button[wire\\:click="synchronize"]')->assertSee('Waiting to start');
+    $run = WorkosSyncRun::sole();
+    $permission = App\Models\Permission::where('key', Permission::PeopleSyncWorkos->value)->sole();
+    foreach ($actor->roles()->get() as $role) {
+        $role->permissions()->detach($permission->id);
+    }
+    $job = new ReconcileWorkosInvitations($company->id, $actor->id, $run->id);
+    $job->protocolVersion = 2;
+    $job->handle(app(App\Actions\People\ReconcileWorkosInvitations::class));
+    $page->assertSee('Synchronization: Failed')->assertSee('Permission revoked')->assertMissing('button[wire\\:click="synchronize"]')->assertSee('WorkOS invitations')->assertNoJavascriptErrors();
+    expect(AccountRequestOperation::count())->toBe(0)->and($run->fresh()->reason)->toBe('permission_revoked');
+    Http::assertNothingSent();
+})->with([390, 1440]);

@@ -100,7 +100,7 @@ it('SC-18 reports exhausted Account targets as terminal failures without replaci
         }
         $input = $inputs[$id];
 
-        return Http::response(array_intersect_key($input, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => $terminal ? 'unknown' : 'pending', 'confirmed_state' => [], 'safe_error' => $terminal ? 'invitation_confirmation_unavailable' : null]);
+        return Http::response(array_intersect_key($input, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => $terminal ? 'needs_attention' : 'pending', 'confirmed_state' => [], 'safe_error' => $terminal ? 'invitation_confirmation_unavailable' : null]);
     }]);
     app(ReconcileWorkosInvitations::class)->handle($run);
     expect($run->fresh()->status)->toBe(WorkosOperationStatus::Running);
@@ -172,4 +172,36 @@ it('SC-15 restores tenant context after a real new-format synchronization job co
     $job->handle(app(ReconcileWorkosInvitations::class));
     expect(app(TenantContext::class)->id())->toBe($other->id)->and($run->fresh()->status)->toBe(WorkosOperationStatus::Completed);
     Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
+});
+
+it('CR-04 retains transient unknown polling and later completes the original Account operations', function () {
+    $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
+    $actor->forceFill(['workos_user_id' => 'user_transient_actor', 'account_id' => Account::factory()->create()->id])->save();
+    Fixture::invitationLink($actor);
+    $person = employeeUser();
+    Fixture::invitationLink($person);
+    $person->forceFill(['invitation_verified_at' => now()->subDay()])->save();
+    $verified = $person->fresh()->invitation_verified_at;
+    $run = WorkosSyncRun::create(['actor_id' => $actor->id, 'status' => WorkosOperationStatus::Queued]);
+    $success = false;
+    $inputs = [];
+    Http::fake(['account.example.test/*' => function ($request) use (&$inputs, &$success) {
+        $id = basename(parse_url($request->url(), PHP_URL_PATH));
+        if ($request->method() === 'PUT') {
+            $inputs[$id] = $request->data();
+        }
+        $input = $inputs[$id];
+        if ($success) {
+            return Http::response(Fixture::observationReceipt($input, User::findOrFail($input['payload']['local_person_id']), 'none'));
+        }
+
+        return Http::response(array_intersect_key($input, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'unknown', 'confirmed_state' => [], 'safe_error' => 'invitation_confirmation_unavailable']);
+    }]);
+    app(ReconcileWorkosInvitations::class)->handle($run);
+    $ids = AccountRequestOperation::pluck('payload_hash', 'id')->all();
+    app(ReconcileWorkosInvitations::class)->refreshPending($actor);
+    expect($run->fresh()->status)->toBe(WorkosOperationStatus::Running)->and(AccountRequestOperation::where('state', 'needs_attention')->count())->toBe(0)->and($person->fresh()->invitation_verified_at->equalTo($verified))->toBeTrue();
+    $success = true;
+    app(ReconcileWorkosInvitations::class)->refreshPending($actor);
+    expect($run->fresh()->status)->toBe(WorkosOperationStatus::Completed)->and($run->fresh()->failed)->toBe(0)->and(AccountRequestOperation::pluck('payload_hash', 'id')->all())->toBe($ids)->and(AccountRequestOperation::where('state', 'confirmed')->count())->toBe(2);
 });

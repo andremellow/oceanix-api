@@ -3,6 +3,7 @@
 beforeEach(fn () => config(['services.account.invitation_ownership_enabled' => true]));
 
 use App\Actions\ControlPlane\ApplyProductOperation;
+use App\Actions\People\QueueWorkosInvitations;
 use App\Actions\People\SendWorkosInvitation;
 use App\Enums\Permission;
 use App\Enums\WorkosOperationStatus;
@@ -13,10 +14,11 @@ use App\Models\PersonAccountLink;
 use App\Models\User;
 use App\Models\WorkosInvitationAttempt;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Ramsey\Uuid\Uuid;
 
-it('recovers an accepted Account invitation receipt without sending again or changing first access', function () {
+it('recovers an accepted Account invitation receipt without sending again or changing first access', function (bool $requeued, bool $missing) {
     Http::preventStrayRequests();
     config(['services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
     $company = currentCompany();
@@ -30,17 +32,28 @@ it('recovers an accepted Account invitation receipt without sending again or cha
     $envelope = ['protocol_version' => 2, 'operation_id' => $id, 'kind' => 'person.invite', 'product' => 'compliance', 'account_company_uuid' => $link->account_company_uuid, 'workos_organization_id' => 'org_cutover', 'subject_id' => $link->company_member_id, 'resource_sequence' => 5, 'actor_workos_user_id' => 'user_inviter', 'payload' => ['local_person_id' => $person->id, 'invitation_id' => null, 'generation' => 4]];
     AccountRequestOperation::create(['id' => $id, 'company_id' => $company->id, 'user_id' => $person->id, 'actor_id' => $actor->id, 'kind' => 'person.invite', 'actor_workos_user_id' => 'user_inviter', 'payload' => $envelope, 'payload_hash' => ApplyProductOperation::hash($envelope), 'dispatched_at' => now()]);
     $firstAccess = $person->first_access_at;
-    Http::fake(['account.example.test/*' => Http::response(array_intersect_key($envelope, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => ['generation' => 5, 'sent' => true, 'invitation' => ['id' => 'inv_cutover', 'email' => $person->email, 'organization_id' => 'org_cutover', 'state' => 'pending', 'created_at' => now()->toIso8601String()]]])]);
+    if ($requeued) {
+        Queue::fake();
+        $attempt->update(['status' => WorkosOperationStatus::DeliveryUnconfirmed]);
+        $this->actingAs($actor);
+        expect(app(QueueWorkosInvitations::class)->handle([$person->id]))->toBe(1);
+        expect($attempt->fresh()->status)->toBe(WorkosOperationStatus::Queued);
+    }
+    Http::fake(['account.example.test/*' => fn ($request) => $missing && $request->method() === 'GET' ? Http::response([], 404) : Http::response(array_intersect_key($envelope, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => ['generation' => 5, 'sent' => true, 'invitation' => ['id' => 'inv_cutover', 'email' => $person->email, 'organization_id' => 'org_cutover', 'state' => 'pending', 'created_at' => now()->toIso8601String()]]])]);
     app(SendWorkosInvitation::class)->execute($attempt);
     expect($attempt->fresh()->status)->toBe(WorkosOperationStatus::Succeeded)
         ->and($person->fresh()->workos_invitation_id)->toBe('inv_cutover')
         ->and($person->fresh()->invitation_generation)->toBe(5)
         ->and($person->fresh()->first_access_at->equalTo($firstAccess))->toBeTrue();
-    Http::assertSentCount(1);
-    Http::assertNotSent(fn ($request) => $request->method() !== 'GET');
+    Http::assertSentCount($missing ? 2 : 1);
+    if ($missing) {
+        Http::assertSent(fn ($request) => $request->method() === 'PUT' && $request['operation_id'] === $id && ApplyProductOperation::hash($request->data()) === ApplyProductOperation::hash($envelope));
+    } else {
+        Http::assertNotSent(fn ($request) => $request->method() !== 'GET');
+    }
     app(SendWorkosInvitation::class)->execute($attempt->fresh());
-    Http::assertSentCount(1);
-});
+    Http::assertSentCount($missing ? 2 : 1);
+})->with(['sending receipt' => [false, false], 'queued committed receipt' => [true, false], 'queued missing receipt' => [true, true]]);
 
 it('keeps generation and send audit unchanged when Account confirms an already active member', function () {
     Http::preventStrayRequests();
