@@ -107,10 +107,12 @@ it('rechecks author permissions and editable state before upload', function (str
     $editor->call('openPdfModal', 'records.0.content_markdown', '', 'revoked');
     if ($fixture->user) {
         $fixture->user->roles()->detach();
+        $editor->set('pdfUpload', lessonPdfUpload());
     } else {
+        $editor->set('pdfUpload', lessonPdfUpload());
         Account::findOrFail($fixture->session['platform_account_id'])->update(['status' => 'suspended']);
     }
-    $editor->set('pdfUpload', lessonPdfUpload())->call('uploadPdf')->assertForbidden();
+    $editor->call('uploadPdf')->assertForbidden();
     expect(LessonDocument::count())->toBe(0);
 })->with('course editor contexts');
 
