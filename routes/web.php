@@ -13,6 +13,7 @@ use App\Http\Controllers\CoursePreviewController;
 use App\Http\Controllers\DevVideoController;
 use App\Http\Controllers\LessonDocumentController;
 use App\Http\Controllers\LessonDocumentLibraryController;
+use App\Http\Controllers\Platform\EditorFileUploadController;
 use App\Http\Controllers\PlatformCoursePreviewController;
 use App\Http\Controllers\TrainingPlaybackController;
 use App\Http\Middleware\EnsurePersonProductAccess;
@@ -126,6 +127,8 @@ Route::prefix('platform')
     ->group(function (): void {
         Route::get('/lesson-document-library/{document}', [LessonDocumentLibraryController::class, 'platform'])
             ->whereUuid('document')->middleware(EnsurePlatformHasPermission::class.':lesson-documents.view')->name('platform.lesson-documents.library.open');
+        Route::post('/editor-uploads/{platformAccount}', [EditorFileUploadController::class, 'handle'])
+            ->whereNumber('platformAccount')->name('platform.editor-uploads.store');
         Route::livewire('/', 'platform.dashboard')->name('platform.dashboard');
         Route::livewire('/companies', 'platform.companies')->name('platform.companies');
         Route::livewire('/users', 'platform.users')->name('platform.users');

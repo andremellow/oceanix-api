@@ -10,12 +10,16 @@ use App\Services\CourseEditor\EditorSaveCommand;
 use App\Services\CourseEditor\EditorSnapshot;
 use App\Services\CourseEditor\EditorStagedState;
 use App\Services\CourseEditor\EditorStagedStateRebaser;
+use App\Services\Platform\PlatformAccess;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\Renderless;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\FileUploadConfiguration;
 use Livewire\WithFileUploads;
 use LogicException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -23,7 +27,24 @@ use Throwable;
 
 abstract class EditorCoordinator extends Component
 {
-    use WithFileUploads;
+    use WithFileUploads {
+        _startUpload as protected startNativeUpload;
+    }
+
+    #[Renderless]
+    public function _startUpload($name, $fileInfo, $isMultiple)
+    {
+        if (FileUploadConfiguration::isUsingS3() || ! in_array($this->fixedContextName(), ['shared-course', 'shared-module'], true)) {
+            return $this->startNativeUpload($name, $fileInfo, $isMultiple);
+        }
+
+        $actor = app(PlatformAccess::class)->authorize();
+        $url = URL::temporarySignedRoute('platform.editor-uploads.store', now()->addMinutes(FileUploadConfiguration::maxUploadTime()), [
+            'platformAccount' => $actor->getKey(),
+        ]);
+
+        $this->dispatch('upload:generatedSignedUrl', name: $name, url: $url)->self();
+    }
 
     private EditorStagedStateRebaser $stagedStateRebaser;
 
