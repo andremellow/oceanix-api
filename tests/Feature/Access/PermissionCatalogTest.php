@@ -75,7 +75,7 @@ it('lets an administrator remove course and people access from an assignment cre
     ])->pluck('id'));
 
     Livewire\Livewire::actingAs(adminUser())
-        ->test('admin.access-profile', ['role' => $role])
+        ->test('oceanix-platform.profile', ['role' => $role])
         ->set('selected', [Permission::AssignmentsCreate->value])
         ->call('save')
         ->assertHasNoErrors();
@@ -118,7 +118,7 @@ it('presents permissions as user-facing names and descriptions without technical
     $role = Role::query()->where('key', 'auditor')->firstOrFail();
 
     Livewire\Livewire::actingAs($administrator)
-        ->test('admin.access-profile', ['role' => $role])
+        ->test('oceanix-platform.profile', ['role' => $role])
         ->assertSee(Permission::ComplianceDashboardView->label())
         ->assertSee(Permission::ComplianceDashboardView->description())
         ->assertSee(Permission::ComplianceReportsExport->description())

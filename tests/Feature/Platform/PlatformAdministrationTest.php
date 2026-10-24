@@ -5,7 +5,6 @@ use Andremellow\Tasks\Models\Task;
 use Andremellow\Tasks\Models\TaskComment;
 use Andremellow\Tasks\Models\TaskType;
 use App\Actions\Auth\AuthenticatePlatformAccount;
-use App\Data\SocialIdentity;
 use App\Http\Middleware\AuthenticatePlatformTaskUser;
 use App\Http\Middleware\EnsureUserIsPlatformAdmin;
 use App\Models\Account;
@@ -21,6 +20,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
 use Livewire\Exceptions\MethodNotFoundException;
 use Livewire\Mechanisms\PersistentMiddleware\PersistentMiddleware;
+use Oceanix\Platform\Auth\Data\SocialIdentity;
 use Tests\Support\AccountIntegrationFixture;
 
 it('denies the platform area to a company administrator', function (): void {

@@ -3,7 +3,6 @@
 use App\Actions\Auth\StartUserImpersonation;
 use App\Actions\Auth\StopUserImpersonation;
 use App\Actions\Platform\EnterCompany;
-use App\Actions\Tenancy\SwitchCompany;
 use App\Enums\UserStatus;
 use App\Http\Controllers\Auth\WorkosController;
 use App\Http\Controllers\CertificateDownloadController;
@@ -20,7 +19,6 @@ use App\Http\Middleware\EnsurePersonProductAccess;
 use App\Http\Middleware\EnsurePlatformHasPermission;
 use App\Http\Middleware\EnsureUserCanAccessControlCenter;
 use App\Http\Middleware\EnsureUserHasPermission;
-use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\EnsureUserIsPlatformAdmin;
 use App\Http\Middleware\IdentifyCompany;
 use App\Http\Middleware\PublicCoursePreview;
@@ -33,6 +31,7 @@ use App\Services\Platform\PlatformAccess;
 use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use Oceanix\Platform\Http\Controllers\Auth\LogoutController;
 
 Route::get('/', function () {
     if (Auth::check()) {
@@ -69,11 +68,7 @@ if (app()->environment('local')) {
 }
 
 Route::middleware('guest')->group(function (): void {
-    Route::livewire('/login', 'auth.login')->name('login');
-    Route::livewire('/platform/login', 'auth.login')->name('platform.login');
-    Route::livewire('/login/{company:slug}', 'auth.login')
-        ->middleware(IdentifyCompany::class)
-        ->name('tenant.login');
+    Route::livewire('/platform/login', 'oceanix-platform.login')->name('platform.login');
 
     // Local-only bypass so the application can be opened before WorkOS is configured.
     // Registered only in the local environment and only for the single configured
@@ -113,10 +108,6 @@ Route::middleware('guest')->group(function (): void {
         })->middleware(IdentifyCompany::class)->name('auth.local');
     }
 
-    Route::middleware([IdentifyCompany::class, 'throttle:auth'])->group(function (): void {
-        Route::get('/auth/workos/redirect', [WorkosController::class, 'redirect'])->name('auth.workos.redirect');
-        Route::get('/auth/workos/callback', [WorkosController::class, 'callback'])->name('auth.workos.callback');
-    });
     Route::get('/auth/workos/platform/redirect', [WorkosController::class, 'platformRedirect'])
         ->middleware('throttle:auth')
         ->name('auth.workos.platform.redirect');
@@ -153,13 +144,7 @@ Route::prefix('platform')
 
             return redirect()->route('dashboard', ['company' => $company]);
         })->name('platform.companies.enter');
-        Route::post('/logout', function () {
-            Auth::logout();
-            session()->invalidate();
-            session()->regenerateToken();
-
-            return redirect()->route('login');
-        })->name('platform.logout');
+        Route::post('/logout', LogoutController::class)->name('platform.logout');
     });
 
 // Keep existing bookmarks and notification links useful while tenant URLs migrate to
@@ -199,12 +184,6 @@ Route::middleware([IdentifyCompany::class, 'auth', EnsurePersonProductAccess::cl
         })->name('legacy.'.str_replace(['/', '{', '}'], ['.', '', ''], trim($uri, '/')));
     }
 });
-
-Route::post('/switch-company/{targetCompany:slug}', function (Company $targetCompany, SwitchCompany $action) {
-    $action->handle(request()->user(), $targetCompany);
-
-    return redirect()->route('dashboard', ['company' => $targetCompany]);
-})->middleware([IdentifyCompany::class, 'auth', EnsurePersonProductAccess::class])->name('company.switch');
 
 Route::get('/c/{company:slug}', function (Company $company) {
     return Auth::check()
@@ -286,18 +265,9 @@ Route::prefix('c/{company:slug}')
                 ->middleware(EnsureUserHasPermission::class.':certificates.view')
                 ->name('certificates.index');
 
-            Route::livewire('/people', 'organization.people')
-                ->middleware(EnsureUserHasPermission::class.':people.view')
-                ->name('people.index');
             Route::livewire('/people/import', 'organization.import-people')
                 ->middleware(EnsureUserHasPermission::class.':people.import')
                 ->name('people.import');
-            Route::livewire('/people/create', 'organization.create-person')
-                ->middleware(EnsureUserHasPermission::class.':people.manage')
-                ->name('people.create');
-            Route::livewire('/people/{user}', 'organization.person')
-                ->middleware(EnsureUserHasPermission::class.':people.view')
-                ->name('people.show');
 
             Route::livewire('/departments', 'organization.departments')
                 ->middleware(EnsureUserHasPermission::class.':departments.view')
@@ -315,20 +285,6 @@ Route::prefix('c/{company:slug}')
                 ->name('audit-log');
         });
 
-        Route::middleware([EnsureUserCanAccessControlCenter::class, EnsureUserIsAdmin::class])
-            ->prefix('admin')
-            ->group(function (): void {
-                Route::livewire('/access-profiles', 'admin.access-profiles')->name('admin.access-profiles');
-                Route::livewire('/access-profiles/{role}', 'admin.access-profile')->name('admin.access-profiles.show');
-            });
-
-        Route::post('/logout', function () {
-            Auth::logout();
-            request()->session()->invalidate();
-            request()->session()->regenerateToken();
-
-            return redirect()->route('login');
-        })->name('logout');
     });
 
 // Capability routes intentionally do not resolve or change the visitor's company.

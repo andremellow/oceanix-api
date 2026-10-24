@@ -1,5 +1,7 @@
 # Account and Compliance production integration
 
+For the published SDK release and non-interactive Accounts registration, start with [SDK production adoption](sdk-production-adoption.md). Its existing-connection path supersedes manual credential bootstrap instructions below; preserve existing production credentials and evidence.
+
 This runbook publishes the existing applications. SDK, boilerplate and shared design-system extraction are deferred until this release passes an end-to-end production check. Commands below are operator instructions; preparing the PRs does not execute them in production.
 
 ## 1. Release prerequisites and order

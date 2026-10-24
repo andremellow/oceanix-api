@@ -17,12 +17,12 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 it('allows active platform administrators to share only platform drafts and denies revoked accounts', function () {
     $account = Account::factory()->create(['is_platform_admin' => true, 'status' => 'active']);
     $version = CourseVersion::factory()->shared()->create(['title' => 'Platform saved draft']);
+    $company = CourseVersion::factory()->create();
     $url = route('platform.shared-courses.preview-link', ['course' => $version->course_id, 'version' => $version->id]);
     $data = $this->withSession(['platform_account_id' => $account->id])->postJson($url)->assertCreated()->json();
     $this->getJson($url)->assertOk()->assertJson($data);
     expect(PlatformPermission::SharedCoursesGeneratePreviewLink->prerequisites())->toBe([PlatformPermission::SharedCoursesView, PlatformPermission::SharedCoursesUpdate]);
     $this->get($data['url'])->assertOk()->assertSee('Platform saved draft');
-    $company = CourseVersion::factory()->create();
     expect(fn () => app(GenerateCoursePreviewLink::class)->handle($company->course, $company, $account))->toThrow(HttpException::class);
     $account->update(['is_platform_admin' => false]);
     $this->postJson($url)->assertRedirect();

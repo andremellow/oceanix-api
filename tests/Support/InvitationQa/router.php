@@ -11,7 +11,6 @@ use App\Models\User;
 use App\Models\WorkosInvitationAttempt;
 use App\Models\WorkosSyncRun;
 use App\Services\Requirements\AssignmentMaterializationService;
-use App\Services\SocialLogin\OauthStateSigner;
 use App\Tenancy\TenantContext;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Http\Request;
@@ -20,6 +19,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Oceanix\Platform\Auth\OauthStateSigner;
 
 // This router is an isolated executable QA fixture, never loaded by production routes.
 $root = dirname(__DIR__, 3);

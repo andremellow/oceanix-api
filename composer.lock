@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "fb978852dbac73d39ebd6ee480a39884",
+    "content-hash": "f0d27da64c6a4b73ea0e371c9a065e53",
     "packages": [
         {
             "name": "andremellow/laravel-tasks",
@@ -3790,6 +3790,57 @@
                 }
             ],
             "time": "2026-02-16T23:10:27+00:00"
+        },
+        {
+            "name": "oceanix/platform",
+            "version": "v0.1.0",
+            "source": {
+                "type": "git",
+                "url": "git@github.com:andremellow/Oceanix-SDK.git",
+                "reference": "69eb008c6abc00d9f6763745d2d0181215445291"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/andremellow/Oceanix-SDK/zipball/69eb008c6abc00d9f6763745d2d0181215445291",
+                "reference": "69eb008c6abc00d9f6763745d2d0181215445291",
+                "shasum": ""
+            },
+            "require": {
+                "laravel/framework": "^13.17",
+                "laravel/sanctum": "^4.0",
+                "livewire/flux": "^2.14",
+                "livewire/livewire": "^4.3",
+                "php": "^8.3",
+                "ramsey/uuid": "^4.0"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Oceanix\\Platform\\PlatformServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Oceanix\\Platform\\": "src/"
+                }
+            },
+            "scripts": {
+                "test": [
+                    "@php tests/consumer.php vendor/autoload.php",
+                    "@php tests/integration.php vendor/autoload.php"
+                ]
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Shared Oceanix authentication, Account integration and product access infrastructure.",
+            "support": {
+                "source": "https://github.com/andremellow/Oceanix-SDK",
+                "issues": "https://github.com/andremellow/Oceanix-SDK/issues"
+            },
+            "time": "2026-10-23T19:32:48+00:00"
         },
         {
             "name": "phpoption/phpoption",
@@ -12952,6 +13003,6 @@
     "platform": {
         "php": "^8.3"
     },
-    "platform-dev": {},
-    "plugin-api-version": "2.9.0"
+    "platform-dev": [],
+    "plugin-api-version": "2.3.0"
 }

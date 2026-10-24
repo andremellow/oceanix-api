@@ -1,10 +1,8 @@
 <?php
 
 use App\Actions\Auth\AuthenticateSocialLogin;
-use App\Data\SocialIdentity;
 use App\Enums\Permission;
 use App\Enums\UserStatus;
-use App\Exceptions\SocialLoginProviderException;
 use App\Models\AccountCompanyBinding;
 use App\Models\Certificate;
 use App\Models\CompanyAccessReceipt;
@@ -13,6 +11,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Oceanix\Platform\Auth\Data\SocialIdentity;
+use Oceanix\Platform\Auth\Exceptions\SocialLoginProviderException;
 
 function accessFixture(): array
 {

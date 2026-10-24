@@ -1,5 +1,7 @@
 {
     "Account confirmed this person. Access is pending confirmation; retry checks the same request.": "O Account confirmou esta pessoa. O acesso aguarda confirmação; tentar novamente consulta a mesma solicitação.",
+    "Select all": "Selecionar todas",
+    "Select all results": "Selecionar todos os resultados",
     "Insert PDF": "Inserir PDF",
     "PDF file": "Arquivo PDF",
     "PDF only, up to 10 MB. Opens in a new tab for people with access to this training.": "Somente PDF, até 10 MB. Abre em uma nova aba para pessoas com acesso a este treinamento.",
@@ -894,8 +896,6 @@
     "You do not have permission to perform this PDF action.": "Você não tem permissão para realizar esta ação com o PDF.",
     "The PDF request was interrupted. Results may be out of date. Your text and selection are preserved.": "A solicitação do PDF foi interrompida. Os resultados podem estar desatualizados. Seu texto e sua seleção foram preservados.",
     "The archive response was interrupted. Try Archive PDF again to confirm the result. Existing links still work.": "A resposta do arquivamento foi interrompida. Use Arquivar PDF novamente para confirmar o resultado. Os links existentes continuam funcionando.",
-    "Select all": "Selecionar todas",
-    "Select all results": "Selecionar todos os resultados",
     "Select a valid audience scope.": "Selecione uma abrangência válida.",
     "Select at least one job function.": "Selecione pelo menos uma função.",
     "One or more selected job functions are no longer available.": "Uma ou mais funções selecionadas não estão mais disponíveis.",

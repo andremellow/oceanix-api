@@ -2,14 +2,6 @@
 
 namespace App\Http\Controllers\ControlPlane;
 
-use App\Actions\ControlPlane\ChangeCompanyComplianceAccess;
-use App\Http\Requests\ControlPlane\CompanyComplianceAccessRequest;
-use App\Http\Resources\ControlPlane\CompanyComplianceAccessResource;
+use Oceanix\Platform\Http\Controllers\ControlPlane\CompanyProductAccessController;
 
-class CompanyComplianceAccessController
-{
-    public function __invoke(CompanyComplianceAccessRequest $request, ChangeCompanyComplianceAccess $action): CompanyComplianceAccessResource
-    {
-        return new CompanyComplianceAccessResource($action->handle($request->attributes->get('provisioning_principal'), $request->command()));
-    }
-}
+class CompanyComplianceAccessController extends CompanyProductAccessController {}

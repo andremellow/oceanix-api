@@ -1,13 +1,13 @@
 <?php
 
 use App\Actions\Auth\AuthenticateSocialLogin;
-use App\Data\SocialIdentity;
-use App\Exceptions\SocialLoginProviderException;
 use App\Models\Account;
 use App\Models\PersonProductAccess;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
+use Oceanix\Platform\Auth\Data\SocialIdentity;
+use Oceanix\Platform\Auth\Exceptions\SocialLoginProviderException;
 use Tests\Support\AccountIntegrationFixture;
 
 it('denies delivered block on web and Livewire including administrators', function (bool $administrator) {

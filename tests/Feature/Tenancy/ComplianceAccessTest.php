@@ -1,7 +1,6 @@
 <?php
 
 use App\Actions\Auth\AuthenticateSocialLogin;
-use App\Data\SocialIdentity;
 use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Company;
@@ -17,6 +16,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
+use Oceanix\Platform\Auth\Data\SocialIdentity;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 beforeEach(function () {

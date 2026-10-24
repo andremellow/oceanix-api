@@ -40,7 +40,8 @@ function platformTransportUrl($editor, string $name = 'pdfUpload'): string
 }
 
 it('uploads through the real native transport from a shared editor with a disabled tenant', function ($context, $image) {
-    currentCompany()->update(['compliance_access_enabled' => false]);
+    $company = currentCompany();
+    $company->update(['compliance_access_enabled' => false]);
     [$fixture, $editor] = platformTransportEditor($context);
     $url = platformTransportUrl($editor, $image ? 'contentImageUpload' : 'pdfUpload');
     $file = $image ? UploadedFile::fake()->image('image.png') : UploadedFile::fake()->createWithContent('sample.pdf', "%PDF-1.4\n%%EOF");
@@ -49,7 +50,7 @@ it('uploads through the real native transport from a shared editor with a disabl
     $path = TemporaryUploadedFile::extractPathFromSignedPath($response->json('paths.0'));
     expect($path)->not->toBeFalse();
     Storage::disk('tmp-for-tests')->assertExists('livewire-tmp/'.$path);
-    expect(session('company_id'))->toBe(currentCompany()->id);
+    expect(session('company_id'))->toBe($company->id);
 })->with(['shared course', 'standalone shared module'])->with([false, true]);
 
 it('rechecks platform authorization before writing an issued upload', function ($state) {

@@ -29,9 +29,11 @@ use App\Policies\TrainingRequirementPolicy;
 use App\Policies\UserPolicy;
 use App\Policies\UserTrainingAssignmentPolicy;
 use App\Policies\WorkosSyncRunPolicy;
+use App\Services\Platform\ComplianceAuthenticationContext;
+use App\Services\Platform\ComplianceCompanyContextHook;
+use App\Services\Platform\ComplianceCompanyInitializer;
+use App\Services\Platform\CompliancePeopleDirectoryExtension;
 use App\Services\Settings\ApplicationSettings;
-use App\Services\SocialLogin\SocialLoginManager;
-use App\Services\SocialLogin\WorkosAuthKitIdentityProvider;
 use App\Services\Video\CloudflareStreamProvider;
 use App\Services\Video\FakeVideoProvider;
 use App\Tenancy\TenantContext;
@@ -42,6 +44,11 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
+use Oceanix\Platform\Access\GateRegistrar;
+use Oceanix\Platform\Auth\Contracts\AuthenticationContext;
+use Oceanix\Platform\Contracts\CompanyContextHook;
+use Oceanix\Platform\Contracts\CompanyInitializer;
+use Oceanix\Platform\Contracts\PeopleDirectoryExtension;
 use Tests\Support\AccountIntegrationFixture;
 
 class AppServiceProvider extends ServiceProvider
@@ -49,11 +56,16 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->scoped(TenantContext::class);
+        $this->app->scoped(\Oceanix\Platform\Tenancy\TenantContext::class, fn ($app) => $app->make(TenantContext::class));
         $this->app->scoped(ApplicationSettings::class);
+        $this->app->scoped(CompanyInitializer::class, ComplianceCompanyInitializer::class);
+        $this->app->scoped(PeopleDirectoryExtension::class, CompliancePeopleDirectoryExtension::class);
+        $this->app->scoped(CompanyContextHook::class, ComplianceCompanyContextHook::class);
 
-        $this->app->singleton(SocialLoginManager::class, fn ($app) => new SocialLoginManager([
-            'workos' => $app->make(WorkosAuthKitIdentityProvider::class),
-        ]));
+        $this->app->scoped(AuthenticationContext::class, ComplianceAuthenticationContext::class);
+        foreach (config('oceanix-platform.legacy_bindings', []) as $shared => $legacy) {
+            $this->app->bind($shared, fn ($app) => $app->make($legacy));
+        }
 
         // The domain depends on the contract, never on Cloudflare. Swapping providers is a
         // binding change here plus a new implementation — nothing else moves.
@@ -101,9 +113,7 @@ class AppServiceProvider extends ServiceProvider
             return $user->isAdmin() && ! $isSharedContentWrite ? true : null;
         });
 
-        foreach (Permission::cases() as $permission) {
-            Gate::define($permission->value, fn (User $user): bool => $user->hasPermission($permission));
-        }
+        app(GateRegistrar::class)->register();
 
         Gate::define('tasks.access', fn (User|PlatformTaskUser $user): bool => $user->account?->is_platform_admin === true
             && $user->account->status === 'active');
