@@ -25,7 +25,7 @@ class ImportPeople
      * @param  list<array{row: int, name: string, email: string, job_function: string, department: string}>  $rows
      * @param  array<string, string>  $jobFunctionMappings
      * @param  array<string, string>  $departmentMappings
-     * @return array{created: int, existing: int, job_functions_created: int, departments_created: int}
+     * @return array{created: int, existing: int, pending: int, job_functions_created: int, departments_created: int, rows: list<array<string, mixed>>, mappings: array{job_functions: array<string, int>, departments: array<string, int>}}
      */
     public function handle(array $rows, array $jobFunctionMappings, array $departmentMappings): array
     {
@@ -39,7 +39,7 @@ class ImportPeople
             return [$functions, $functionCount, $departments, $departmentCount];
         });
         $employeeRole = Role::query()->where('key', 'employee')->firstOrFail();
-        $result = ['created' => 0, 'existing' => 0, 'pending' => 0, 'job_functions_created' => $jobFunctionsCreated, 'departments_created' => $departmentsCreated, 'rows' => []];
+        $result = ['created' => 0, 'existing' => 0, 'pending' => 0, 'job_functions_created' => $jobFunctionsCreated, 'departments_created' => $departmentsCreated, 'rows' => [], 'mappings' => ['job_functions' => $jobFunctions, 'departments' => $departments]];
         foreach ($rows as $row) {
             Gate::authorize(Permission::PeopleImport->value);
             $user = User::query()->where('email', $row['email'])->first();
@@ -85,7 +85,7 @@ class ImportPeople
             });
             $result['rows'][] = ['row' => $row['row'], 'outcome' => 'confirmed'];
         }
-        $this->audit->log('people.imported', metadata: array_diff_key($result, ['rows' => true]) + ['rows' => count($rows)]);
+        $this->audit->log('people.imported', metadata: array_diff_key($result, ['rows' => true, 'mappings' => true]) + ['rows' => count($rows)]);
 
         return $result;
     }

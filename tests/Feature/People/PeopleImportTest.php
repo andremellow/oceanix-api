@@ -166,7 +166,7 @@ it('revokes import access immediately and preserves the permission prerequisites
     $this->actingAs($user->fresh())->get(route('people.import'))->assertForbidden();
 });
 
-it('retains mixed uncertain import rows and reuses pending registration and adoption receipts without duplicate people or email', function () {
+it('retains mixed uncertain import rows and reuses pending registration and adoption receipts without duplicate people or email', function (bool $createMappings) {
     seedAccessCatalog();
     Http::preventStrayRequests();
     config(['services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic-token', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
@@ -176,7 +176,8 @@ it('retains mixed uncertain import rows and reuses pending registration and adop
     $company->update(['workos_organization_id' => 'org_mixed_import']);
     $binding = AccountCompanyBinding::create(['account_company_uuid' => (string) Str::uuid(), 'compliance_company_id' => $company->id, 'workos_organization_id' => $company->workos_organization_id]);
     $existing = User::factory()->create(['email' => 'adopt-mixed@example.test', 'workos_user_id' => 'user_mixed_existing']);
-    $department = Department::factory()->create();
+    $department = $createMappings ? null : Department::factory()->create(['name' => 'Mapped']);
+    $function = $createMappings ? null : JobFunction::factory()->create(['name' => 'Imported job']);
     $recover = false;
     $envelopes = [];
     Http::fake(function ($request) use (&$recover, &$envelopes) {
@@ -207,12 +208,16 @@ it('retains mixed uncertain import rows and reuses pending registration and adop
     $pending = app(RegisterPerson::class)->handle($actor, (string) Str::uuid(), 'Pending mixed', 'pending-mixed@example.test', import: true);
     expect($pending->state)->toBe('unknown');
     $rows = [
-        ['row' => 2, 'name' => 'Confirmed mixed', 'email' => 'confirmed-mixed@example.test', 'job_function' => '', 'department' => 'Mapped'],
-        ['row' => 3, 'name' => 'Pending mixed', 'email' => 'pending-mixed@example.test', 'job_function' => '', 'department' => 'Mapped'],
-        ['row' => 4, 'name' => 'Adopt mixed', 'email' => $existing->email, 'job_function' => '', 'department' => 'Mapped'],
+        ['row' => 2, 'name' => 'Confirmed mixed', 'email' => 'confirmed-mixed@example.test', 'job_function' => 'Imported job', 'department' => 'Mapped'],
+        ['row' => 3, 'name' => 'Pending mixed', 'email' => 'pending-mixed@example.test', 'job_function' => 'Imported job', 'department' => 'Mapped'],
+        ['row' => 4, 'name' => 'Adopt mixed', 'email' => $existing->email, 'job_function' => 'Imported job', 'department' => 'Mapped'],
     ];
-    $view = Livewire\Livewire::actingAs($actor)->test('organization.import-people')->set('rows', $rows)->set('departmentTerms', [['value' => 'Mapped', 'selected' => (string) $department->id, 'count' => 3, 'matched' => true]])->call('import')
+    $view = Livewire\Livewire::actingAs($actor)->test('organization.import-people')->set('rows', $rows)->set('departmentTerms', [['value' => 'Mapped', 'selected' => $createMappings ? 'create' : (string) $department->id, 'count' => 3, 'matched' => ! $createMappings]])->set('jobFunctionTerms', [['value' => 'Imported job', 'selected' => $createMappings ? 'create' : (string) $function->id, 'count' => 3, 'matched' => ! $createMappings]])->call('import')
         ->assertSet('result.pending', 2)->assertSet('result.created', 1)->assertSet('rows', $rows)->assertSee('Some registrations need confirmation')->assertSee('Row 2: Confirmed')->assertSee('Row 3: Pending confirmation')->assertSee('Row 4: Pending confirmation')->assertDontSee('Import completed')->assertSee('Retry the import');
+    $department ??= Department::where('name', 'Mapped')->sole();
+    $function ??= JobFunction::where('name', 'Imported job')->sole();
+    $view->assertSet('departmentTerms.0.selected', (string) $department->id)
+        ->assertSet('jobFunctionTerms.0.selected', (string) $function->id);
     expect(User::where('email', 'confirmed-mixed@example.test')->sole()->departments()->whereKey($department->id)->exists())->toBeTrue()
         ->and(User::where('email', 'pending-mixed@example.test')->count())->toBe(0)->and($existing->departments()->count())->toBe(0);
     $identities = AccountRequestOperation::orderBy('id')->pluck('payload_hash', 'id')->all();
@@ -223,10 +228,16 @@ it('retains mixed uncertain import rows and reuses pending registration and adop
         ->and(AccountRequestOperation::where('state', 'confirmed')->count())->toBe(4)
         ->and(User::whereIn('email', array_column($rows, 'email'))->count())->toBe(3)
         ->and(User::where('email', 'pending-mixed@example.test')->sole()->departments()->whereKey($department->id)->exists())->toBeTrue()->and($existing->fresh()->departments()->whereKey($department->id)->exists())->toBeTrue();
+    expect(Department::where('name', 'Mapped')->count())->toBe(1)
+        ->and(JobFunction::where('name', 'Imported job')->count())->toBe(1);
+    foreach (User::whereIn('email', array_column($rows, 'email'))->get() as $person) {
+        expect($person->departments()->pluck('departments.id')->all())->toBe([$department->id])
+            ->and($person->jobFunctions()->pluck('job_functions.id')->all())->toBe([$function->id]);
+    }
     $puts = collect(Http::recorded())->filter(fn ($pair) => $pair[0]->method() === 'PUT');
     expect($puts->map(fn ($pair) => $pair[0]['operation_id'])->all())->toHaveCount(5);
     Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com') || str_contains($request->url(), '/invitations'));
-});
+})->with([false, true]);
 
 it('never decorates an unresolved registration owned by another caller or source', function ($source, $otherActor, $mappingFails) {
     seedAccessCatalog();

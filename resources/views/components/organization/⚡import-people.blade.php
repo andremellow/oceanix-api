@@ -63,6 +63,14 @@ new class extends Component
 
         $this->result = $action->handle($this->rows, $jobFunctionMappings, $departmentMappings);
 
+        // Keep committed organization IDs in Livewire state while uncertain rows are retried.
+        foreach ($this->jobFunctionTerms as $index => $term) {
+            $this->jobFunctionTerms[$index]['selected'] = (string) $this->result['mappings']['job_functions'][$term['value']];
+        }
+        foreach ($this->departmentTerms as $index => $term) {
+            $this->departmentTerms[$index]['selected'] = (string) $this->result['mappings']['departments'][$term['value']];
+        }
+
         if (($this->result['pending'] ?? 0) === 0) {
             $this->reset(['spreadsheet', 'rows', 'previewErrors', 'jobFunctionTerms', 'departmentTerms']);
         }
