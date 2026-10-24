@@ -11,13 +11,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Tests\Support\AccountIntegrationFixture;
 
 beforeEach(function () {
     Http::preventStrayRequests();
-    Http::fake();
+    AccountIntegrationFixture::fakeAccountActorAuthorization();
 });
 
-function provisionToken(array $abilities = ['companies:provision'], mixed $expires = null): string
+function provisionToken(array $abilities = [], mixed $expires = null): string
 {
     return ServicePrincipal::create(['name' => 'Account fixture', 'product' => 'compliance', 'environment' => app()->environment(), 'active' => true])->createToken('fixture', $abilities, $expires)->plainTextToken;
 }
@@ -39,7 +40,7 @@ it('SC-07 provisions a tenant with a scoped machine token and no human role gran
     $this->withToken(provisionToken())->withHeader('Idempotency-Key', $key)->putJson(provisionUrl($uuid), $payload)->assertCreated()->assertJsonPath('account_company_uuid', $uuid)->assertJsonPath('workos_organization_id', 'org_receiver')->assertJsonPath('operation_id', $key)->assertJsonPath('outcome', 'created');
     expect(Company::count())->toBe($before + 1)->and(AccountCompanyBinding::count())->toBe(1)->and(ProvisioningReceipt::count())->toBe(1)->and(User::withoutGlobalScopes()->count())->toBe(0)->and(DB::table('role_user')->count())->toBe(0);
     expect(app(TenantContext::class)->id())->toBe($context);
-    Http::assertNothingSent();
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
 });
 
 it('SC-08 adopts an existing tenant without rekeying or modifying published evidence', function () {
@@ -67,18 +68,17 @@ it('SC-08 SC-12 replays identical receipts and rejects changed payload under the
     expect(Company::where('workos_organization_id', 'org_receiver')->count())->toBe(1)->and(ProvisioningReceipt::count())->toBe(1);
 });
 
-it('SC-11 rejects missing wrong scoped expired and human tokens without mutations', function () {
+it('SC-11 rejects missing invalid expired and human tokens without mutations', function () {
     $uuid = (string) Str::uuid();
     $payload = provisionPayload();
     $count = Company::count();
     $this->withHeader('Idempotency-Key', (string) Str::uuid())->putJson(provisionUrl($uuid), $payload)->assertUnauthorized();
     $this->withToken('wrong-token')->putJson(provisionUrl($uuid), $payload)->assertUnauthorized();
-    $this->withToken(provisionToken(['other:scope']))->putJson(provisionUrl($uuid), $payload)->assertForbidden();
     $this->withToken(provisionToken(expires: now()->subMinute()))->putJson(provisionUrl($uuid), $payload)->assertUnauthorized();
     $human = adminUser();
     $this->withToken($human->createToken('human', ['companies:provision'])->plainTextToken)->putJson(provisionUrl($uuid), $payload)->assertForbidden();
     expect(Company::count())->toBe($count)->and(AccountCompanyBinding::count())->toBe(0);
-    Http::assertNothingSent();
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com'));
 });
 
 it('SC-11 rejects conflicting Account bindings and occupied slugs without modifying tenants', function () {
@@ -126,4 +126,18 @@ it('SC-08 refuses provisioning rollback while retaining migration history and op
         expect(DB::table($table)->orderBy('id')->get()->toJson())->toBe($before[$table]);
     }
     expect(app('migrator')->run([$path]))->toBe([]);
+});
+
+it('SC-15 keeps initial provisioning and old provisioning replays independent of product access', function () {
+    $uuid = (string) Str::uuid();
+    $key = (string) Str::uuid();
+    $payload = provisionPayload('org_access_legacy');
+    $this->withToken(provisionToken())->withHeader('Idempotency-Key', $key);
+    $first = $this->putJson(provisionUrl($uuid), $payload)->assertCreated()->json();
+    $company = Company::where('workos_organization_id', 'org_access_legacy')->sole();
+    expect($company->compliance_access_enabled)->toBeTrue()->and($company->compliance_access_version)->toBe(0);
+    $company->update(['compliance_access_enabled' => false, 'compliance_access_version' => 1]);
+    $this->putJson(provisionUrl($uuid), $payload)->assertExactJson($first);
+    $this->withHeader('Idempotency-Key', (string) Str::uuid())->putJson(provisionUrl($uuid), $payload)->assertOk();
+    expect($company->fresh()->compliance_access_enabled)->toBeFalse()->and($company->fresh()->compliance_access_version)->toBe(1);
 });

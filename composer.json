@@ -3,10 +3,14 @@
     "name": "oceanix/training-compliance",
     "type": "project",
     "description": "Oceanix Training Compliance — corporate training and compliance platform.",
-    "keywords": ["laravel", "livewire", "compliance", "training"],
+    "keywords": [
+        "laravel",
+        "livewire",
+        "compliance",
+        "training"
+    ],
     "license": "proprietary",
     "require": {
-        "php": "^8.3",
         "andremellow/laravel-tasks": "dev-codex/task-media-editor",
         "bacon/bacon-qr-code": "^3.1",
         "barryvdh/laravel-dompdf": "^3.1",
@@ -18,6 +22,8 @@
         "livewire/flux": "^2.14",
         "livewire/flux-pro": "^2.15",
         "livewire/livewire": "^4.3",
+        "oceanix/platform": "^0.1.0",
+        "php": "^8.3",
         "resend/resend-php": "^1.5"
     },
     "require-dev": {
@@ -63,7 +69,10 @@
         "test:browser": [
             "node --test tests/JavaScript/lesson-documents.browser.test.mjs",
             "@php vendor/bin/pest tests/Browser/UnifiedCourseEditorBrowserTest.php --compact",
-            "@php vendor/bin/pest tests/Browser/BrowserEnvironmentSmokeTest.php tests/Browser/RequirementTargetModalTest.php tests/Browser/CourseDetailWidthTest.php tests/Browser/EditorFixtureCompatibilityTest.php tests/Browser/UnifiedCourseEditorLayoutTest.php --compact"
+            "@php vendor/bin/pest tests/Browser/BrowserEnvironmentSmokeTest.php tests/Browser/RequirementTargetModalTest.php tests/Browser/CourseDetailWidthTest.php tests/Browser/EditorFixtureCompatibilityTest.php tests/Browser/UnifiedCourseEditorLayoutTest.php --compact",
+            "@php vendor/bin/pest tests/Browser/ComplianceAccessTest.php --compact",
+            "@php vendor/bin/pest tests/Browser/AccountCompanyOwnershipTest.php --compact",
+            "@php vendor/bin/pest tests/Browser/PeopleAccountAccessTest.php tests/Browser/SharedPlatformProfilesTest.php --compact"
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
@@ -89,7 +98,8 @@
             "@test:browser",
             "npm run test:preview",
             "vendor/bin/pint --dirty --format agent"
-        ]
+        ],
+        "test:postgres": "@php vendor/bin/pest tests/Feature/ControlPlane/CompanyComplianceAccessPostgresConcurrencyTest.php --compact"
     },
     "extra": {
         "laravel": {
@@ -108,6 +118,10 @@
     "minimum-stability": "stable",
     "prefer-stable": true,
     "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/andremellow/Oceanix-SDK.git"
+        },
         {
             "type": "vcs",
             "url": "https://github.com/andremellow/laravel-tasks.git"

@@ -1,0 +1,365 @@
+{
+  "verdict": "BLOCKED",
+  "runId": "20261020-account-owned-invitations",
+  "scopeId": "account-owned-invitations-v1",
+  "checkpoint": "account-owned-invitations-v1-remediation2-9a02b0261bbf387d",
+  "reviewMode": "independent",
+  "contextMode": "fresh",
+  "round": 2,
+  "completedCoverage": [
+    "QA-01",
+    "QA-02",
+    "QA-03",
+    "QA-04",
+    "QA-05",
+    "QA-06",
+    "QA-07",
+    "QA-08",
+    "QA-09",
+    "QA-10",
+    "QA-12",
+    "QA-13",
+    "QA-14",
+    "QA-15",
+    "QA-16",
+    "QA-17",
+    "QA-18",
+    "QA-19",
+    "QA-20",
+    "QA-21",
+    "QA-22",
+    "QA-23"
+  ],
+  "findings": [
+    {
+      "id": "QA-F01",
+      "severity": "high",
+      "classification": "in-contract",
+      "blocking": true,
+      "detectedBy": "QA",
+      "failureStage": "implementation",
+      "basis": [
+        "AC-02",
+        "AC-05",
+        "SC-15",
+        "SC-23"
+      ],
+      "title": "Authorized product-only administrator cannot synchronize",
+      "setup": "Real platform invite, synthetic provider acceptance and real AuthKit callback created active Compliance administrator User12/user_qa_generated_2, reciprocal company mapping; Account login User count remained0.",
+      "action": "Administrator pressed Compliance invitation sync; actual queues and stored signed intent were exercised.",
+      "expected": "Current authorized source administrator can perform Account-owned synchronization.",
+      "observed": "Run4 processed9/9 failures provider_verification_failed; exact signed Account request returned403. Existing manager passed authority with409 generation conflict and subsequently synchronized same accepted person. Nonadmin source grant also succeeded with an existing Account login identity.",
+      "requiredOutcome": "Authorize the approved source-bound actor without requiring an incidental Account login record.",
+      "evidence": [
+        "qa-accepted-actor-compliance.json",
+        "qa-accepted-sync-compliance.json",
+        "qa-product-proof-result.json",
+        "qa-manager-proof-result.json",
+        "qa-actor-account.json",
+        "qa-actor-compliance.json",
+        "qa-manager-accepted-sync-compliance.json",
+        "qa-grant-positive-compliance.json"
+      ]
+    },
+    {
+      "id": "QA-F02",
+      "severity": "high",
+      "classification": "in-contract",
+      "blocking": true,
+      "detectedBy": "QA",
+      "failureStage": "implementation",
+      "basis": [
+        "AC-02",
+        "SC-09",
+        "FR-009",
+        "FR-010"
+      ],
+      "title": "Exact imported-person mapping cannot bootstrap invitation reconciliation",
+      "setup": "Four imported provider users have real synthetic invitation IDs/gen0; existing Compliance users7\u201310 have matching WorkOS IDs and no invitation metadata.",
+      "action": "Real Compliance mapping/sync controls and actual queues mapped existing people, then reconciled.",
+      "expected": "Exact mapping preserves local people and allows synchronization to proceed.",
+      "observed": "All four reciprocal mappings confirmed with no duplicates or role changes, but reconcile intents froze invitation_id=null/gen0 while Account held nonnull/gen0. Account409, batch partial3/7, four failures. Account-origin delivery also reported mapping-required despite exact links. Initialized-person lifecycle/retry positive controls succeeded.",
+      "requiredOutcome": "Allow approved exact adoption to initialize the invitation baseline safely and converge without replacing people or immutable intents.",
+      "evidence": [
+        "qa-mapped-account.json",
+        "qa-mapped-compliance.json",
+        "qa-manager-proof-result.json",
+        "qa-fault503-account.json"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "QA-01",
+      "status": "PASS",
+      "observed": "Preview one and all companies with product HTTP forbidden: no writes or product requests.",
+      "evidence": [
+        "qa-import-isolated.json",
+        "qa-import-first.json"
+      ]
+    },
+    {
+      "id": "QA-02",
+      "status": "PASS",
+      "observed": "Paged import retained pending/accepted/expired/revoked identities, including accepted IDs independently of state; repeat created no duplicates. Imported association remained unverified.",
+      "evidence": [
+        "qa-import-runtime.json",
+        "qa-mapped-account.json"
+      ]
+    },
+    {
+      "id": "QA-03",
+      "status": "PASS",
+      "observed": "Exact active membership controlled access; pending/inactive did not activate; explicit denial version7 remained unchanged.",
+      "evidence": [
+        "qa-denial-preservation.json"
+      ]
+    },
+    {
+      "id": "QA-04",
+      "status": "PASS",
+      "observed": "Holding administrator succeeded; unknown company, ordinary actor, malformed and foreign identity safely rejected without writes.",
+      "evidence": [
+        "qa-import-first.json",
+        "qa-import-empty-conflict.json"
+      ]
+    },
+    {
+      "id": "QA-05",
+      "status": "PASS",
+      "observed": "Legacy confirmed/unknown immutable payloads and outcomes survived import; injected private write failure then fresh process restart completed without replay or duplicates.",
+      "evidence": [
+        "qa-legacy-import.json",
+        "qa-legacy-restarted-account.json"
+      ]
+    },
+    {
+      "id": "QA-06",
+      "status": "PASS",
+      "observed": "Empty import returned zero; actual CLI with synthetic 401/429/timeout/malformed later page/repeated cursor failed without guessed or partial identity writes.",
+      "evidence": [
+        "qa-import-failures.json",
+        "qa-import-empty-conflict.json"
+      ]
+    },
+    {
+      "id": "QA-07",
+      "status": "PASS",
+      "observed": "Compliance manager used rendered sync control and actual workers; linked pending\u2192accepted projected into existing person without access or training change.",
+      "evidence": [
+        "qa-manager-accepted-sync-compliance.json"
+      ]
+    },
+    {
+      "id": "QA-08",
+      "status": "PASS",
+      "observed": "Account rendered sync control and workers projected expired with accepted history into existing Compliance person, retaining operational access.",
+      "evidence": [
+        "qa-expired-sync-account.json",
+        "qa-expired-sync-compliance.json"
+      ]
+    },
+    {
+      "id": "QA-09",
+      "status": "FAIL",
+      "observed": "Four exact provider-ID mappings succeeded without duplicate people or role changes; subsequent reconciliation froze null invitation/gen0 and received409 against imported nonnull invitation/gen0. Sync could not proceed (QA-F02).",
+      "evidence": [
+        "qa-mapped-account.json",
+        "qa-mapped-compliance.json",
+        "qa-manager-proof-result.json"
+      ]
+    },
+    {
+      "id": "QA-10",
+      "status": "PASS",
+      "observed": "Invitation-only person mapped by exact invitation/org, then expired and revoked projected without fabricated WorkOS user or activation.",
+      "evidence": [
+        "qa-only-expired-compliance.json",
+        "qa-only-revoked-compliance.json"
+      ]
+    },
+    {
+      "id": "QA-11",
+      "status": "BLOCKED",
+      "observed": "Supported factory preparation of duplicate provider ID and same-email/different-ID legacy rows was rejected by PostgreSQL23505; transactions rolled back. Did not bypass constraints. Wrong-company/altered mapping requests409 were observed elsewhere; full prior-mapping and missing-binding variants were not independently completed.",
+      "evidence": [
+        "qa-mapping-conflict-identities.json",
+        "qa-integrity-controls.json",
+        "qa-replay-all-kinds.json"
+      ]
+    },
+    {
+      "id": "QA-12",
+      "status": "PASS",
+      "observed": "Known no-invitation people rendered honest results from both origins, with zero discovery/send; provider failure retained failure rather than empty success.",
+      "evidence": [
+        "qa-start-account.json",
+        "qa-manager-accepted-sync-compliance.json"
+      ]
+    },
+    {
+      "id": "QA-13",
+      "status": "PASS",
+      "observed": "Fresh UTC case retained all lifecycle states and accepted identity, older accepted history did not regress, newer history advanced; active/inactive provider membership did not change local access.",
+      "evidence": [
+        "qa-normal-send-compliance.json",
+        "qa-utc-accepted-compliance.json",
+        "qa-utc-expired-compliance.json",
+        "qa-utc-revoked-compliance.json"
+      ]
+    },
+    {
+      "id": "QA-14",
+      "status": "PASS",
+      "observed": "Real Compliance verify/send and linked resend controls executed via Account queues, including auto-mapping unlinked existing person; no direct operational provider call from Compliance.",
+      "evidence": [
+        "qa-unlinked-send-compliance.json",
+        "qa-linked-resend-compliance.json"
+      ]
+    },
+    {
+      "id": "QA-15",
+      "status": "FAIL",
+      "observed": "View-only/direct-route/foreign tenant denials, prerequisite denial and queue revocation passed; temporary nonadmin atomic grant succeeded. Active authorized product-only administrator failed source authorization because Account login user was absent (QA-F01). Original grant restored.",
+      "evidence": [
+        "qa-revocation-compliance.json",
+        "qa-grant-positive-compliance.json",
+        "qa-actor-compliance.json",
+        "qa-actor-account.json"
+      ]
+    },
+    {
+      "id": "QA-16",
+      "status": "PASS",
+      "observed": "Actual HTTP503/401/old-release404/malformed receipt kept provider observation separate from failed delivery. Initialized person manual retries converged with same intents; imported uninitialized cases remain affected by QA-F02.",
+      "evidence": [
+        "qa-fault503-account.json",
+        "qa-http401-account.json",
+        "qa-http404-account.json",
+        "qa-malformed-account.json"
+      ]
+    },
+    {
+      "id": "QA-17",
+      "status": "PASS",
+      "observed": "Receiver-commit/body-loss recovered stored receipt for status and mapping. Same send/map/status intent replay200; altered payload409. Synthetic provider committed invitation then failed connection; retry preserved dispatched unknown marker and did not resend. HTTP body loss is not claimed as TCP failure.",
+      "evidence": [
+        "qa-bodyloss-account.json",
+        "qa-receipt-results.json",
+        "qa-map-loss-final-account.json",
+        "qa-replay-all-kinds.json",
+        "qa-ambiguous-retried-account.json"
+      ]
+    },
+    {
+      "id": "QA-18",
+      "status": "PASS",
+      "observed": "Persistent503 exhausted at7 attempts and no next retry; person and Communication retry controls resumed same intent. Killed only spawned worker after persisted lease, advanced private clock past lease, recovery completed same intent and cleared claim.",
+      "evidence": [
+        "qa-exhausted-account.json",
+        "qa-retry-runtime.json",
+        "qa-crash-evidence.json",
+        "qa-crash-recovered-account.json"
+      ]
+    },
+    {
+      "id": "QA-19",
+      "status": "PASS",
+      "observed": "Two barrier-synchronized actual Livewire HTTP requests returned same result and one intent. Operational send created generation2; older waiting generation1 delivery became superseded and could not overwrite. Outbound worker observations recorded transaction level0. Import replacement was not treated as generation advancement.",
+      "evidence": [
+        "qa-concurrent-results.json",
+        "qa-order-new-send-compliance.json",
+        "qa-order-old-retried-compliance.json",
+        "qa-network-transactions.json"
+      ]
+    },
+    {
+      "id": "QA-20",
+      "status": "PASS",
+      "observed": "Actual Account product enable established new company binding with original system credential empty UUIDlist; disable/re-enable succeeded when compatibility list excluded company, without credential change; list restored.",
+      "evidence": [
+        "qa-provision-binding.json",
+        "qa-provision-legacy-list-binding.json"
+      ]
+    },
+    {
+      "id": "QA-21",
+      "status": "PASS",
+      "observed": "Actual HTTP boundaries rejected missing/revoked/expired/inactive/wrong environment/product principals and altered actor/company/hash. Valid receipts and immutable intent replays were positive controls.",
+      "evidence": [
+        "qa-security-boundaries.json",
+        "qa-integrity-controls.json",
+        "qa-replay-all-kinds.json"
+      ]
+    },
+    {
+      "id": "QA-22",
+      "status": "PASS",
+      "observed": "Actual legacy queue jobs quarantined without provider mutation; old-release404 and disabled cutover prevented fallback, retained evidence and errors; runtime readiness flags restored.",
+      "evidence": [
+        "qa-legacy-jobs.json",
+        "qa-legacy-jobs-compliance.json",
+        "qa-cutover-off-compliance.json",
+        "qa-cutover-restored-account.json"
+      ]
+    },
+    {
+      "id": "QA-23",
+      "status": "FAIL",
+      "observed": "Real AuthKit redirect/state/callback positive controls, normal registration and separate send, platform grant/invite and stale revoked-platform form403 executed. Wide/narrow changed controls interacted with; source-only administrator created through these flows could not sync (QA-F01). Normal browser console empty and exact fixture token log scan negative.",
+      "evidence": [
+        "qa-authkit-results.json",
+        "qa-platform-account.json",
+        "qa-platform-compliance.json",
+        "qa-log-secret-scan.json",
+        "qa-product-proof-result.json"
+      ]
+    }
+  ],
+  "protectedEvidence": {
+    "baseline": {
+      "courses": {
+        "count": 1,
+        "sha256": "381fa92ac321a189d75104c87cdd29a65296bd5fbbef2c61e918f642c6292b20"
+      },
+      "course_versions": {
+        "count": 1,
+        "sha256": "92af44260810da378aae689a7965a106e2eb791dca638d6058b76fa8defd24f5"
+      },
+      "user_training_assignments": {
+        "count": 1,
+        "sha256": "70f8d6636aa788827fcbe56a0ce2c49f7bee578cc630c2b550f292a348625cf9"
+      },
+      "certificates": {
+        "count": 1,
+        "sha256": "be016b4632ffc6fd1faa5e6da3f2889352d9ab07196803246a609eb6724910ca"
+      },
+      "compliance_events": {
+        "count": 1,
+        "sha256": "a425af82131253ec975a7ffcc6b8fffac8b70e83485866771c1e1c7c6458eff0"
+      }
+    },
+    "current": {
+      "courses": {
+        "count": 1,
+        "sha256": "381fa92ac321a189d75104c87cdd29a65296bd5fbbef2c61e918f642c6292b20"
+      },
+      "course_versions": {
+        "count": 1,
+        "sha256": "92af44260810da378aae689a7965a106e2eb791dca638d6058b76fa8defd24f5"
+      },
+      "user_training_assignments": {
+        "count": 1,
+        "sha256": "70f8d6636aa788827fcbe56a0ce2c49f7bee578cc630c2b550f292a348625cf9"
+      },
+      "certificates": {
+        "count": 1,
+        "sha256": "be016b4632ffc6fd1faa5e6da3f2889352d9ab07196803246a609eb6724910ca"
+      },
+      "compliance_events": {
+        "count": 1,
+        "sha256": "a425af82131253ec975a7ffcc6b8fffac8b70e83485866771c1e1c7c6458eff0"
+      }
+    }
+  }
+}

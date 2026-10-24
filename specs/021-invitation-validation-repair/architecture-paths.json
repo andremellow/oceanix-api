@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "scopeId": "invitation-validation-repair-v1",
+  "status": "proposed-for-owner-approval",
+  "notes": [
+    "Exact bounded candidate source/test mutation inventory, all within prior approved inventory. No permission to implement until hash-bound approval and readiness.",
+    "No .env, Account config/services.php, verifier, policy, migrations or provider mutations.",
+    "Unlisted source dependencies may be read only; no unrelated file refactors."
+  ],
+  "repositories": [
+    {
+      "id": "account",
+      "repository": "/Users/andrepiresdemello/Code/Oceanix/Account",
+      "existing": [
+        "app/Services/Integration/ProductActorAuthorization.php",
+        "app/Actions/CompanyUsers/MapExistingProductPerson.php",
+        "app/Services/CompanyUsers/CompanyUserDirectory.php",
+        "resources/views/components/company-users/\u26a1index.blade.php",
+        "resources/views/components/company-users/\u26a1show.blade.php",
+        "lang/pt_BR.json",
+        "tests/Feature/Integration/RegistrationActorAuthorizationTest.php",
+        "tests/Feature/CompanyUsers/ExistingPersonMappingTest.php",
+        "tests/Feature/CompanyInvitationSyncAuthorizationTest.php",
+        "tests/Feature/CompanyInvitationSyncTest.php",
+        "tests/Browser/CompanyInvitationSyncTest.php",
+        "tests/Feature/Integration/SystemPrincipalTest.php",
+        "tests/Feature/CompanyUsers/RegistrationTest.php",
+        "tests/Feature/CompanyUsers/RegistrationMappingTest.php",
+        "tests/Feature/CompanyUsers/AdoptionTest.php",
+        "tests/Feature/CompanyUsers/InvitationTest.php",
+        "tests/Feature/CompanyUsers/InvitationObservationDeliveryTest.php",
+        "tests/Feature/CompanyUsers/InvitationConcurrencyTest.php",
+        "tests/Feature/CompanyUsers/LegacyInvitationCutoverTest.php",
+        "tests/Feature/CompanyUsers/OperationRecoveryTest.php",
+        "tests/Feature/CompanyUsers/PrReviewRecoveryTest.php",
+        "tests/Support/ProductIntegrationFixture.php",
+        "tests/Support/AccountOwnedInvitationFixture.php"
+      ],
+      "new": []
+    },
+    {
+      "id": "compliance",
+      "repository": "/Users/andrepiresdemello/Code/oceanix-api",
+      "existing": [
+        "app/Actions/People/AdoptPeopleIntoAccount.php",
+        "app/Actions/People/ReconcileWorkosInvitations.php",
+        "app/Actions/ControlPlane/MapExistingAccountPerson.php",
+        "app/Actions/ControlPlane/ApplyInvitationObservation.php",
+        "tests/Feature/ControlPlane/ExistingAccountPersonMappingTest.php",
+        "tests/Feature/ControlPlane/InvitationObservationTest.php",
+        "tests/Feature/People/AccountAdoptionTest.php",
+        "tests/Feature/People/AccountOwnedInvitationCutoverTest.php",
+        "tests/Feature/People/PeopleInvitationProjectionTest.php",
+        "tests/Browser/PeopleAccountAccessTest.php",
+        "tests/Feature/People/WorkosInvitationSyncTest.php"
+      ],
+      "new": []
+    }
+  ],
+  "verificationToolAmendment": {
+    "id": "gate-amendment-02",
+    "approvedBy": "product-owner",
+    "repository": "account",
+    "existing": [
+      ".toscanini/bin/toscanini-gate.py"
+    ],
+    "new": [
+      ".toscanini/tests/test_gate_directed_order.py"
+    ],
+    "applicationInventoryUnchanged": true
+  }
+}

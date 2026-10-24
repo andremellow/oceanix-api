@@ -16,15 +16,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Collection;
 use Laravel\Sanctum\HasApiTokens;
+use Oceanix\Platform\Access\EffectivePermissions;
+use Oceanix\Platform\Contracts\Person;
 
 #[Fillable([
     'account_id', 'name', 'email', 'email_verified_at', 'password', 'avatar_url', 'provider', 'provider_id',
     'workos_user_id', 'workos_invitation_id', 'invitation_sent_at', 'employee_id', 'status', 'hired_at', 'terminated_at',
 ])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable
+class User extends Authenticatable implements Person
 {
     /** @use HasFactory<UserFactory> */
     use BelongsToCompany, HasApiTokens, HasFactory, Notifiable;
@@ -144,37 +145,19 @@ class User extends Authenticatable
      */
     public function canAccessControlCenter(): bool
     {
-        return $this->isAdmin() || $this->roles()
-            ->whereNull('archived_at')
-            ->whereHas('permissions')
-            ->exists();
+        return app(EffectivePermissions::class)->canOperate($this);
     }
 
     /** Resolves the union of the user's active access profiles. Used behind Gates only. */
     public function hasPermission(string|Permission $permission): bool
     {
-        $key = $permission instanceof Permission ? $permission->value : $permission;
-
-        return $this->roles()
-            ->whereNull('archived_at')
-            ->whereHas('permissions', fn (Builder $query) => $query->where('key', $key))
-            ->exists();
+        return app(EffectivePermissions::class)->has($this, $permission);
     }
 
     /** @return list<string> */
     public function effectivePermissionKeys(): array
     {
-        if ($this->isAdmin()) {
-            return Permission::values();
-        }
-
-        return $this->roles()->whereNull('archived_at')->with('permissions:id,key')->get()
-            ->flatMap(fn (Role $role): Collection => $role->permissions)
-            ->pluck('key')
-            ->unique()
-            ->sort()
-            ->values()
-            ->all();
+        return app(EffectivePermissions::class)->keys($this);
     }
 
     public function initial(): string

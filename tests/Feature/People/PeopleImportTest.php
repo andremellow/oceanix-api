@@ -1,14 +1,22 @@
 <?php
 
+beforeEach(fn () => config(['services.account.invitation_ownership_enabled' => true]));
+
+use App\Actions\ControlPlane\ApplyProductOperation;
 use App\Actions\People\ImportPeople;
+use App\Actions\People\RegisterPerson;
 use App\Enums\Permission;
+use App\Models\AccountCompanyBinding;
+use App\Models\AccountRequestOperation;
 use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\JobFunction;
 use App\Models\User;
 use App\Services\People\PeopleImportPreview;
 use App\Services\People\PeopleSpreadsheetParser;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Ramsey\Uuid\Uuid;
 
 function positionalPeopleWorkbook(array $rows): string
 {
@@ -88,7 +96,26 @@ it('matches organization values after safe normalization and leaves new values r
 it('imports new people, reuses existing accounts, creates mappings, and preserves blank links', function (): void {
     seedAccessCatalog();
     $operator = userWithPermissions([Permission::PeopleImport]);
-    $existing = User::factory()->create(['email' => 'existing@example.com']);
+    $operator->forceFill(['workos_user_id' => 'user_import_operator'])->save();
+    $company = currentCompany();
+    $company->update(['workos_organization_id' => 'org_import']);
+    AccountCompanyBinding::create(['account_company_uuid' => (string) Str::uuid(), 'compliance_company_id' => $company->id, 'workos_organization_id' => $company->workos_organization_id]);
+    Http::preventStrayRequests();
+    config(['services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic-token', 'services.account.actor_assertion_secret' => 'synthetic-actor-proof']);
+    Http::fake(['account.example.test/*' => function ($request) {
+        $input = $request->data();
+        $state = ['shared_person_id' => Uuid::uuid5(Uuid::NAMESPACE_URL, 'shared:'.$input['operation_id'])->toString(), 'company_member_id' => Uuid::uuid5(Uuid::NAMESPACE_URL, 'member:'.$input['operation_id'])->toString()];
+        if ($input['kind'] === 'person.map-existing') {
+            $state += ['mapping_complete' => true, 'local_person_id' => (string) $input['payload']['local_person_id']];
+        } elseif (($input['payload']['registration_mode'] ?? null) === 'confirmed-first-mapping') {
+            $state = $input['payload'] + ['mapping_complete' => true];
+        } elseif ($input['kind'] === 'person.register') {
+            $state += ['workos_user_id' => 'user_import_new', 'workos_membership_id' => 'om_import_new', 'membership_status' => 'pending', 'registration_mode' => 'confirmed-first', 'registration_source' => 'import', 'actor_workos_user_id' => $input['actor_workos_user_id'], 'request_payload_hash' => ApplyProductOperation::hash($input), 'mapping_complete' => false];
+        }
+
+        return Http::response(array_intersect_key($input, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence', 'actor_workos_user_id'])) + ['outcome' => 'confirmed', 'confirmed_state' => $state]);
+    }]);
+    $existing = User::factory()->create(['email' => 'existing@example.com', 'workos_user_id' => 'user_import_existing']);
     $department = Department::factory()->create(['name' => 'Existing department']);
     $this->actingAs($operator);
 
@@ -138,3 +165,112 @@ it('revokes import access immediately and preserves the permission prerequisites
     $role->permissions()->detach();
     $this->actingAs($user->fresh())->get(route('people.import'))->assertForbidden();
 });
+
+it('retains mixed uncertain import rows and reuses pending registration and adoption receipts without duplicate people or email', function (bool $createMappings) {
+    seedAccessCatalog();
+    Http::preventStrayRequests();
+    config(['services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic-token', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
+    $actor = userWithPermissions([Permission::PeopleImport]);
+    $actor->forceFill(['workos_user_id' => 'user_mixed_import'])->save();
+    $company = currentCompany();
+    $company->update(['workos_organization_id' => 'org_mixed_import']);
+    $binding = AccountCompanyBinding::create(['account_company_uuid' => (string) Str::uuid(), 'compliance_company_id' => $company->id, 'workos_organization_id' => $company->workos_organization_id]);
+    $existing = User::factory()->create(['email' => 'adopt-mixed@example.test', 'workos_user_id' => 'user_mixed_existing']);
+    $department = $createMappings ? null : Department::factory()->create(['name' => 'Mapped']);
+    $function = $createMappings ? null : JobFunction::factory()->create(['name' => 'Imported job']);
+    $recover = false;
+    $envelopes = [];
+    Http::fake(function ($request) use (&$recover, &$envelopes) {
+        $id = str_ends_with($request->url(), '/local-person') ? $request['operation_id'] : basename(parse_url($request->url(), PHP_URL_PATH));
+        if ($request->method() === 'PUT' && ! str_ends_with($request->url(), '/local-person')) {
+            $envelopes[$id] = $request->data();
+        }
+        $input = str_ends_with($request->url(), '/local-person') ? $request->data() : $envelopes[$id];
+        if (! $recover && ! str_ends_with($request->url(), '/local-person') && ($input['payload']['email'] ?? '') !== 'confirmed-mixed@example.test') {
+            return Http::failedConnection();
+        }
+        if (($input['payload']['registration_mode'] ?? null) === 'confirmed-first-mapping') {
+            return Http::response(array_intersect_key($input, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence', 'actor_workos_user_id'])) + ['outcome' => 'confirmed', 'confirmed_state' => $input['payload'] + ['mapping_complete' => true]]);
+        }
+        $personId = $input['payload']['local_person_id'] ?? $input['operation_id'];
+        $shared = Uuid::uuid5(Uuid::NAMESPACE_URL, 'shared:'.$personId)->toString();
+        $member = Uuid::uuid5(Uuid::NAMESPACE_URL, 'member:'.$personId)->toString();
+        $state = ['shared_person_id' => $shared, 'company_member_id' => $member];
+        if ($input['kind'] === 'person.map-existing') {
+            $state += ['mapping_complete' => true, 'local_person_id' => (string) $input['payload']['local_person_id']];
+        }
+        if ($input['kind'] === 'person.register') {
+            $state += ['workos_user_id' => 'user_'.str_replace('-', '', $input['operation_id']), 'workos_membership_id' => 'om_'.str_replace('-', '', $input['operation_id']), 'membership_status' => 'pending', 'registration_mode' => 'confirmed-first', 'registration_source' => 'import', 'actor_workos_user_id' => $input['actor_workos_user_id'], 'request_payload_hash' => ApplyProductOperation::hash($input), 'mapping_complete' => false];
+        }
+
+        return Http::response(array_intersect_key($input, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence'])) + ['outcome' => 'confirmed', 'confirmed_state' => $state]);
+    });
+    $pending = app(RegisterPerson::class)->handle($actor, (string) Str::uuid(), 'Pending mixed', 'pending-mixed@example.test', import: true);
+    expect($pending->state)->toBe('unknown');
+    $rows = [
+        ['row' => 2, 'name' => 'Confirmed mixed', 'email' => 'confirmed-mixed@example.test', 'job_function' => 'Imported job', 'department' => 'Mapped'],
+        ['row' => 3, 'name' => 'Pending mixed', 'email' => 'pending-mixed@example.test', 'job_function' => 'Imported job', 'department' => 'Mapped'],
+        ['row' => 4, 'name' => 'Adopt mixed', 'email' => $existing->email, 'job_function' => 'Imported job', 'department' => 'Mapped'],
+    ];
+    $view = Livewire\Livewire::actingAs($actor)->test('organization.import-people')->set('rows', $rows)->set('departmentTerms', [['value' => 'Mapped', 'selected' => $createMappings ? 'create' : (string) $department->id, 'count' => 3, 'matched' => ! $createMappings]])->set('jobFunctionTerms', [['value' => 'Imported job', 'selected' => $createMappings ? 'create' : (string) $function->id, 'count' => 3, 'matched' => ! $createMappings]])->call('import')
+        ->assertSet('result.pending', 2)->assertSet('result.created', 1)->assertSet('rows', $rows)->assertSee('Some registrations need confirmation')->assertSee('Row 2: Confirmed')->assertSee('Row 3: Pending confirmation')->assertSee('Row 4: Pending confirmation')->assertDontSee('Import completed')->assertSee('Retry the import');
+    $department ??= Department::where('name', 'Mapped')->sole();
+    $function ??= JobFunction::where('name', 'Imported job')->sole();
+    $view->assertSet('departmentTerms.0.selected', (string) $department->id)
+        ->assertSet('jobFunctionTerms.0.selected', (string) $function->id);
+    expect(User::where('email', 'confirmed-mixed@example.test')->sole()->departments()->whereKey($department->id)->exists())->toBeTrue()
+        ->and(User::where('email', 'pending-mixed@example.test')->count())->toBe(0)->and($existing->departments()->count())->toBe(0);
+    $identities = AccountRequestOperation::orderBy('id')->pluck('payload_hash', 'id')->all();
+    expect($identities)->toHaveCount(4)->and(AccountRequestOperation::find($pending->id)->state)->toBe('unknown');
+    $recover = true;
+    $view->call('import')->assertSet('result.pending', 0)->assertSet('rows', [])->assertSee('Import completed');
+    expect(AccountRequestOperation::orderBy('id')->pluck('payload_hash', 'id')->all())->toBe($identities)
+        ->and(AccountRequestOperation::where('state', 'confirmed')->count())->toBe(4)
+        ->and(User::whereIn('email', array_column($rows, 'email'))->count())->toBe(3)
+        ->and(User::where('email', 'pending-mixed@example.test')->sole()->departments()->whereKey($department->id)->exists())->toBeTrue()->and($existing->fresh()->departments()->whereKey($department->id)->exists())->toBeTrue();
+    expect(Department::where('name', 'Mapped')->count())->toBe(1)
+        ->and(JobFunction::where('name', 'Imported job')->count())->toBe(1);
+    foreach (User::whereIn('email', array_column($rows, 'email'))->get() as $person) {
+        expect($person->departments()->pluck('departments.id')->all())->toBe([$department->id])
+            ->and($person->jobFunctions()->pluck('job_functions.id')->all())->toBe([$function->id]);
+    }
+    $puts = collect(Http::recorded())->filter(fn ($pair) => $pair[0]->method() === 'PUT');
+    expect($puts->map(fn ($pair) => $pair[0]['operation_id'])->all())->toHaveCount(5);
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.workos.com') || str_contains($request->url(), '/invitations'));
+})->with([false, true]);
+
+it('never decorates an unresolved registration owned by another caller or source', function ($source, $otherActor, $mappingFails) {
+    seedAccessCatalog();
+    Http::preventStrayRequests();
+    config(['services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
+    currentCompany()->update(['workos_organization_id' => 'org_import_ownership']);
+    AccountCompanyBinding::create(['account_company_uuid' => (string) Str::uuid(), 'compliance_company_id' => currentCompany()->id, 'workos_organization_id' => 'org_import_ownership']);
+    $owner = userWithPermissions([Permission::PeopleManage, Permission::PeopleImport]);
+    $owner->update(['workos_user_id' => 'user_registration_owner']);
+    Http::fake(['account.example.test/*' => function ($request) use ($mappingFails) {
+        $input = $request->data();
+        if (str_ends_with($request->url(), '/local-person')) {
+            if ($mappingFails) {
+                return Http::failedConnection();
+            }
+            $state = $input['payload'] + ['mapping_complete' => true];
+        } else {
+            $state = ['shared_person_id' => '11111111-1111-4111-8111-111111111111', 'company_member_id' => '22222222-2222-4222-8222-222222222222', 'workos_user_id' => 'user_import_owned', 'workos_membership_id' => 'om_import_owned', 'membership_status' => 'pending', 'registration_mode' => 'confirmed-first', 'registration_source' => $input['payload']['registration_source'], 'actor_workos_user_id' => $input['actor_workos_user_id'], 'request_payload_hash' => ApplyProductOperation::hash($input), 'mapping_complete' => false];
+        }
+
+        return Http::response(array_intersect_key($input, array_flip(['protocol_version', 'operation_id', 'kind', 'product', 'account_company_uuid', 'workos_organization_id', 'subject_id', 'resource_sequence', 'actor_workos_user_id'])) + ['outcome' => 'confirmed', 'confirmed_state' => $state]);
+    }]);
+    $operation = app(RegisterPerson::class)->handle($owner, (string) Str::uuid(), 'Owned registration', 'owned@example.test', import: $source === 'import');
+    $person = User::findOrFail($operation->user_id);
+    $before = $operation->fresh()->getRawOriginal();
+    $importer = $otherActor ? userWithPermissions([Permission::PeopleImport]) : $owner;
+    $this->actingAs($importer);
+    $department = Department::factory()->create();
+    $job = JobFunction::factory()->create();
+    $result = app(ImportPeople::class)->handle([['row' => 2, 'name' => 'Must not rename', 'email' => $person->email, 'department' => 'Department', 'job_function' => 'Job']], ['Job' => (string) $job->id], ['Department' => (string) $department->id]);
+    expect($result['pending'])->toBe($mappingFails ? 1 : 0)->and($result['existing'])->toBe($mappingFails ? 0 : 1)->and($result['created'])->toBe(0);
+    expect($result['rows'][0]['outcome'])->toBe($mappingFails ? 'mapping_pending' : 'confirmed');
+    expect($person->roles()->where('key', 'employee')->exists())->toBe(! $mappingFails)->and($person->departments()->exists())->toBe(! $mappingFails)->and($person->jobFunctions()->exists())->toBe(! $mappingFails);
+    expect($operation->fresh()->getRawOriginal())->toBe($before);
+    Http::assertSentCount(2);
+})->with(['other import actor' => ['import', true, true], 'same actor form source' => ['form', false, true], 'confirmed existing positive' => ['form', true, false]]);

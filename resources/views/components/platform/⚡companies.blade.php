@@ -1,74 +1,40 @@
 <?php
 
-use App\Actions\Platform\CreateCompany;
-use App\Actions\Platform\ProvisionCompanyInWorkos;
-use App\Models\Company;
-use App\Services\Platform\PlatformOverview;
 use App\Services\Platform\PlatformAccess;
+use App\Services\Platform\PlatformOverview;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
 new #[Layout('layouts::platform')] class extends Component
 {
-    public string $name = '';
-    public string $slug = '';
-
-    public function create(CreateCompany $action, PlatformAccess $access): void
-    {
-        $data = $this->validate(['name' => ['required', 'string', 'max:255'], 'slug' => ['nullable', 'alpha_dash', 'max:255', 'unique:companies,slug']]);
-        $action->handle($data['name'], $data['slug'] ?: null, $access->authorize());
-        $this->reset('name', 'slug');
-        session()->flash('status', __('Company created.'));
-    }
-
     public function with(PlatformOverview $overview, PlatformAccess $access): array
     {
         $access->authorize();
 
         return ['companies' => $overview->companies($access->authorize()->id)];
     }
-
-    public function provisionWorkos(int $companyId, ProvisionCompanyInWorkos $action): void
-    {
-        try {
-            $action->handle(Company::query()->findOrFail($companyId));
-            session()->flash('status', __('Company synchronized with WorkOS.'));
-        } catch (\RuntimeException $exception) {
-            $this->addError('workos', $exception->getMessage());
-        }
-    }
 };
 ?>
 
 <div class="space-y-7">
-    <x-page-hero :kicker="__('Platform administration')" :title="__('Companies')" :description="__('Create and inspect tenant workspaces.')" />
+    <x-page-hero :kicker="__('Platform administration')" :title="__('Companies')" :description="__('Create companies and enable Compliance in Account.')" />
     <x-status-message />
-    @error('workos') <flux:callout variant="danger" :heading="$message" /> @enderror
-    <div class="grid gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
-        <form wire:submit="create" class="form-panel space-y-4 rounded-[20px] border border-[#dde3e7] p-5">
-            <h2 class="font-bold">{{ __('New company') }}</h2>
-            <flux:input wire:model="name" :label="__('Name')" required />
-            <flux:input wire:model="slug" :label="__('URL code')" :description="__('Leave blank to generate it from the name.')" />
-            <flux:button type="submit" variant="primary">{{ __('Create company') }}</flux:button>
-        </form>
-        <section class="detail-card divide-y divide-[#e8edef]">
-            @foreach ($companies as $company)
-                <div class="flex flex-col gap-4 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
-                    <div><a href="{{ route('platform.companies.show', ['company' => $company]) }}" wire:navigate class="font-semibold text-[#262d33] hover:text-[#1c6b84]">{{ $company->name }}</a><p class="text-xs text-[#7d878d]">{{ $company->slug }} · {{ $company->public_id }}</p></div>
-                    <div class="flex items-center gap-3 sm:justify-end">
-                        <div class="text-right"><span class="status-pill {{ $company->status === 'active' ? 'status-pill--accent' : '' }}">{{ __($company->status) }}</span><p class="mt-1 text-xs text-[#7d878d]">{{ $company->people_count }} {{ __('people') }}</p></div>
-                        @if ($company->workos_organization_id)
-                            <div class="text-right"><span class="status-pill status-pill--accent">{{ __('WorkOS synchronized') }}</span><p class="mt-1 font-mono text-[10px] text-[#7d878d]">{{ $company->workos_organization_id }}</p></div>
-                            <flux:button wire:click="provisionWorkos({{ $company->id }})" wire:loading.attr="disabled" variant="ghost" size="sm">{{ __('Synchronize') }}</flux:button>
-                        @else
-                            <flux:button wire:click="provisionWorkos({{ $company->id }})" wire:loading.attr="disabled" variant="primary" size="sm">{{ __('Provision in WorkOS') }}</flux:button>
-                        @endif
-                        @if ($company->account_linked)
-                            <form method="POST" action="{{ route('platform.companies.enter', ['company' => $company]) }}">@csrf<flux:button type="submit" variant="ghost" size="sm">{{ __('Enter company') }}</flux:button></form>
-                        @endif
-                    </div>
+    <section class="detail-card divide-y divide-[#e8edef]">
+        @forelse ($companies as $company)
+            <div class="flex flex-col gap-4 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                <div class="min-w-0 break-words"><a href="{{ route('platform.companies.show', ['company' => $company]) }}" wire:navigate class="font-semibold text-[#262d33] hover:text-[#1c6b84]">{{ $company->name }}</a><p class="text-xs text-[#7d878d]">{{ $company->slug }} · {{ $company->public_id }}</p></div>
+                <div class="flex flex-wrap items-center gap-3 sm:justify-end">
+                    <div class="text-right"><span class="status-pill {{ $company->status === 'active' ? 'status-pill--accent' : '' }}">{{ __($company->status) }}</span><p class="mt-1 text-xs text-[#7d878d]">{{ $company->people_count }} {{ __('people') }}</p></div>
+                    @if ($company->workos_organization_id)
+                        <div class="text-right"><span class="status-pill status-pill--accent">{{ __('WorkOS synchronized') }}</span><p class="mt-1 font-mono text-[10px] text-[#7d878d]">{{ $company->workos_organization_id }}</p></div>
+                    @endif
+                    @if ($company->account_linked)
+                        <form method="POST" action="{{ route('platform.companies.enter', ['company' => $company]) }}">@csrf<flux:button type="submit" variant="ghost" size="sm">{{ __('Enter company') }}</flux:button></form>
+                    @endif
                 </div>
-            @endforeach
-        </section>
-    </div>
+            </div>
+        @empty
+            <x-empty-state icon="building-office-2" :title="__('No companies')" :description="__('Create companies and enable Compliance in Account.')" />
+        @endforelse
+    </section>
 </div>

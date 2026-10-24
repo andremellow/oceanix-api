@@ -128,3 +128,7 @@ Phase 1 (foundation) is in place: authentication, authorization, the complete da
 control center shell, compliance dashboards, the employee board, directories and certificate
 verification. The course editor, the lesson player and the materialization engine are the next
 phases — see §24 of the product spec.
+
+## Shared platform SDK
+
+The reusable backend, login and people/profile screens are provided by `oceanix/platform:^0.1.0` from the private Oceanix-SDK repository. The lockfile pins the published release; no sibling SDK directory is required. See the [production adoption guide](docs/sdk-production-adoption.md), the [extraction checkpoint](docs/handoffs/shared-platform-package-20261021/extraction-status.md), and the [SDK installation guide](https://github.com/andremellow/Oceanix-SDK/blob/main/README.md).

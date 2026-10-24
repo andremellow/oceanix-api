@@ -30,8 +30,9 @@ it('protects every shared course administration route with platform access', fun
         route('platform.shared-courses.editor', ['course' => $course]),
     ];
 
+    $tenantAdmin = adminUser();
     foreach ($routes as $route) {
-        $this->actingAs(adminUser())->get($route)->assertForbidden();
+        $this->actingAs($tenantAdmin)->get($route)->assertForbidden();
     }
 });
 
@@ -52,11 +53,12 @@ it('lets a platform administrator open the shared course directory and navigatio
 it('protects and exposes the shared module directory route', function (): void {
     $account = Account::factory()->platformAdmin()->create();
     Module::factory()->shared()->create(['status' => 'published', 'title' => 'Published raw status module']);
+    $tenantAdmin = adminUser();
 
     $this->get(route('platform.shared-modules.index'))
         ->assertRedirect(route('platform.login'));
 
-    $this->actingAs(adminUser())->get(route('platform.shared-modules.index'))->assertForbidden();
+    $this->actingAs($tenantAdmin)->get(route('platform.shared-modules.index'))->assertForbidden();
 
     $this->withSession(['platform_account_id' => $account->id])
         ->get(route('platform.shared-modules.index'))

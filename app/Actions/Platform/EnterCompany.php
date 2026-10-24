@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Platform\PlatformAccess;
+use App\Services\Tenancy\CompanyComplianceAccess;
 use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Auth;
 
@@ -21,6 +22,8 @@ class EnterCompany
     public function handle(Company $company): User
     {
         $account = $this->access->authorize();
+        app(CompanyComplianceAccess::class)->assertEnabled($company);
+        abort_unless($company->fresh()->status === 'active', 403);
         $person = User::withoutGlobalScope('company')
             ->where('company_id', $company->id)
             ->where('account_id', $account->id)

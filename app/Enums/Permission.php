@@ -2,6 +2,8 @@
 
 namespace App\Enums;
 
+use Oceanix\Platform\Access\PermissionCatalog;
+
 /**
  * Atomic permission catalog — one case per independently grantable backend action.
  *
@@ -269,25 +271,7 @@ enum Permission: string
      */
     public static function withPrerequisites(iterable $permissions): array
     {
-        $resolved = [];
-
-        $add = function (self $permission) use (&$resolved, &$add): void {
-            if (isset($resolved[$permission->value])) {
-                return;
-            }
-
-            $resolved[$permission->value] = true;
-
-            foreach ($permission->prerequisites() as $prerequisite) {
-                $add($prerequisite);
-            }
-        };
-
-        foreach ($permissions as $permission) {
-            $add($permission instanceof self ? $permission : self::from($permission));
-        }
-
-        return array_keys($resolved);
+        return app(PermissionCatalog::class)->expand($permissions);
     }
 
     /** @return list<string> */

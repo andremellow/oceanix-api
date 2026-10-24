@@ -35,7 +35,7 @@ it('upgrades an existing catalog additively and enables a real non-admin profile
     $version = CourseVersion::factory()->create();
     $url = route('courses.preview-link', ['course' => $version->course_id, 'version' => $version->id]);
     $this->actingAs($recipient)->postJson($url)->assertForbidden();
-    Livewire::actingAs(adminUser())->test('admin.access-profile', ['role' => $role])
+    Livewire::actingAs(adminUser())->test('oceanix-platform.profile', ['role' => $role])
         ->set('selected', [PermissionEnum::CoursesGeneratePreviewLink->value])->call('save')->assertHasNoErrors();
     expect($role->permissions()->pluck('key')->all())->toEqualCanonicalizing(PermissionEnum::withPrerequisites([PermissionEnum::CoursesGeneratePreviewLink]));
     expect($recipient->fresh()->roles()->where('key', 'admin')->exists())->toBeFalse();

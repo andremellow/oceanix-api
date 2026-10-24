@@ -1,0 +1,125 @@
+{
+  "checkpointId": "account-owned-invitations-v1-remediation1-cd88c0078bf46580",
+  "scopeId": "account-owned-invitations-v1",
+  "architectureSha256": "490eb8c361fc7cbdb60f3ae8d0b33843fb25c1c140a243df5e2a9f8294310ecb",
+  "phase": "remediation-checkpoint",
+  "round": 1,
+  "previousCheckpointId": "account-owned-invitations-v1-3734b6699a921fa4",
+  "repositories": [
+    {
+      "id": "account",
+      "repository": "/Users/andrepiresdemello/Code/Oceanix/Account",
+      "branch": "codex/account-owned-invitations",
+      "checkpointCommit": "33375e42da9f5c33b2761686229cbfcc90787559",
+      "remediationDiffBase": "90ef69866cfd37729d45db15986df86d305f4bd9",
+      "reviewDiffBase": "e9b128a3de1592a5b0a0cbaf3674c110c2ad7b51",
+      "changedPathCount": 13,
+      "changedPaths": [
+        "app/Actions/CompanyUsers/EnsureProductPersonMembership.php",
+        "app/Actions/CompanyUsers/QueueCompanyInvitationSync.php",
+        "app/Actions/CompanyUsers/ReconcileCompanyInvitation.php",
+        "app/Actions/Integration/AuthorizeAccountOperator.php",
+        "app/Data/ProductOperationEnvelope.php",
+        "app/Http/Resources/Integration/OperationResource.php",
+        "tests/Feature/CompanyUsers/ExistingPersonMappingTest.php",
+        "tests/Feature/CompanyUsers/InvitationConcurrencyTest.php",
+        "tests/Feature/CompanyUsers/InvitationObservationDeliveryTest.php",
+        "tests/Feature/CompanyUsers/LegacyInvitationCutoverTest.php",
+        "tests/Feature/Integration/SystemPrincipalTest.php",
+        "tests/Feature/WorkosPeopleImportTest.php",
+        "tests/Support/ProductIntegrationFixture.php"
+      ],
+      "remediationDiffSha256": "26e5229d39174b52c2b73218819dce4f59baa22743975dc4c81dfc3883075cd1"
+    },
+    {
+      "id": "compliance",
+      "repository": "/Users/andrepiresdemello/Code/oceanix-api",
+      "branch": "feature/lesson-pdf-links",
+      "checkpointCommit": "5ff9d2089115dee98f9d8c18ec0819289d207ca1",
+      "remediationDiffBase": "20e707ff5b8c2861829808ff88fca7701c516578",
+      "reviewDiffBase": "c46e45874b717c20d26d2674a079e1881699ea53",
+      "changedPathCount": 10,
+      "changedPaths": [
+        "app/Actions/People/ReconcileWorkosInvitations.php",
+        "app/Actions/People/SendWorkosInvitation.php",
+        "tests/Browser/PeopleAccountAccessTest.php",
+        "tests/Feature/ControlPlane/ExistingAccountPersonMappingTest.php",
+        "tests/Feature/ControlPlane/InvitationObservationTest.php",
+        "tests/Feature/ControlPlane/SystemPrincipalTest.php",
+        "tests/Feature/People/AccountInvitationTest.php",
+        "tests/Feature/People/AccountOwnedInvitationCutoverTest.php",
+        "tests/Feature/People/WorkosInvitationSyncTest.php",
+        "tests/Feature/Platform/AccountOwnedAdministratorTest.php"
+      ],
+      "remediationDiffSha256": "7bf174c250c654e98f327c7074e3a458397f7a7719bbc384f9b25e01fd4610eb"
+    }
+  ],
+  "canonical": {
+    "account": {
+      "exitCode": 0,
+      "featureUnit": {
+        "passed": 438,
+        "skipped": 7,
+        "assertions": 2940
+      },
+      "browser": {
+        "passed": 43,
+        "assertions": 658
+      },
+      "build": "pass",
+      "pint": "pass"
+    },
+    "compliance": {
+      "exitCode": 0,
+      "featureUnit": {
+        "passed": 1154,
+        "skipped": 18,
+        "assertions": 6936
+      },
+      "editorJs": 30,
+      "pdfBrowserJs": 4,
+      "browserGroups": [
+        [
+          79,
+          811
+        ],
+        [
+          40,
+          776
+        ],
+        [
+          2,
+          10
+        ],
+        [
+          4,
+          48
+        ],
+        [
+          12,
+          207
+        ]
+      ],
+      "previewJs": 25,
+      "build": "pass",
+      "pint": "pass"
+    }
+  },
+  "findingIds": [
+    "CR-01",
+    "CR-02",
+    "CR-03",
+    "CR-04",
+    "CR-05",
+    "TA-01",
+    "TA-02",
+    "TA-03",
+    "TA-04",
+    "TA-05",
+    "TA-06",
+    "TA-07",
+    "TA-08"
+  ],
+  "independentVerdicts": "pending directed verification",
+  "evidence": "specs/020-account-owned-invitations/reviews/remediation-01-evidence.md"
+}

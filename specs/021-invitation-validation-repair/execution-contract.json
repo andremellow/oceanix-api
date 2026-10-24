@@ -1,0 +1,358 @@
+{
+  "schemaVersion": 3,
+  "runId": "20261020-invitation-validation-repair",
+  "assurance": "critical",
+  "goal": "Repair the observed source-actor403, imported-person baseline409, invitation verification presentation and incomplete conflict/dynamic evidence without changing the approved Account-owned invitation/access model.",
+  "task": {
+    "size": "medium",
+    "decisionRisk": "low",
+    "estimatedBaselineMinutes": 70,
+    "specKitEnabled": true,
+    "decisionRiskAssessment": "Low unresolved product-decision risk: existing approved authority/current active membership, exact mapping, no access mutations, immutable ordering and no Account-login prerequisite remain unchanged. Additive receipt/initialization is a bounded implementation contract, not a new product rule. Engineering/security execution risk remains critical assurance. Pending owner architecture and QA-equivalence approvals are not inferred or waived; changed domain/security rules must reopen clarification."
+  },
+  "scope": {
+    "in": [
+      "Only remaining QA-F01/QA-F02, DSR01/02 and validation gaps QA11/DSR03 from the prior blocked run.",
+      "Reuse the existing approved product behavior; repair implementation and direct causal regressions only."
+    ],
+    "out": [
+      "Any .env or Account verifier/config/services.php edit.",
+      "Events/SDK/package extraction, production/provider mutations, deployment/merge, destructive data repair, unrelated dirty changes.",
+      "Silently waiving unsupported QA preconditions or manufacturing review approval."
+    ],
+    "changeBoundary": [
+      "app/Actions/People/AdoptPeopleIntoAccount.php",
+      "app/Actions/People/ReconcileWorkosInvitations.php",
+      "app/Actions/ControlPlane/MapExistingAccountPerson.php",
+      "app/Actions/ControlPlane/ApplyInvitationObservation.php",
+      "tests/Feature/ControlPlane/ExistingAccountPersonMappingTest.php",
+      "tests/Feature/ControlPlane/InvitationObservationTest.php",
+      "tests/Feature/People/AccountAdoptionTest.php",
+      "tests/Feature/People/AccountOwnedInvitationCutoverTest.php",
+      "tests/Feature/People/PeopleInvitationProjectionTest.php",
+      "tests/Browser/PeopleAccountAccessTest.php"
+    ]
+  },
+  "invariants": [
+    {
+      "id": "INV-01",
+      "statement": "Initial import never calls Compliance or mutates WorkOS; no fabricated remote confirmation."
+    },
+    {
+      "id": "INV-02",
+      "statement": "Compliance direct WorkOS boundary limited to AuthKit login; no operational fallback."
+    },
+    {
+      "id": "INV-03",
+      "statement": "Preserve existing users/access/roles/training/history and exact company/provider identity; no email-only merge."
+    },
+    {
+      "id": "INV-04",
+      "statement": "Status-only reconciliation never sends email, provisions arbitrary users or changes access."
+    },
+    {
+      "id": "INV-05",
+      "statement": "Durable bounded retries/idempotency/ordered observations and current actor/company checks survive cutover; no secret logging."
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-01",
+      "statement": "SC-01\u201306 local-only correct independent import and legacy recovery."
+    },
+    {
+      "id": "AC-02",
+      "statement": "SC-07\u201315 both origins update invitation observations through Account with exact mappings and no access changes."
+    },
+    {
+      "id": "AC-03",
+      "statement": "SC-16\u201319 visible, bounded, idempotent and ordered HTTP/queue recovery."
+    },
+    {
+      "id": "AC-04",
+      "statement": "SC-20\u201321 system-wide credentials retain actual tenant/actor protection."
+    },
+    {
+      "id": "AC-05",
+      "statement": "SC-22\u201323 safe cutover, existing AuthKit/register behavior and accessible status/retry UI."
+    }
+  ],
+  "validationScope": {
+    "scopeId": "invitation-validation-repair-v1",
+    "frozen": true,
+    "codeReviewPaths": [
+      "app/Actions/People/AdoptPeopleIntoAccount.php",
+      "app/Actions/People/ReconcileWorkosInvitations.php",
+      "app/Actions/ControlPlane/MapExistingAccountPerson.php",
+      "app/Actions/ControlPlane/ApplyInvitationObservation.php",
+      "tests/Feature/ControlPlane/ExistingAccountPersonMappingTest.php",
+      "tests/Feature/ControlPlane/InvitationObservationTest.php",
+      "tests/Feature/People/AccountAdoptionTest.php",
+      "tests/Feature/People/AccountOwnedInvitationCutoverTest.php",
+      "tests/Feature/People/PeopleInvitationProjectionTest.php",
+      "tests/Browser/PeopleAccountAccessTest.php"
+    ],
+    "repositoryCodeReviewPaths": {
+      "account": [
+        "app/Services/Integration/ProductActorAuthorization.php",
+        "app/Actions/CompanyUsers/MapExistingProductPerson.php",
+        "app/Services/CompanyUsers/CompanyUserDirectory.php",
+        "resources/views/components/company-users/\u26a1index.blade.php",
+        "resources/views/components/company-users/\u26a1show.blade.php",
+        "lang/pt_BR.json",
+        "tests/Feature/Integration/RegistrationActorAuthorizationTest.php",
+        "tests/Feature/CompanyUsers/ExistingPersonMappingTest.php",
+        "tests/Feature/CompanyInvitationSyncAuthorizationTest.php",
+        "tests/Feature/CompanyInvitationSyncTest.php",
+        "tests/Browser/CompanyInvitationSyncTest.php",
+        "tests/Feature/Integration/SystemPrincipalTest.php",
+        "tests/Feature/CompanyUsers/RegistrationTest.php",
+        "tests/Feature/CompanyUsers/RegistrationMappingTest.php",
+        "tests/Feature/CompanyUsers/AdoptionTest.php",
+        "tests/Feature/CompanyUsers/InvitationTest.php",
+        "tests/Feature/CompanyUsers/InvitationObservationDeliveryTest.php",
+        "tests/Feature/CompanyUsers/InvitationConcurrencyTest.php",
+        "tests/Feature/CompanyUsers/LegacyInvitationCutoverTest.php",
+        "tests/Feature/CompanyUsers/OperationRecoveryTest.php",
+        "tests/Feature/CompanyUsers/PrReviewRecoveryTest.php",
+        "tests/Support/ProductIntegrationFixture.php",
+        "tests/Support/AccountOwnedInvitationFixture.php"
+      ],
+      "compliance": [
+        "app/Actions/People/AdoptPeopleIntoAccount.php",
+        "app/Actions/People/ReconcileWorkosInvitations.php",
+        "app/Actions/ControlPlane/MapExistingAccountPerson.php",
+        "app/Actions/ControlPlane/ApplyInvitationObservation.php",
+        "tests/Feature/ControlPlane/ExistingAccountPersonMappingTest.php",
+        "tests/Feature/ControlPlane/InvitationObservationTest.php",
+        "tests/Feature/People/AccountAdoptionTest.php",
+        "tests/Feature/People/AccountOwnedInvitationCutoverTest.php",
+        "tests/Feature/People/PeopleInvitationProjectionTest.php",
+        "tests/Browser/PeopleAccountAccessTest.php"
+      ]
+    },
+    "regressionSurfaces": [
+      "Current source authority and exact company binding, immutable request/receipt identities, invitation baseline/order, bounded retry, existing invitation UI and protected access/history."
+    ],
+    "qaScenarios": [
+      {
+        "id": "QA-R01",
+        "description": "New pending platform administrator accepts via AuthKit and performs authorized Compliance synchronization and normal registration through the shared ordinary-product-actor guard without Account login; invalid/revoked/foreign current authority is denied.",
+        "acceptanceCriteria": [
+          "AC-02",
+          "AC-05"
+        ],
+        "invariants": [
+          "INV-05"
+        ]
+      },
+      {
+        "id": "QA-R02",
+        "description": "Imported exact provider identity with unknown Compliance invitation baseline maps and converges from both origins without duplicate people, access/role/history mutations or rewriting immutable input.",
+        "acceptanceCriteria": [
+          "AC-02",
+          "AC-03"
+        ],
+        "invariants": [
+          "INV-03",
+          "INV-05"
+        ]
+      },
+      {
+        "id": "QA-R03",
+        "description": "Known/newer invitation observations, generation changes, same-intent receipts, lost acknowledgement and bounded retry retain ordering and reject stale/conflicting replacement.",
+        "acceptanceCriteria": [
+          "AC-03"
+        ],
+        "invariants": [
+          "INV-05"
+        ]
+      },
+      {
+        "id": "QA-R04",
+        "description": "Actual conflict/missing-binding/prior-link boundaries reject identity reassignment; unsupported duplicate preconditions require explicit owner-approved equivalent proof, never constraint removal.",
+        "acceptanceCriteria": [
+          "AC-02"
+        ],
+        "invariants": [
+          "INV-03"
+        ]
+      },
+      {
+        "id": "QA-R05",
+        "description": "Account list/detail explain status-only/no-email before action and display retained last verification age/error; dynamic loading/partial/exhausted/retry and responsive/keyboard/hidden-control behavior follow existing design.",
+        "acceptanceCriteria": [
+          "AC-02",
+          "AC-03",
+          "AC-05"
+        ],
+        "invariants": [
+          "INV-04"
+        ]
+      },
+      {
+        "id": "QA-R06",
+        "description": "Shared ordinary-product-actor guard covers existing kinds consistently, including representative registration, mapping and reconcile: current principal/proof/actor/provider failure denies before effects; valid exact fresh active membership proceeds with its existing source ability. Proof failure makes no provider call, authorization never mutates access, and Compliance has no operational WorkOS fallback.",
+        "acceptanceCriteria": [
+          "AC-02",
+          "AC-04"
+        ],
+        "invariants": [
+          "INV-04",
+          "INV-05"
+        ]
+      }
+    ]
+  },
+  "implementationCheckpoint": {
+    "id": null,
+    "recordedAfterImplementation": false
+  },
+  "specification": {
+    "required": false,
+    "status": "not-required",
+    "artifact": null,
+    "clarifyStatus": "not-required",
+    "planStatus": "not-required",
+    "waiverReason": null,
+    "waivedBy": null,
+    "assessment": "Confirmed implementation repair against existing approved specs/020 behavior, not a new feature. No new product/domain/security rule required and no waiver inferred. Existing specification approvals remain authoritative. Minimal additive mapping receipt clarification is submitted in repair architecture for owner approval; any materially changed security/domain decision must reopen clarification.",
+    "references": [
+      "specs/020-account-owned-invitations/spec.md",
+      "specs/020-account-owned-invitations/clarification.md",
+      "specs/020-account-owned-invitations/architecture.md"
+    ]
+  },
+  "architecture": {
+    "required": true,
+    "status": "draft",
+    "artifact": "specs/021-invitation-validation-repair/architecture.md",
+    "sha256": "890bf44ce261d0747087f72f295acc071548da062480c6bdff06b3f1ca2889b5",
+    "ownerApproval": {
+      "approvedBy": null,
+      "decision": null,
+      "artifactSha256": null,
+      "scopeId": null
+    },
+    "frameworkAlignment": [
+      {
+        "repository": "account",
+        "framework": "Laravel",
+        "version": "13.26.1",
+        "additionalFrameworks": [
+          "Livewire 4.4.1"
+        ],
+        "referenceAssessment": "The other affected product supplies behavior/API and integration compatibility evidence; no internal architecture copied. Existing approved spec/architecture retained.",
+        "nativeDesign": "Existing thin Livewire, Actions, Eloquent, focused authorization/read projections and bounded HTTP clients; no new layers.",
+        "boost": "Not installed; no available Boost documentation tool; official versioned docs fallback consulted.",
+        "status": "aligned",
+        "materialConflicts": [],
+        "ownerDecisionReference": null,
+        "guidance": [
+          "AGENTS.md",
+          "docs/control-center-design-system.md",
+          ".toscanini/manifest.json",
+          "vendor/composer/installed.json",
+          "/Users/andrepiresdemello/Code/toscanini/templates/adapters/laravel.json",
+          "https://laravel.com/framework/docs/13.x/database",
+          "https://laravel.com/framework/docs/13.x/http-client",
+          "https://livewire.laravel.com/docs/4.x/actions"
+        ]
+      },
+      {
+        "repository": "compliance",
+        "framework": "Laravel",
+        "version": "13.26.1",
+        "additionalFrameworks": [
+          "Livewire 4.4.1"
+        ],
+        "referenceAssessment": "The other affected product supplies behavior/API and integration compatibility evidence; no internal architecture copied. Existing approved spec/architecture retained.",
+        "nativeDesign": "Existing thin Livewire, Actions, Eloquent, focused authorization/read projections and bounded HTTP clients; no new layers.",
+        "boost": "Not installed; no available Boost documentation tool; official versioned docs fallback consulted.",
+        "status": "aligned",
+        "materialConflicts": [],
+        "ownerDecisionReference": null,
+        "guidance": [
+          "AGENTS.md",
+          "docs/control-center-design-system.md",
+          ".toscanini/manifest.json",
+          "vendor/composer/installed.json",
+          "/Users/andrepiresdemello/Code/toscanini/templates/adapters/laravel.json",
+          "https://laravel.com/framework/docs/13.x/database",
+          "https://laravel.com/framework/docs/13.x/http-client",
+          "https://livewire.laravel.com/docs/4.x/actions"
+        ]
+      }
+    ],
+    "authorVerdict": "approved-with-conditions",
+    "decisionRiskAssessment": "Low unresolved product-decision risk: existing approved authority/current active membership, exact mapping, no access mutations, immutable ordering and no Account-login prerequisite remain unchanged. Additive receipt/initialization is a bounded implementation contract, not a new product rule. Engineering/security execution risk remains critical assurance. Pending owner architecture and QA-equivalence approvals are not inferred or waived; changed domain/security rules must reopen clarification."
+  },
+  "budgets": {
+    "remediationRounds": 2,
+    "specialistRuns": 17
+  },
+  "approved": false,
+  "approvedBy": null,
+  "readiness": {
+    "scopeId": "invitation-validation-repair-v1",
+    "environment": "One Worker across existing checkouts; isolated SQLite and guarded paired PostgreSQL HTTP/provider-fake environment only.",
+    "architectureOnly": true,
+    "checks": [
+      {
+        "category": "runtimes",
+        "name": "Installed target runtime and actual execution",
+        "status": "verified",
+        "evidence": "PHP8.4.14, Node24.19.0 retained from same source checkpoint; actual PHP HTTP/CLI jobs now executed in both. Laravel13.26.1, Livewire4.4.1, Sanctum4.3.3, Pest4.7.8 read from installed packages; no Boost installed."
+      },
+      {
+        "category": "dependencies",
+        "name": "Existing dependency/build/test usability",
+        "status": "verified",
+        "evidence": "No dependency/lockfile changes proposed. Prior actual canonical exits0 at unchanged source checkpoints A8cb3a44f/C462f6b56 retained; compiled manifests present. Current browser and actual database job resolve installed application/dependencies."
+      },
+      {
+        "category": "access",
+        "name": "Synthetic private credentials and provider isolation",
+        "status": "verified",
+        "evidence": "Both guarded __readiness responses confirmed testing/private databases and provider_mutations=false. Private connection files remain available; no credential values printed or requested. Real provider endpoints remain forbidden/faked."
+      },
+      {
+        "category": "services",
+        "name": "Fresh HTTP, UTC PostgreSQL, database queue and browser probes",
+        "status": "verified",
+        "evidence": "Loopback16586/16587 returned exact account_owned_account/account_owned_compliance identities. Fresh dedicated repair-readiness queue jobs processed with exit0 and0remaining in both; session timezoneUTC. IAB opened Account readiness JSON successfully then closed. Queue retry_after180>lease120, worker timeout60. No normal database touched."
+      },
+      {
+        "category": "verification",
+        "name": "Repair-cycle executable path and unresolved approval boundary",
+        "status": "pending",
+        "evidence": "Architect finalized exact paths and six executable scenarios. Existing canonical/runtime paths are usable. QA-R04 equivalent constraint-plus-reachable-conflict proof awaits owner approval. Account verifier remains unchanged; any actual mismatch must remain a blocker."
+      },
+      {
+        "category": "permissions",
+        "name": "Owner resume and frozen contract/architecture approval",
+        "status": "pending",
+        "evidence": "Owner explicitly resumed unfinished delivery on2026-10-20. Only replanning authorized so far; concrete new architecture hash, scope and validation contract await direct owner approval before Worker. .env/Account verifier exclusions retained."
+      }
+    ]
+  },
+  "design": {
+    "required": true,
+    "status": "approved-reference",
+    "artifact": "specs/020-account-owned-invitations/design-constraints.md",
+    "reference": "docs/control-center-design-system.md",
+    "verification": "Actual targeted dynamic UI review required; no claim from static attributes alone."
+  },
+  "resumeAuthorization": {
+    "decision": "Human explicitly resumed the unfinished delivery: bem, se n\u00e3o acabou a entrega, pode continuar.",
+    "date": "2026-10-20",
+    "scopeReference": "specs/020-account-owned-invitations/replan-proposal.md",
+    "meaning": "Authorizes bounded replanning and necessary work within retained exclusions; no unknown architecture/hash or QA-equivalence approval inferred."
+  },
+  "priorRun": {
+    "id": "20261020-account-owned-invitations",
+    "status": "blocked",
+    "checkpoint": "account-owned-invitations-v1-remediation2-9a02b0261bbf387d",
+    "preserveEvidence": true
+  }
+}

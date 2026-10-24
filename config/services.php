@@ -35,6 +35,8 @@ return [
         ],
     ],
 
+    'account' => ['invitation_ownership_enabled' => (bool) env('ACCOUNT_OWNED_INVITATIONS_ENABLED', false), 'url' => env('ACCOUNT_URL'), 'token' => env('ACCOUNT_TOKEN'), 'actor_assertion_secret' => env('ACCOUNT_ACTOR_ASSERTION_SECRET')],
+
     'workos' => [
         'client_id' => env('WORKOS_CLIENT_ID'),
         'api_key' => env('WORKOS_API_KEY'),
@@ -42,6 +44,8 @@ return [
 
     'social_login' => [
         'providers' => [
+            'account' => ['url' => env('ACCOUNT_URL'), 'token' => env('ACCOUNT_TOKEN'), 'actor_assertion_secret' => env('ACCOUNT_ACTOR_ASSERTION_SECRET')],
+
             'workos' => [
                 'enabled' => filter_var(env('SOCIAL_LOGIN_WORKOS_ENABLED', true), FILTER_VALIDATE_BOOL),
                 'label' => 'AuthKit',

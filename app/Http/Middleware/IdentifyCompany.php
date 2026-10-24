@@ -3,51 +3,35 @@
 namespace App\Http\Middleware;
 
 use App\Models\Company;
-use App\Services\Settings\ApplicationSettings;
 use App\Tenancy\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\URL;
 use Symfony\Component\HttpFoundation\Response;
 
-class IdentifyCompany
+class IdentifyCompany extends \Oceanix\Platform\Http\Middleware\IdentifyCompany
 {
-    public function __construct(
-        private readonly TenantContext $context,
-        private readonly ApplicationSettings $settings,
-    ) {}
-
     public function handle(Request $request, Closure $next): Response
     {
-        $routeCompany = $request->route('company');
-        $company = $routeCompany;
-
-        if (is_string($company)) {
-            $company = Company::query()->where('slug', $company)->first();
-        }
-
-        if (! $company instanceof Company) {
-            $companyId = $request->session()->get('company_id') ?? $request->user()?->company_id;
+        // Existing Compliance sessions may carry only the tenant-scoped login. Resolve
+        // that identity before the SDK clears tenant context for global platform routes.
+        if ($request->routeIs('platform.*') && ! $request->session()->has('platform_account_id')) {
+            $companyId = $request->session()->get('company_id');
             $company = is_numeric($companyId) ? Company::query()->find($companyId) : null;
+            $context = app(TenantContext::class);
+
+            try {
+                if ($company !== null) {
+                    $context->set($company);
+                    $account = $request->user()?->account;
+                    if ($account?->is_platform_admin && $account->status === 'active') {
+                        $request->session()->put('platform_account_id', $account->getKey());
+                    }
+                }
+            } finally {
+                $context->clear();
+            }
         }
 
-        if ($company === null) {
-            abort_if($request->routeIs('tenant.login', 'auth.local'), 404);
-
-            return $next($request);
-        }
-
-        abort_if($company->status !== 'active', 404);
-
-        $this->context->set($company);
-        $request->session()->put('company_id', $company->getKey());
-        URL::defaults(['company:slug' => $company->slug]);
-        $this->settings->apply();
-
-        if ($request->user() !== null && (int) $request->user()->company_id !== (int) $company->getKey()) {
-            abort(404);
-        }
-
-        return $next($request);
+        return parent::handle($request, $next);
     }
 }

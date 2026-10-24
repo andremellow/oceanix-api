@@ -80,6 +80,7 @@ class WorkosOrganizationMembershipService
 
     private function client(): PendingRequest
     {
+        throw new RuntimeException('Operational WorkOS requests belong to Account.', 409);
         $apiKey = (string) config('services.workos.api_key');
 
         if ($apiKey === '') {

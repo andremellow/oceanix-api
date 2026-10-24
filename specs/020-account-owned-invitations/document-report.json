@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "reportId": "account-owned-invitations",
+  "project": "Account and Oceanix Training Compliance",
+  "title": "Account-owned invitations \u2014 approval proposal",
+  "version": 2,
+  "documents": [
+    {
+      "id": "summary",
+      "title": "Approval summary",
+      "path": "specs/020-account-owned-invitations/approval-summary.md"
+    },
+    {
+      "id": "approval",
+      "title": "Approval scope and artifact hashes",
+      "path": "specs/020-account-owned-invitations/approval-request.md"
+    },
+    {
+      "id": "specification",
+      "title": "Specification",
+      "path": "specs/020-account-owned-invitations/spec.md"
+    },
+    {
+      "id": "architecture",
+      "title": "Architecture",
+      "path": "specs/020-account-owned-invitations/architecture.md"
+    },
+    {
+      "id": "scenarios",
+      "title": "Behavior scenarios and proposed verification",
+      "path": "specs/020-account-owned-invitations/scenarios.md"
+    },
+    {
+      "id": "plan",
+      "title": "Implementation plan proposal",
+      "path": "specs/020-account-owned-invitations/plan.md"
+    },
+    {
+      "id": "data-model",
+      "title": "Data model proposal",
+      "path": "specs/020-account-owned-invitations/data-model.md"
+    },
+    {
+      "id": "contracts",
+      "title": "HTTP contract proposal",
+      "path": "specs/020-account-owned-invitations/contracts/http-invitations.md"
+    },
+    {
+      "id": "rollout",
+      "title": "Rollout and validation proposal",
+      "path": "specs/020-account-owned-invitations/quickstart.md"
+    },
+    {
+      "id": "design",
+      "title": "Existing UI constraints",
+      "path": "specs/020-account-owned-invitations/design-constraints.md"
+    },
+    {
+      "id": "research",
+      "title": "Research and framework decisions",
+      "path": "specs/020-account-owned-invitations/research.md"
+    },
+    {
+      "id": "clarification",
+      "title": "Confirmed decisions and approval status",
+      "path": "specs/020-account-owned-invitations/clarification.md"
+    },
+    {
+      "id": "checklist",
+      "title": "Specification quality checklist",
+      "path": "specs/020-account-owned-invitations/checklists/requirements.md"
+    }
+  ]
+}

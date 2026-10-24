@@ -1,4 +1,7 @@
 {
+    "Account confirmed this person. Access is pending confirmation; retry checks the same request.": "O Account confirmou esta pessoa. O acesso aguarda confirmação; tentar novamente consulta a mesma solicitação.",
+    "Select all": "Selecionar todas",
+    "Select all results": "Selecionar todos os resultados",
     "Insert PDF": "Inserir PDF",
     "PDF file": "Arquivo PDF",
     "PDF only, up to 10 MB. Opens in a new tab for people with access to this training.": "Somente PDF, até 10 MB. Abre em uma nova aba para pessoas com acesso a este treinamento.",
@@ -893,8 +896,6 @@
     "You do not have permission to perform this PDF action.": "Você não tem permissão para realizar esta ação com o PDF.",
     "The PDF request was interrupted. Results may be out of date. Your text and selection are preserved.": "A solicitação do PDF foi interrompida. Os resultados podem estar desatualizados. Seu texto e sua seleção foram preservados.",
     "The archive response was interrupted. Try Archive PDF again to confirm the result. Existing links still work.": "A resposta do arquivamento foi interrompida. Use Arquivar PDF novamente para confirmar o resultado. Os links existentes continuam funcionando.",
-    "Select all": "Selecionar todas",
-    "Select all results": "Selecionar todos os resultados",
     "Select a valid audience scope.": "Selecione uma abrangência válida.",
     "Select at least one job function.": "Selecione pelo menos uma função.",
     "One or more selected job functions are no longer available.": "Uma ou mais funções selecionadas não estão mais disponíveis.",
@@ -978,5 +979,14 @@
     "No people yet": "Nenhuma pessoa cadastrada",
     "This action covers one person: :name (:email).": "Esta ação abrange uma pessoa: :name (:email).",
     "Queue company-wide WorkOS invitation recovery after importing": "Agendar recuperação de convites WorkOS de toda a empresa após importar",
-    "Includes eligible people already in this company: pending invitations are resent, and expired or missing invitations receive a new invitation. This is not limited to the imported rows.": "Inclui pessoas elegíveis já cadastradas nesta empresa: convites pendentes são reenviados e convites expirados ou ausentes recebem um novo convite. Não se limita às linhas importadas."
+    "Includes eligible people already in this company: pending invitations are resent, and expired or missing invitations receive a new invitation. This is not limited to the imported rows.": "Inclui pessoas elegíveis já cadastradas nesta empresa: convites pendentes são reenviados e convites expirados ou ausentes recebem um novo convite. Não se limita às linhas importadas.",
+    "This person already exists.": "Esta pessoa já existe.",
+    "Your access to this product has been removed.": "Seu acesso a este produto foi removido.",
+    "Confirmed rows are saved. Retry the import to check incomplete rows using the same requests. No invitation is sent automatically.": "As linhas confirmadas foram salvas. Tente importar novamente para verificar as linhas incompletas usando as mesmas solicitações. Nenhum convite é enviado automaticamente.",
+    "Import row outcomes": "Resultados das linhas da importação",
+    "Row :row": "Linha :row",
+    "An exact existing-person mapping is required. Review the company and provider identity.": "É necessário um vínculo exato com a pessoa existente. Revise a empresa e a identidade do provedor.",
+    "Legacy invitation work needs review before retrying.": "Os convites antigos precisam de revisão antes de tentar novamente.",
+    "Automatic retries stopped. Review the Account communication.": "As tentativas automáticas pararam. Revise a comunicação no Account.",
+    "The invitation is awaiting confirmation from Account.": "O convite aguarda confirmação do Account."
 }

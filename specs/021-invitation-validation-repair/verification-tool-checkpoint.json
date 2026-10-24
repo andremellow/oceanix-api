@@ -1,0 +1,10 @@
+{
+  "id": "gate-directed-order-db2f936ade34ccda",
+  "repository": "account",
+  "sha256": {
+    ".toscanini/bin/toscanini-gate.py": "1f4e62195110d00aa78dc44e0748d4f53e913ed1afccf45df2dd9ddc5cda1464",
+    ".toscanini/tests/test_gate_directed_order.py": "e12bdcba2952aaa877c60a8190038150c0c635e3c046c7b2523f32eaa085598d"
+  },
+  "applicationCheckpoint": "invitation-validation-repair-v1-67670919374299c4",
+  "applicationHashesUnchanged": true
+}
