@@ -26,6 +26,13 @@ jobs:
           composer config --global --auth http-basic.composer.fluxui.dev \
             "${{ secrets.FLUX_USERNAME }}" "${{ secrets.FLUX_LICENSE_KEY }}"
 
+      - name: Authenticate private GitHub dependencies
+        env:
+          GITHUB_SDK_TOKEN: ${{ secrets.GITHUB_SDK_TOKEN }}
+        run: |
+          : "${GITHUB_SDK_TOKEN:?Configure GITHUB_SDK_TOKEN with read access to Oceanix-SDK and laravel-tasks}"
+          composer config --global --auth github-oauth.github.com "${GITHUB_SDK_TOKEN}"
+
       - name: Install PHP dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
@@ -65,6 +72,13 @@ jobs:
         run: |
           composer config --global --auth http-basic.composer.fluxui.dev \
             "${{ secrets.FLUX_USERNAME }}" "${{ secrets.FLUX_LICENSE_KEY }}"
+
+      - name: Authenticate private GitHub dependencies
+        env:
+          GITHUB_SDK_TOKEN: ${{ secrets.GITHUB_SDK_TOKEN }}
+        run: |
+          : "${GITHUB_SDK_TOKEN:?Configure GITHUB_SDK_TOKEN with read access to Oceanix-SDK and laravel-tasks}"
+          composer config --global --auth github-oauth.github.com "${GITHUB_SDK_TOKEN}"
 
       - name: Install PHP dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
@@ -121,6 +135,13 @@ jobs:
         run: |
           composer config --global --auth http-basic.composer.fluxui.dev \
             "${{ secrets.FLUX_USERNAME }}" "${{ secrets.FLUX_LICENSE_KEY }}"
+
+      - name: Authenticate private GitHub dependencies
+        env:
+          GITHUB_SDK_TOKEN: ${{ secrets.GITHUB_SDK_TOKEN }}
+        run: |
+          : "${GITHUB_SDK_TOKEN:?Configure GITHUB_SDK_TOKEN with read access to Oceanix-SDK and laravel-tasks}"
+          composer config --global --auth github-oauth.github.com "${GITHUB_SDK_TOKEN}"
 
       - name: Install PHP dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
@@ -185,6 +206,13 @@ jobs:
         run: |
           composer config --global --auth http-basic.composer.fluxui.dev \
             "${{ secrets.FLUX_USERNAME }}" "${{ secrets.FLUX_LICENSE_KEY }}"
+
+      - name: Authenticate private GitHub dependencies
+        env:
+          GITHUB_SDK_TOKEN: ${{ secrets.GITHUB_SDK_TOKEN }}
+        run: |
+          : "${GITHUB_SDK_TOKEN:?Configure GITHUB_SDK_TOKEN with read access to Oceanix-SDK and laravel-tasks}"
+          composer config --global --auth github-oauth.github.com "${GITHUB_SDK_TOKEN}"
 
       - name: Install PHP dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
