@@ -28,10 +28,10 @@ jobs:
 
       - name: Authenticate private GitHub dependencies
         env:
-          GITHUB_SDK_TOKEN: ${{ secrets.GITHUB_SDK_TOKEN }}
+          OCEANIX_COMPOSER_TOKEN: ${{ secrets.OCEANIX_COMPOSER_TOKEN }}
         run: |
-          : "${GITHUB_SDK_TOKEN:?Configure GITHUB_SDK_TOKEN with read access to Oceanix-SDK and laravel-tasks}"
-          composer config --global --auth github-oauth.github.com "${GITHUB_SDK_TOKEN}"
+          : "${OCEANIX_COMPOSER_TOKEN:?Configure OCEANIX_COMPOSER_TOKEN with read access to Oceanix-SDK and laravel-tasks}"
+          composer config --global --auth github-oauth.github.com "${OCEANIX_COMPOSER_TOKEN}"
 
       - name: Install PHP dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
@@ -75,10 +75,10 @@ jobs:
 
       - name: Authenticate private GitHub dependencies
         env:
-          GITHUB_SDK_TOKEN: ${{ secrets.GITHUB_SDK_TOKEN }}
+          OCEANIX_COMPOSER_TOKEN: ${{ secrets.OCEANIX_COMPOSER_TOKEN }}
         run: |
-          : "${GITHUB_SDK_TOKEN:?Configure GITHUB_SDK_TOKEN with read access to Oceanix-SDK and laravel-tasks}"
-          composer config --global --auth github-oauth.github.com "${GITHUB_SDK_TOKEN}"
+          : "${OCEANIX_COMPOSER_TOKEN:?Configure OCEANIX_COMPOSER_TOKEN with read access to Oceanix-SDK and laravel-tasks}"
+          composer config --global --auth github-oauth.github.com "${OCEANIX_COMPOSER_TOKEN}"
 
       - name: Install PHP dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
@@ -138,10 +138,10 @@ jobs:
 
       - name: Authenticate private GitHub dependencies
         env:
-          GITHUB_SDK_TOKEN: ${{ secrets.GITHUB_SDK_TOKEN }}
+          OCEANIX_COMPOSER_TOKEN: ${{ secrets.OCEANIX_COMPOSER_TOKEN }}
         run: |
-          : "${GITHUB_SDK_TOKEN:?Configure GITHUB_SDK_TOKEN with read access to Oceanix-SDK and laravel-tasks}"
-          composer config --global --auth github-oauth.github.com "${GITHUB_SDK_TOKEN}"
+          : "${OCEANIX_COMPOSER_TOKEN:?Configure OCEANIX_COMPOSER_TOKEN with read access to Oceanix-SDK and laravel-tasks}"
+          composer config --global --auth github-oauth.github.com "${OCEANIX_COMPOSER_TOKEN}"
 
       - name: Install PHP dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
@@ -209,10 +209,10 @@ jobs:
 
       - name: Authenticate private GitHub dependencies
         env:
-          GITHUB_SDK_TOKEN: ${{ secrets.GITHUB_SDK_TOKEN }}
+          OCEANIX_COMPOSER_TOKEN: ${{ secrets.OCEANIX_COMPOSER_TOKEN }}
         run: |
-          : "${GITHUB_SDK_TOKEN:?Configure GITHUB_SDK_TOKEN with read access to Oceanix-SDK and laravel-tasks}"
-          composer config --global --auth github-oauth.github.com "${GITHUB_SDK_TOKEN}"
+          : "${OCEANIX_COMPOSER_TOKEN:?Configure OCEANIX_COMPOSER_TOKEN with read access to Oceanix-SDK and laravel-tasks}"
+          composer config --global --auth github-oauth.github.com "${OCEANIX_COMPOSER_TOKEN}"
 
       - name: Install PHP dependencies
         run: composer install --prefer-dist --no-interaction --no-progress

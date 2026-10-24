@@ -22,7 +22,7 @@ npm ci --ignore-scripts --no-audit
 npm run build
 ```
 
-GitHub Actions also requires the repository secret `GITHUB_SDK_TOKEN` with the same repository access. Add it in the Compliance repository Settings → Secrets and variables → Actions. The workflow configures Composer authentication in all four jobs and stops with an explicit message when the secret is missing. Existing Flux secrets remain unchanged.
+GitHub Actions also requires the repository secret `OCEANIX_COMPOSER_TOKEN` with the same repository access. Add it in the Compliance repository Settings → Secrets and variables → Actions. The workflow configures Composer authentication in all four jobs and stops with an explicit message when the secret is missing. Existing Flux secrets remain unchanged.
 
 Do not leave an obsolete COMPOSER_AUTH variable overriding the configured GitHub credential. Production uses the committed lockfile, never `composer update` or the development setup script. Back up existing databases/configuration, drain in-flight work and coordinate workers/schedulers during deployment. Apply the application's pending migrations with `php artisan migrate --force --no-interaction`, refresh cached configuration through the hosting deployment, and restart workers with the new code. Do not clear durable operation/cache evidence.
 
