@@ -1,21 +1,3 @@
-<?php
-
-use App\Services\Platform\PlatformAccess;
-use App\Services\Platform\PlatformOverview;
-use Livewire\Attributes\Layout;
-use Livewire\Component;
-
-new #[Layout('layouts::platform')] class extends Component
-{
-    public function with(PlatformOverview $overview, PlatformAccess $access): array
-    {
-        $access->authorize();
-
-        return ['companies' => $overview->companies($access->authorize()->id)];
-    }
-};
-?>
-
 <div class="space-y-7">
     <x-page-hero :kicker="__('Platform administration')" :title="__('Companies')" :description="__('Create companies and enable Compliance in Account.')" />
     <x-status-message />

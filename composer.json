@@ -22,7 +22,7 @@
         "livewire/flux": "^2.14",
         "livewire/flux-pro": "^2.15",
         "livewire/livewire": "^4.3",
-        "oceanix/platform": "^0.1.0",
+        "oceanix/platform": "^0.1.2",
         "php": "^8.3",
         "resend/resend-php": "^1.5"
     },
@@ -72,7 +72,7 @@
             "@php vendor/bin/pest tests/Browser/BrowserEnvironmentSmokeTest.php tests/Browser/RequirementTargetModalTest.php tests/Browser/CourseDetailWidthTest.php tests/Browser/EditorFixtureCompatibilityTest.php tests/Browser/UnifiedCourseEditorLayoutTest.php --compact",
             "@php vendor/bin/pest tests/Browser/ComplianceAccessTest.php --compact",
             "@php vendor/bin/pest tests/Browser/AccountCompanyOwnershipTest.php --compact",
-            "@php vendor/bin/pest tests/Browser/PeopleAccountAccessTest.php tests/Browser/SharedPlatformProfilesTest.php --compact"
+            "@php vendor/bin/pest tests/Browser/PeopleAccountAccessTest.php tests/Browser/SharedPlatformProfilesTest.php tests/Browser/PlatformSdkAdoptionTest.php --compact"
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",

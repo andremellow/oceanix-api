@@ -1,6 +1,6 @@
 # Published SDK and Accounts integration for existing Compliance
 
-Compliance consumes `oceanix/platform:^0.1.0`, locked to `v0.1.0` (`69eb008c6abc00d9f6763745d2d0181215445291`). Composer downloads it into vendor from the private GitHub repository. The local SDK directory is no longer required. Package isolation tests belong to the SDK repository; Compliance tests exercise its adapters and existing routes against the installed release.
+Compliance consumes `oceanix/platform:^0.1.2`, locked to `v0.1.2` (`7e632f0` compatibility release). Composer downloads it into vendor from the private GitHub repository. The local SDK directory is no longer required. Package isolation tests belong to the SDK repository; Compliance tests exercise its adapters and existing routes against the installed release.
 
 ## Preserved boundaries
 
@@ -82,3 +82,12 @@ If validation fails, stop new dispatch, preserve unknown outcomes and restore th
 The final application run passed 1,215 tests with 7,214 assertions; 18 environment-dependent scenarios were skipped. All 138 Pest browser scenarios passed (1,880 assertions), including SDK People/profiles, plus four PDF browser scenarios, 30 editor unit scenarios and 25 preview scenarios. Production assets built successfully; strict Composer validation, Pint and diff whitespace checks passed. The final tests used the downloaded SDK archive, not a symlink. No other locked dependency version changed.
 
 The complete Composer verification was first interrupted by the local 128 MB PHP limit, then exposed legacy session restoration failures. After the compatibility correction, every canonical verification stage was rerun successfully; the final full application run used a process-local 1 GB limit. Production settings were not changed. WorkOS/Accounts automated calls were faked and databases were disposable; production end-to-end acceptance is still a separate operator task.
+
+
+## Global platform administration adoption
+
+Global users and company lists now use SDK Livewire screens, with scoped Blade presentation overrides retaining the Compliance shell and English/Portuguese labels. The dashboard subclasses the SDK screen only to retain recent-company navigation. Global SDK routes remain disabled so the host keeps course, module, preview, upload and Tasks routes without collisions.
+
+The existing App platform action names extend the SDK implementations for platform invitations, company status, explicit administrator grants, company administrator invitations and company entry. A compatible PlatformAccess binding preserves existing tenant-linked global accounts and rechecks active global authorization on every use. Company detail and course promotion remain Compliance-owned.
+
+SDK v0.1.2 uses the existing Person contract and configured status enum in company administration, supporting Compliance's independent User model without a schema or data migration. Platform administrator registration uses WorkOS identity lookup: verified existing accounts receive access without another invitation; unverified existing accounts remain pending verification. Tests fake provider requests; no production invitation or credential change accompanies the migration.

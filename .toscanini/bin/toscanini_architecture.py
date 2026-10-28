@@ -72,7 +72,7 @@ def validate_architecture(root: Path, contract: dict, history: list[dict], *, re
             findings.append('Architect verdict does not match approved architecture and scope')
         if not any(i < index and e.get('event') == 'started' for i, e in author) or any(i > index and e.get('event') == 'started' for i, e in author):
             findings.append('Architect authoring has no completed start/terminal sequence')
-        first_worker = next((i for i, e in enumerate(history) if role(e) == 'worker' and e.get('event') == 'started'), None)
+        first_worker = next((i for i, e in enumerate(history) if role(e) == 'worker' and e.get('event') == 'started' and e.get('scopeId') in (None, scope)), None)
         if first_worker is not None and index >= first_worker:
             findings.append('Worker started before the applicable Architect verdict')
     implemented = contract.get('implementationCheckpoint', {}).get('recordedAfterImplementation') is True or any(role(e) == 'worker' for e in history)

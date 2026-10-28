@@ -49,6 +49,8 @@ use Oceanix\Platform\Auth\Contracts\AuthenticationContext;
 use Oceanix\Platform\Contracts\CompanyContextHook;
 use Oceanix\Platform\Contracts\CompanyInitializer;
 use Oceanix\Platform\Contracts\PeopleDirectoryExtension;
+use Oceanix\Platform\Livewire\PlatformCompanies;
+use Oceanix\Platform\Livewire\PlatformUsers;
 use Tests\Support\AccountIntegrationFixture;
 
 class AppServiceProvider extends ServiceProvider
@@ -83,6 +85,10 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Retain historical Livewire aliases while using package-owned screen behavior.
+        Livewire::component('platform.users', PlatformUsers::class);
+        Livewire::component('platform.companies', PlatformCompanies::class);
+
         if (getenv('COMPANY_USER_QA_FIXTURE') === '1') {
             AccountIntegrationFixture::bootHttpQa();
         }
