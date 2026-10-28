@@ -121,8 +121,8 @@ Route::prefix('platform')
         Route::post('/editor-uploads/{platformAccount}', [EditorFileUploadController::class, 'handle'])
             ->whereNumber('platformAccount')->name('platform.editor-uploads.store');
         Route::livewire('/', 'platform.dashboard')->name('platform.dashboard');
-        Route::livewire('/companies', 'platform.companies')->name('platform.companies');
-        Route::livewire('/users', 'platform.users')->name('platform.users');
+        Route::livewire('/companies', 'oceanix-platform.platform-companies')->name('platform.companies');
+        Route::livewire('/users', 'oceanix-platform.platform-users')->name('platform.users');
         Route::livewire('/shared-courses', 'platform.shared-courses.index')->name('platform.shared-courses.index');
         Route::livewire('/shared-courses/{course}', 'platform.shared-courses.show')->name('platform.shared-courses.show');
         Route::livewire('/shared-courses/{course}/editor', 'platform.shared-courses.editor')->name('platform.shared-courses.editor');

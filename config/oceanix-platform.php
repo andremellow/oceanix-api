@@ -17,6 +17,11 @@ use App\Actions\People\DispatchWorkosOperation;
 use App\Actions\People\QueueWorkosInvitations;
 use App\Actions\People\QueueWorkosSynchronization;
 use App\Actions\People\RegisterPerson;
+use App\Actions\Platform\ChangeCompanyStatus;
+use App\Actions\Platform\EnterCompany;
+use App\Actions\Platform\GrantPlatformCompanyAccess;
+use App\Actions\Platform\InviteCompanyAdministrator;
+use App\Actions\Platform\InvitePlatformAdministrator;
 use App\Actions\Tenancy\SwitchCompany;
 use App\Enums\Permission;
 use App\Enums\UserStatus;
@@ -51,6 +56,8 @@ use App\Models\WorkosSyncRun;
 use App\Services\Account\AccountUserClient;
 use App\Services\Audit\AuditLogger;
 use App\Services\People\PeopleDirectory;
+use App\Services\Platform\PlatformAccess;
+use App\Services\Platform\PlatformOverview;
 use App\Services\Tenancy\CompanyComplianceAccess;
 use Oceanix\Platform\Actions\ControlPlane\ChangeCompanyProductAccess;
 use Oceanix\Platform\Http\Controllers\ControlPlane\CompanyProductAccessController;
@@ -65,6 +72,13 @@ return [
     'routes' => ['auth' => true, 'control_plane' => false],
     'jobs' => ['SendWorkosInvitation' => SendWorkosInvitation::class, 'ReconcileWorkosInvitations' => ReconcileWorkosInvitations::class],
     'legacy_bindings' => [
+        Oceanix\Platform\Actions\Platform\ChangeCompanyStatus::class => ChangeCompanyStatus::class,
+        Oceanix\Platform\Actions\Platform\EnterCompany::class => EnterCompany::class,
+        Oceanix\Platform\Actions\Platform\GrantPlatformCompanyAccess::class => GrantPlatformCompanyAccess::class,
+        Oceanix\Platform\Actions\Platform\InviteCompanyAdministrator::class => InviteCompanyAdministrator::class,
+        Oceanix\Platform\Actions\Platform\InvitePlatformAdministrator::class => InvitePlatformAdministrator::class,
+        Oceanix\Platform\Services\Platform\PlatformAccess::class => PlatformAccess::class,
+        Oceanix\Platform\Services\Platform\PlatformOverview::class => PlatformOverview::class,
         Oceanix\Platform\Actions\People\QueueWorkosSynchronization::class => QueueWorkosSynchronization::class,
         Oceanix\Platform\Actions\People\QueueWorkosInvitations::class => QueueWorkosInvitations::class,
         Oceanix\Platform\Actions\People\ReconcileWorkosInvitations::class => App\Actions\People\ReconcileWorkosInvitations::class,
@@ -105,6 +119,8 @@ return [
     'route_names' => ['dashboard' => 'dashboard'],
     'ui' => [
         'enabled' => true,
+        'platform_enabled' => false,
+        'platform_layout' => 'layouts::platform',
         'layout' => 'layouts::app',
         'login_layout' => 'layouts::guest',
         'logo' => 'images/oceanix-logo.png',

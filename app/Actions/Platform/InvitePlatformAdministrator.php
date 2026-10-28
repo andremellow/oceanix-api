@@ -2,47 +2,16 @@
 
 namespace App\Actions\Platform;
 
-use App\Models\Account;
-use App\Services\Platform\PlatformAccess;
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Support\Facades\Http;
-use RuntimeException;
+use Oceanix\Platform\Auth\Contracts\AuthenticationContext;
+use Oceanix\Platform\Services\Platform\PlatformAccess;
 
-class InvitePlatformAdministrator
+class InvitePlatformAdministrator extends \Oceanix\Platform\Actions\Platform\InvitePlatformAdministrator
 {
-    public function __construct(private readonly PlatformAccess $access) {}
-
-    public function handle(string $name, string $email): Account
+    public function __construct(PlatformAccess $access, AuthenticationContext $authentication)
     {
-        $this->access->authorize();
-        $email = strtolower(trim($email));
-        $apiKey = (string) config('services.workos.api_key');
+        // Keep the existing consumer credentials authoritative for delegated registration.
+        config(['oceanix-platform.auth.workos.api_key' => $authentication->apiKey()]);
 
-        if ($apiKey === '') {
-            throw new RuntimeException(__('WorkOS is not configured.'));
-        }
-
-        try {
-            $response = Http::baseUrl('https://api.workos.com')
-                ->withToken($apiKey)
-                ->acceptJson()
-                ->asJson()
-                ->timeout(12)
-                ->post('/user_management/invitations', [
-                    'email' => $email,
-                    'locale' => app()->getLocale() === 'pt_BR' ? 'pt-BR' : 'en-US',
-                ]);
-        } catch (ConnectionException $exception) {
-            throw new RuntimeException(__('WorkOS could not be reached. Try again.'), previous: $exception);
-        }
-
-        if ($response->failed()) {
-            throw new RuntimeException(__('WorkOS could not send this invitation.'));
-        }
-
-        return Account::query()->updateOrCreate(
-            ['email' => $email],
-            ['name' => trim($name), 'is_platform_admin' => true, 'status' => 'active'],
-        );
+        parent::__construct($access);
     }
 }

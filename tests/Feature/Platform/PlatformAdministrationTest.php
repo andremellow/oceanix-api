@@ -271,6 +271,7 @@ it('invites and authorizes a new platform administrator without an environment a
     $viewer = Account::factory()->platformAdmin()->create();
     $this->withSession(['platform_account_id' => $viewer->id]);
     Http::fake([
+        'api.workos.com/user_management/users*' => Http::response(['object' => 'list', 'data' => [], 'list_metadata' => ['before' => null, 'after' => null]]),
         'api.workos.com/user_management/invitations' => Http::response(['id' => 'inv_platform'], 201),
     ]);
 
@@ -362,7 +363,11 @@ it('rejects removed company methods without persistence or provider side effects
     $before = $snapshot();
     $arguments = $component === 'platform.companies' && $method === 'provisionWorkos' ? [$company->id] : [];
 
-    expect(fn () => $page->call($method, ...$arguments))->toThrow(MethodNotFoundException::class);
+    if ($revoked && $component === 'platform.companies') {
+        $page->call($method, ...$arguments)->assertForbidden();
+    } else {
+        expect(fn () => $page->call($method, ...$arguments))->toThrow(MethodNotFoundException::class);
+    }
     expect($snapshot())->toBe($before);
     Http::assertNothingSent();
 })->with([

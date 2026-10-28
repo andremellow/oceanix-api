@@ -988,5 +988,15 @@
     "An exact existing-person mapping is required. Review the company and provider identity.": "É necessário um vínculo exato com a pessoa existente. Revise a empresa e a identidade do provedor.",
     "Legacy invitation work needs review before retrying.": "Os convites antigos precisam de revisão antes de tentar novamente.",
     "Automatic retries stopped. Review the Account communication.": "As tentativas automáticas pararam. Revise a comunicação no Account.",
-    "The invitation is awaiting confirmation from Account.": "O convite aguarda confirmação do Account."
+    "The invitation is awaiting confirmation from Account.": "O convite aguarda confirmação do Account.",
+    "Add administrator": "Adicionar administrador",
+    "Awaiting email verification": "Aguardando verificação de e-mail",
+    "Verified existing accounts receive platform access. Unverified existing accounts await email verification. Email addresses without an existing account receive an invitation.": "Contas existentes verificadas recebem acesso à plataforma. Contas não verificadas aguardam a verificação do e-mail. Endereços sem conta existente recebem um convite.",
+    "Checking account and adding administrator…": "Verificando conta e adicionando administrador…",
+    "Administrator saved. Access is blocked until the account email is verified.": "Administrador salvo. O acesso está bloqueado até a verificação do e-mail da conta.",
+    "Platform administrator access released for the existing account. No invitation was sent.": "Acesso de administrador da plataforma liberado para a conta existente. Nenhum convite foi enviado.",
+    "Platform administrator invitation sent.": "Convite de administrador da plataforma enviado.",
+    "This account could not be linked safely. No administrator access was granted.": "Não foi possível vincular esta conta com segurança. Nenhum acesso de administrador foi concedido.",
+    "The account could not be checked. No access was granted and no invitation was sent. Try again.": "Não foi possível verificar a conta. Nenhum acesso foi concedido e nenhum convite foi enviado. Tente novamente.",
+    "The invitation could not be sent. No administrator access was granted. Try again.": "Não foi possível enviar o convite. Nenhum acesso de administrador foi concedido. Tente novamente."
 }

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "f0d27da64c6a4b73ea0e371c9a065e53",
+    "content-hash": "30607f201f67c739eae080ead1de88b4",
     "packages": [
         {
             "name": "andremellow/laravel-tasks",
@@ -3793,16 +3793,16 @@
         },
         {
             "name": "oceanix/platform",
-            "version": "v0.1.0",
+            "version": "v0.1.2",
             "source": {
                 "type": "git",
                 "url": "git@github.com:andremellow/Oceanix-SDK.git",
-                "reference": "69eb008c6abc00d9f6763745d2d0181215445291"
+                "reference": "7e632f062557d8a55fe945fbe439825025d7cee7"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/andremellow/Oceanix-SDK/zipball/69eb008c6abc00d9f6763745d2d0181215445291",
-                "reference": "69eb008c6abc00d9f6763745d2d0181215445291",
+                "url": "https://api.github.com/repos/andremellow/Oceanix-SDK/zipball/7e632f062557d8a55fe945fbe439825025d7cee7",
+                "reference": "7e632f062557d8a55fe945fbe439825025d7cee7",
                 "shasum": ""
             },
             "require": {
@@ -3840,7 +3840,7 @@
                 "source": "https://github.com/andremellow/Oceanix-SDK",
                 "issues": "https://github.com/andremellow/Oceanix-SDK/issues"
             },
-            "time": "2026-10-23T19:32:48+00:00"
+            "time": "2026-10-28T21:31:31+00:00"
         },
         {
             "name": "phpoption/phpoption",
@@ -13003,6 +13003,6 @@
     "platform": {
         "php": "^8.3"
     },
-    "platform-dev": [],
-    "plugin-api-version": "2.3.0"
+    "platform-dev": {},
+    "plugin-api-version": "2.9.0"
 }
