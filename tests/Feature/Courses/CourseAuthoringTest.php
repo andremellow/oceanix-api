@@ -9,9 +9,7 @@ use App\Enums\Permission;
 use App\Enums\QuestionType;
 use App\Enums\VideoStatus;
 use App\Exceptions\CoursePublicationException;
-use App\Models\Account;
 use App\Models\AuditLog;
-use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
@@ -21,6 +19,8 @@ use App\Models\Video;
 use App\Services\Audit\AuditLogger;
 use App\Services\Courses\CourseVersionValidator;
 use App\Tenancy\TenantContext;
+use Database\Factories\AccountFactory;
+use Database\Factories\CompanyFactory;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -57,7 +57,7 @@ it('creates a course together with its first draft version', function (): void {
 
 it('normalizes company course codes and scopes their uniqueness to the owning company', function (): void {
     $firstCompany = currentCompany();
-    $otherCompany = Company::factory()->create();
+    $otherCompany = CompanyFactory::new()->create();
     app(TenantContext::class)->set($firstCompany);
     $actor = adminUser();
     Course::factory()->create(['company_id' => $otherCompany->id, 'code' => 'HUET-01']);
@@ -263,7 +263,7 @@ it('deep copies a genuinely legacy version only when no canonical composition ex
 });
 
 it('clones a shared module composition once without colliding on its position', function (): void {
-    $platformActor = Account::factory()->platformAdmin()->create();
+    $platformActor = AccountFactory::new()->platformAdmin()->create();
     $course = Course::factory()->shared()->create();
     $version = CourseVersion::factory()->published()->create(['course_id' => $course]);
     $module = Lesson::factory()->create([

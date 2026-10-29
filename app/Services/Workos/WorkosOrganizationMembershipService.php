@@ -2,11 +2,11 @@
 
 namespace App\Services\Workos;
 
-use App\Models\Company;
 use App\Models\User;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
+use Oceanix\Platform\Models\Company;
 use RuntimeException;
 
 class WorkosOrganizationMembershipService

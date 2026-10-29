@@ -5,7 +5,6 @@ namespace Database\Seeders;
 use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
 use App\Enums\ModuleVersionStatus;
-use App\Models\Company;
 use App\Models\CompanyCourse;
 use App\Models\Course;
 use App\Models\CourseVersion;
@@ -16,6 +15,7 @@ use App\Models\QuestionOption;
 use App\Models\Video;
 use App\Tenancy\TenantContext;
 use Illuminate\Database\Seeder;
+use Oceanix\Platform\Models\Company;
 
 class DatabaseSeeder extends Seeder
 {

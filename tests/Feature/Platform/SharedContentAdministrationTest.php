@@ -2,7 +2,6 @@
 
 use App\Actions\Courses\PrepareSharedCourseEditor;
 use App\Actions\Modules\CreateAndAttachSharedModule;
-use App\Models\Account;
 use App\Models\ContentImage;
 use App\Models\Course;
 use App\Models\CourseVersion;
@@ -12,8 +11,10 @@ use App\Models\ModuleVersion;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Video;
+use Database\Factories\AccountFactory;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Oceanix\Platform\Models\Account;
 
 function explicitlyPrepareSharedCourseEditor(Course $course, CourseVersion $version, Account $account): void
 {
@@ -37,7 +38,7 @@ it('protects every shared course administration route with platform access', fun
 });
 
 it('lets a platform administrator open the shared course directory and navigation', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     Course::factory()->shared()->create(['title' => 'Global Offshore Safety']);
 
     $this->withSession(['platform_account_id' => $account->id])
@@ -51,7 +52,7 @@ it('lets a platform administrator open the shared course directory and navigatio
 });
 
 it('protects and exposes the shared module directory route', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     Module::factory()->shared()->create(['status' => 'published', 'title' => 'Published raw status module']);
     $tenantAdmin = adminUser();
 
@@ -69,7 +70,7 @@ it('protects and exposes the shared module directory route', function (): void {
 });
 
 it('opens shared module detail with a raw retired aggregate status', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $module = Module::factory()->shared()->create(['status' => 'retired', 'title' => 'Retired shared module']);
 
     $this->withSession(['platform_account_id' => $account->id])
@@ -80,7 +81,7 @@ it('opens shared module detail with a raw retired aggregate status', function ()
 });
 
 it('rejects company-owned courses from platform shared detail and editor routes', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $course = Course::factory()->create();
 
     $this->withSession(['platform_account_id' => $account->id])
@@ -93,7 +94,7 @@ it('rejects company-owned courses from platform shared detail and editor routes'
 });
 
 it('renders the shared course hero description at full width', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $course = Course::factory()->shared()->draft()->create([
         'description' => 'A detailed shared course description.',
     ]);
@@ -106,7 +107,7 @@ it('renders the shared course hero description at full width', function (): void
 });
 
 it('creates shared courses with platform ownership from the directory', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $this->withSession(['platform_account_id' => $account->id]);
 
     Livewire\Livewire::test('platform.shared-courses.index')
@@ -124,7 +125,7 @@ it('creates shared courses with platform ownership from the directory', function
 });
 
 it('opens the complete course and module editor on one continuous screen', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $course = Course::factory()->shared()->draft()->create();
     $courseVersion = CourseVersion::factory()->create(['course_id' => $course]);
     $module = Module::factory()->shared()->create(['status' => 'published', 'published_at' => now()]);
@@ -168,7 +169,7 @@ it('opens the complete course and module editor on one continuous screen', funct
 });
 
 it('creates a shared module in the course editor and attaches it last', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $course = Course::factory()->shared()->draft()->create();
     $courseVersion = CourseVersion::factory()->create(['course_id' => $course]);
     $existing = Module::factory()->shared()->create(['status' => 'draft']);
@@ -216,7 +217,7 @@ it('creates a shared module in the course editor and attaches it last', function
 });
 
 it('keeps the new module form open and retryable after an unexpected failure', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $course = Course::factory()->shared()->draft()->create();
     $version = CourseVersion::factory()->create(['course_id' => $course]);
     $this->withSession(['platform_account_id' => $account->id]);
@@ -248,7 +249,7 @@ it('keeps the new module form open and retryable after an unexpected failure', f
 });
 
 it('does not convert revoked platform authorization into a retryable form error', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $course = Course::factory()->shared()->draft()->create();
     CourseVersion::factory()->create(['course_id' => $course]);
     $this->withSession(['platform_account_id' => $account->id]);
@@ -267,7 +268,7 @@ it('does not convert revoked platform authorization into a retryable form error'
 });
 
 it('shows a friendly duplicate shared module code error without writing', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $course = Course::factory()->shared()->draft()->create();
     CourseVersion::factory()->create(['course_id' => $course]);
     Module::factory()->shared()->create(['code' => 'DUP-101', 'status' => 'draft']);
@@ -290,7 +291,7 @@ it('shows a friendly duplicate shared module code error without writing', functi
 
 it('atomically rejects revoked administrators and ineligible course versions', function (): void {
     $action = app(CreateAndAttachSharedModule::class);
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $sharedCourse = Course::factory()->shared()->draft()->create();
     $draft = CourseVersion::factory()->create(['course_id' => $sharedCourse]);
     $account->update(['is_platform_admin' => false]);
@@ -298,7 +299,7 @@ it('atomically rejects revoked administrators and ineligible course versions', f
     expect(fn () => $action->handle($draft, $account, 'REVOKED', 'Revoked'))
         ->toThrow(LogicException::class);
 
-    $activeAdmin = Account::factory()->platformAdmin()->create();
+    $activeAdmin = AccountFactory::new()->platformAdmin()->create();
     $published = CourseVersion::factory()->published()->create(['course_id' => $sharedCourse, 'version_number' => 2]);
     $companyCourse = Course::factory()->draft()->create();
     $companyDraft = CourseVersion::factory()->create(['course_id' => $companyCourse]);
@@ -312,7 +313,7 @@ it('atomically rejects revoked administrators and ineligible course versions', f
 });
 
 it('validates the new shared module form without writing', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $course = Course::factory()->shared()->draft()->create();
     CourseVersion::factory()->create(['course_id' => $course]);
     $this->withSession(['platform_account_id' => $account->id]);
@@ -335,7 +336,7 @@ it('validates the new shared module form without writing', function (): void {
 });
 
 it('validates shared module fields before writing them', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $course = Course::factory()->shared()->draft()->create();
     $courseVersion = CourseVersion::factory()->create(['course_id' => $course]);
     $module = Module::factory()->shared()->create(['status' => 'published', 'published_at' => now()]);
@@ -354,7 +355,7 @@ it('validates shared module fields before writing them', function (): void {
 });
 
 it('does not partially publish modules when a later module is invalid', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $course = Course::factory()->shared()->draft()->create();
     $courseVersion = CourseVersion::factory()->create(['course_id' => $course]);
     $first = Module::factory()->shared()->create(['status' => 'published', 'published_at' => now()]);
@@ -380,7 +381,7 @@ it('does not partially publish modules when a later module is invalid', function
 
 it('uploads and reuses images from the shared visual editor library', function (): void {
     Storage::fake('public');
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $course = Course::factory()->shared()->draft()->create();
     $courseVersion = CourseVersion::factory()->create(['course_id' => $course]);
     $module = Module::factory()->shared()->create(['status' => 'published', 'published_at' => now()]);

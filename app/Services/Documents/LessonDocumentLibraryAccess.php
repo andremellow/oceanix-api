@@ -5,13 +5,13 @@ namespace App\Services\Documents;
 use App\Enums\Permission;
 use App\Enums\PlatformPermission;
 use App\Enums\UserStatus;
-use App\Models\Account;
 use App\Models\LessonDocument;
 use App\Models\User;
-use App\Services\Platform\PlatformAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Oceanix\Platform\Models\Account;
+use Oceanix\Platform\Services\Platform\PlatformAccess;
 use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 

@@ -2,20 +2,20 @@
 
 use App\Actions\ControlPlane\ApplyProductOperation;
 use App\Actions\ControlPlane\AuthorizeProductActor;
-use App\Actions\Platform\GrantPlatformCompanyAccess;
-use App\Actions\Platform\InviteCompanyAdministrator;
 use App\Enums\UserStatus;
-use App\Models\Account;
 use App\Models\AccountCompanyBinding;
 use App\Models\AccountRequestOperation;
 use App\Models\AuditLog;
 use App\Models\PersonAccountLink;
 use App\Models\User;
 use App\Services\Account\AccountUserClient;
+use Database\Factories\AccountFactory;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Oceanix\Platform\Actions\Platform\GrantPlatformCompanyAccess;
+use Oceanix\Platform\Actions\Platform\InviteCompanyAdministrator;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Support\AccountIntegrationFixture as Fixture;
 
@@ -23,7 +23,7 @@ it('SC-23 confirms platform membership through Account before granting local adm
     $company = currentCompany();
     $company->update(['workos_organization_id' => 'org_platform']);
     AccountCompanyBinding::create(['account_company_uuid' => (string) Str::uuid(), 'compliance_company_id' => $company->id, 'workos_organization_id' => $company->workos_organization_id]);
-    $platform = Account::factory()->create(['is_platform_admin' => true, 'status' => 'active', 'workos_user_id' => 'user_platform_actor']);
+    $platform = AccountFactory::new()->create(['is_platform_admin' => true, 'status' => 'active', 'workos_user_id' => 'user_platform_actor']);
     session(['platform_account_id' => $platform->id]);
     config(['services.account.invitation_ownership_enabled' => true, 'services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic', 'services.account.actor_assertion_secret' => 'synthetic-actor-proof']);
     Http::preventStrayRequests();
@@ -42,7 +42,7 @@ it('SC-23 confirms platform membership through Account before granting local adm
 
 it('SC-21 SC-23 rejects a revoked platform actor on the exact persisted operation', function () {
     [$company,$person,$principal,$token,$input] = Fixture::receiver();
-    $account = Account::factory()->create(['is_platform_admin' => true, 'status' => 'active', 'workos_user_id' => 'user_platform_proof']);
+    $account = AccountFactory::new()->create(['is_platform_admin' => true, 'status' => 'active', 'workos_user_id' => 'user_platform_proof']);
     $input['kind'] = 'person.membership.ensure';
     $input['actor_workos_user_id'] = $account->workos_user_id;
     $input['payload'] = ['actor_context' => 'platform-account', 'platform_account_id' => $account->id, 'local_person_id' => $person->id];
@@ -59,7 +59,7 @@ it('SC-23 keeps the original membership envelope after the confirmed identity be
     $company = currentCompany();
     $company->update(['workos_organization_id' => 'org_platform']);
     AccountCompanyBinding::create(['account_company_uuid' => (string) Str::uuid(), 'compliance_company_id' => $company->id, 'workos_organization_id' => $company->workos_organization_id]);
-    $platform = Account::factory()->platformAdmin()->create();
+    $platform = AccountFactory::new()->platformAdmin()->create();
     $person = User::factory()->create(['company_id' => $company->id, 'workos_user_id' => null]);
     config(['services.account.invitation_ownership_enabled' => true, 'services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic', 'services.account.actor_assertion_secret' => 'synthetic-actor-proof']);
     $stored = null;
@@ -85,7 +85,7 @@ it('SC-23 keeps the original membership envelope after the confirmed identity be
 it('SC-23 rechecks platform authority after membership confirmation before local role and success audit', function () {
     $company = currentCompany();
     $company->update(['workos_organization_id' => 'org_platform']);
-    $platform = Account::factory()->platformAdmin()->create();
+    $platform = AccountFactory::new()->platformAdmin()->create();
     session(['platform_account_id' => $platform->id]);
     Fixture::fakePlatformConnection($company);
     Http::swap(new Factory);
@@ -103,7 +103,7 @@ it('SC-23 rechecks platform authority after membership confirmation before local
 it('SC-17 SC-23 recovers the same invite intent after response loss and a newer local generation', function () {
     $company = currentCompany();
     $company->update(['workos_organization_id' => 'org_platform']);
-    $platform = Account::factory()->platformAdmin()->create();
+    $platform = AccountFactory::new()->platformAdmin()->create();
     $person = User::factory()->create(['company_id' => $company->id, 'workos_user_id' => 'user_platform_target']);
     $link = Fixture::invitationLink($person);
     AccountCompanyBinding::create(['account_company_uuid' => $link->account_company_uuid, 'compliance_company_id' => $company->id, 'workos_organization_id' => $company->workos_organization_id]);
@@ -129,7 +129,7 @@ it('SC-17 SC-23 recovers the same invite intent after response loss and a newer 
 it('SC-23 reports an unconfirmed platform invitation honestly after membership is linked', function () {
     $company = currentCompany();
     $company->update(['workos_organization_id' => 'org_platform']);
-    $platform = Account::factory()->platformAdmin()->create();
+    $platform = AccountFactory::new()->platformAdmin()->create();
     session(['platform_account_id' => $platform->id]);
     Fixture::fakePlatformConnection($company);
     Http::swap(new Factory);
@@ -148,7 +148,7 @@ it('SC-23 reports an unconfirmed platform invitation honestly after membership i
 it('TA-07 rolls back platform linking failures and recovers only the same confirmed membership receipt', function (string $failure) {
     $company = currentCompany();
     $company->update(['workos_organization_id' => 'org_failure_platform']);
-    $platform = Account::factory()->platformAdmin()->create();
+    $platform = AccountFactory::new()->platformAdmin()->create();
     session(['platform_account_id' => $platform->id]);
     $person = User::factory()->create(['account_id' => $platform->id, 'name' => $platform->name, 'email' => $platform->email, 'workos_user_id' => $platform->workos_user_id, 'status' => UserStatus::Invited]);
     $binding = AccountCompanyBinding::create(['account_company_uuid' => (string) Str::uuid(), 'compliance_company_id' => $company->id, 'workos_organization_id' => $company->workos_organization_id]);

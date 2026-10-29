@@ -5,7 +5,6 @@ use App\Actions\People\QueueWorkosSynchronization;
 use App\Enums\AssignmentStatus;
 use App\Enums\FrequencyType;
 use App\Enums\RenewalBasis;
-use App\Models\Company;
 use App\Models\TrainingRequirement;
 use App\Models\User;
 use App\Models\WorkosInvitationAttempt;
@@ -20,6 +19,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Oceanix\Platform\Auth\OauthStateSigner;
+use Oceanix\Platform\Models\Company;
 
 // This router is an isolated executable QA fixture, never loaded by production routes.
 $root = dirname(__DIR__, 3);

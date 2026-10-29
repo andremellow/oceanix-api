@@ -3,7 +3,6 @@
 namespace App\Actions\Modules;
 
 use App\Enums\ModuleVersionStatus;
-use App\Models\Account;
 use App\Models\CourseVersionModule;
 use App\Models\ModuleVersion;
 use App\Services\Audit\AuditLogger;
@@ -12,6 +11,7 @@ use App\Services\Modules\SharedModuleDraftWriter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use Oceanix\Platform\Models\Account;
 
 class DiscardModuleDraft
 {

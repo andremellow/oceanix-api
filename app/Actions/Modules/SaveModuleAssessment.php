@@ -4,7 +4,6 @@ namespace App\Actions\Modules;
 
 use App\Enums\ModuleVersionStatus;
 use App\Enums\QuestionType;
-use App\Models\Account;
 use App\Models\ModuleVersion;
 use App\Models\QuestionOption;
 use App\Services\Modules\ModuleLineageLock;
@@ -12,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use LogicException;
+use Oceanix\Platform\Models\Account;
 
 class SaveModuleAssessment
 {

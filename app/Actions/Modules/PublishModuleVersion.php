@@ -3,12 +3,12 @@
 namespace App\Actions\Modules;
 
 use App\Enums\ModuleVersionStatus;
-use App\Models\Account;
 use App\Models\ModuleVersion;
 use App\Services\Modules\ModuleLineageLock;
 use App\Services\Modules\ModuleVersionValidator;
 use Illuminate\Support\Facades\DB;
 use LogicException;
+use Oceanix\Platform\Models\Account;
 
 class PublishModuleVersion
 {

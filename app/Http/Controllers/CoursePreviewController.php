@@ -9,10 +9,10 @@ use App\Models\CourseVersion;
 use App\Services\Courses\CoursePreviewProjection;
 use App\Services\Courses\PreviewPlaybackService;
 use App\Services\Courses\PublicPreviewResolver;
-use App\Services\Platform\PlatformAccess;
 use App\Services\Video\FakeVideoProvider;
 use App\Services\Video\LocalVideoStream;
 use Illuminate\Http\Request;
+use Oceanix\Platform\Services\Platform\PlatformAccess;
 
 class CoursePreviewController extends Controller
 {

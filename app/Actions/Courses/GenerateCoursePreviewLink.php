@@ -2,13 +2,13 @@
 
 namespace App\Actions\Courses;
 
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CoursePreviewLink;
 use App\Models\CourseVersion;
 use App\Models\User;
 use App\Services\Courses\CoursePreviewAuthority;
 use Illuminate\Support\Facades\DB;
+use Oceanix\Platform\Models\Account;
 
 class GenerateCoursePreviewLink
 {

@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Certificate;
-use App\Models\Company;
 use App\Services\Certificates\CertificateRenderer;
+use Oceanix\Platform\Models\Company;
 use Symfony\Component\HttpFoundation\Response;
 
 class CertificateDownloadController extends Controller

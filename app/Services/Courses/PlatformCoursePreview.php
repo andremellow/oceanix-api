@@ -5,14 +5,14 @@ namespace App\Services\Courses;
 use App\Contracts\VideoProvider;
 use App\Enums\CourseVersionStatus;
 use App\Enums\PlatformPermission;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
-use App\Services\Platform\PlatformAccess;
 use App\Services\Video\FakeVideoProvider;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
+use Oceanix\Platform\Models\Account;
+use Oceanix\Platform\Services\Platform\PlatformAccess;
 
 class PlatformCoursePreview
 {

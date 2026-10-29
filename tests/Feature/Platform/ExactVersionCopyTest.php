@@ -10,7 +10,6 @@ use App\Data\Video\VideoAssetStatus;
 use App\Data\Video\VideoUpload;
 use App\Enums\CourseVersionStatus;
 use App\Enums\VideoStatus;
-use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Course;
 use App\Models\CourseVersion;
@@ -21,9 +20,11 @@ use App\Models\QuestionOption;
 use App\Models\Video;
 use App\Services\CourseEditor\EditorRevision;
 use App\Tenancy\TenantContext;
+use Database\Factories\AccountFactory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
+use Oceanix\Platform\Models\Account;
 
 function exactCopyFixture(?string $content = "  <h2>Emergency procedure</h2>\n<p>Keep <strong>three points</strong> of contact.</p><img src=\"/storage/content-images/safety-diagram.png\" alt=\"Safety diagram\"><div data-oceanix-video></div>  ", bool $shared = true): array
 {
@@ -45,7 +46,7 @@ function exactCopyFixture(?string $content = "  <h2>Emergency procedure</h2>\n<p
     }
     $course->update(['current_published_version_id' => $version->id]);
 
-    return [$course, $version, ModuleVersion::findOrFail($module->id), Account::factory()->platformAdmin()->create()];
+    return [$course, $version, ModuleVersion::findOrFail($module->id), AccountFactory::new()->platformAdmin()->create()];
 }
 
 // Independent persisted oracle: deliberately does not use the production comparison helper.
@@ -270,7 +271,7 @@ it('returns no current media when only noncurrent videos exist', function (): vo
 it('clones and prepares an empty course without inventing module content', function (): void {
     $course = Course::factory()->shared()->create();
     $source = CourseVersion::factory()->published()->create(['course_id' => $course, 'title' => 'Empty edition', 'description' => null]);
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $draft = app(CreateDraftFromVersion::class)->handle($source, $actor);
     $prepared = exactCopyPrepare($course, $actor);
 

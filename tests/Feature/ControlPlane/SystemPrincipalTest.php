@@ -3,10 +3,10 @@
 use App\Actions\ControlPlane\ApplyProductOperation;
 use App\Enums\Permission;
 use App\Models\AccountRequestOperation;
-use App\Models\Company;
 use App\Models\ProductOperationReceipt;
 use App\Models\User;
 use App\Services\Account\AccountUserClient;
+use Database\Factories\CompanyFactory;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -58,7 +58,7 @@ it('TA-01 verifies the real persisted mapping source callback and current permis
             'subject' => ['payload' => array_replace($source, ['subject_id' => 'foreign-subject'])],
             'hash' => ['payload_hash' => str_repeat('0', 64)],
             'actor' => ['actor_id' => User::factory()->create()->id],
-            'company' => ['company_id' => Company::factory()->create()->id],
+            'company' => ['company_id' => CompanyFactory::new()->create()->id],
             'user' => ['user_id' => User::factory()->create()->id],
             'kind' => ['kind' => 'person.invite'],
         });

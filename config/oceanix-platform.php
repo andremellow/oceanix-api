@@ -1,8 +1,5 @@
 <?php
 
-use App\Actions\Auth\AuthenticatePlatformAccount;
-use App\Actions\Auth\AuthenticateSocialLogin;
-use App\Actions\Auth\RecordTenantAccess;
 use App\Actions\ControlPlane\ApplyInvitationObservation;
 use App\Actions\ControlPlane\ApplyProductOperation;
 use App\Actions\ControlPlane\AuthorizeProductActor;
@@ -17,15 +14,9 @@ use App\Actions\People\DispatchWorkosOperation;
 use App\Actions\People\QueueWorkosInvitations;
 use App\Actions\People\QueueWorkosSynchronization;
 use App\Actions\People\RegisterPerson;
-use App\Actions\Platform\ChangeCompanyStatus;
-use App\Actions\Platform\EnterCompany;
-use App\Actions\Platform\GrantPlatformCompanyAccess;
-use App\Actions\Platform\InviteCompanyAdministrator;
-use App\Actions\Platform\InvitePlatformAdministrator;
 use App\Actions\Tenancy\SwitchCompany;
 use App\Enums\Permission;
 use App\Enums\UserStatus;
-use App\Http\Controllers\Auth\WorkosController;
 use App\Http\Controllers\ControlPlane\CompanyComplianceAccessController;
 use App\Http\Controllers\ControlPlane\MigrateAccountPersonController;
 use App\Http\Controllers\ControlPlane\ProductActorAuthorizationController;
@@ -38,11 +29,9 @@ use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\SetLocale;
 use App\Jobs\ReconcileWorkosInvitations;
 use App\Jobs\SendWorkosInvitation;
-use App\Models\Account;
 use App\Models\AccountCompanyBinding;
 use App\Models\AccountRequestOperation;
 use App\Models\AuditLog;
-use App\Models\Company;
 use App\Models\CompanyAccessReceipt;
 use App\Models\PersonAccountLink;
 use App\Models\PersonProductAccess;
@@ -56,8 +45,6 @@ use App\Models\WorkosSyncRun;
 use App\Services\Account\AccountUserClient;
 use App\Services\Audit\AuditLogger;
 use App\Services\People\PeopleDirectory;
-use App\Services\Platform\PlatformAccess;
-use App\Services\Platform\PlatformOverview;
 use App\Services\Tenancy\CompanyComplianceAccess;
 use Oceanix\Platform\Actions\ControlPlane\ChangeCompanyProductAccess;
 use Oceanix\Platform\Http\Controllers\ControlPlane\CompanyProductAccessController;
@@ -65,6 +52,7 @@ use Oceanix\Platform\Services\Tenancy\CompanyProductAccess;
 
 return [
     'product' => 'compliance',
+    'auth' => ['config_sources' => ['client_id' => 'services.workos.client_id', 'api_key' => 'services.workos.api_key', 'providers' => 'services.social_login.providers']],
     'operation_namespaces' => ['platform' => 'platform', 'platform-invite' => 'platform-invite', 'mapping-baseline-v1-source' => 'mapping-baseline-v1-source', 'mapping' => 'mapping'],
     'migrations' => false,
     'authorization' => ['register_gates' => false, 'catalog_admin_bypass' => false],
@@ -72,13 +60,6 @@ return [
     'routes' => ['auth' => true, 'control_plane' => false],
     'jobs' => ['SendWorkosInvitation' => SendWorkosInvitation::class, 'ReconcileWorkosInvitations' => ReconcileWorkosInvitations::class],
     'legacy_bindings' => [
-        Oceanix\Platform\Actions\Platform\ChangeCompanyStatus::class => ChangeCompanyStatus::class,
-        Oceanix\Platform\Actions\Platform\EnterCompany::class => EnterCompany::class,
-        Oceanix\Platform\Actions\Platform\GrantPlatformCompanyAccess::class => GrantPlatformCompanyAccess::class,
-        Oceanix\Platform\Actions\Platform\InviteCompanyAdministrator::class => InviteCompanyAdministrator::class,
-        Oceanix\Platform\Actions\Platform\InvitePlatformAdministrator::class => InvitePlatformAdministrator::class,
-        Oceanix\Platform\Services\Platform\PlatformAccess::class => PlatformAccess::class,
-        Oceanix\Platform\Services\Platform\PlatformOverview::class => PlatformOverview::class,
         Oceanix\Platform\Actions\People\QueueWorkosSynchronization::class => QueueWorkosSynchronization::class,
         Oceanix\Platform\Actions\People\QueueWorkosInvitations::class => QueueWorkosInvitations::class,
         Oceanix\Platform\Actions\People\ReconcileWorkosInvitations::class => App\Actions\People\ReconcileWorkosInvitations::class,
@@ -107,11 +88,7 @@ return [
         Oceanix\Platform\Http\Middleware\EnsureUserCanAccessControlCenter::class => EnsureUserCanAccessControlCenter::class,
         Oceanix\Platform\Http\Middleware\EnsureUserIsAdmin::class => EnsureUserIsAdmin::class,
         Oceanix\Platform\Http\Middleware\EnsureUserHasPermission::class => EnsureUserHasPermission::class,
-        Oceanix\Platform\Http\Controllers\Auth\WorkosController::class => WorkosController::class,
         Oceanix\Platform\Actions\Tenancy\SwitchCompany::class => SwitchCompany::class,
-        Oceanix\Platform\Actions\Auth\RecordTenantAccess::class => RecordTenantAccess::class,
-        Oceanix\Platform\Actions\Auth\AuthenticateSocialLogin::class => AuthenticateSocialLogin::class,
-        Oceanix\Platform\Actions\Auth\AuthenticatePlatformAccount::class => AuthenticatePlatformAccount::class,
         Oceanix\Platform\Services\Audit\AuditLogger::class => AuditLogger::class,
         Oceanix\Platform\Services\People\PersonProductAccess::class => App\Services\People\PersonProductAccess::class,
         CompanyProductAccess::class => CompanyComplianceAccess::class,
@@ -119,10 +96,10 @@ return [
     'route_names' => ['dashboard' => 'dashboard'],
     'ui' => [
         'enabled' => true,
-        'platform_enabled' => false,
-        'platform_layout' => 'layouts::platform',
+        'platform_enabled' => true,
+        'platform_layout' => 'oceanix-platform::layouts.platform',
         'layout' => 'layouts::app',
-        'login_layout' => 'layouts::guest',
+        'login_layout' => 'oceanix-platform::layouts.guest',
         'logo' => 'images/oceanix-logo.png',
         'middleware' => [EnsureUserCanAccessControlCenter::class],
         'components' => ['people' => 'organization.people', 'person' => 'organization.person'],
@@ -130,7 +107,13 @@ return [
         'people_search_placeholder' => 'Name, email or employee ID',
         'profile_placeholder' => 'Training coordinator',
         'product_removal_message' => 'This removes only Compliance access for this company. Identity, other products and operational evidence are retained.',
+        'platform_navigation' => [
+            ['route' => 'platform.shared-courses.index', 'label' => 'Shared courses', 'active' => ['platform.shared-courses.*']],
+            ['route' => 'platform.shared-modules.index', 'label' => 'Shared modules', 'active' => ['platform.shared-modules.*']],
+            ['route' => 'platform.tasks.index', 'label' => 'Tasks', 'active' => ['platform.tasks.*']],
+        ],
         'slots' => [
+            'platform_company_after_details' => 'platform-extensions.company_courses',
             'login_local' => 'platform-extensions.login_local',
             'people_actions' => 'platform-extensions.people_actions',
             'people_cells_after_access' => 'platform-extensions.people_cells_after_access',
@@ -146,7 +129,7 @@ return [
     ],
     'permission_catalog' => [Permission::class],
     'user_status_enum' => UserStatus::class,
-    'models' => ['AccountCompanyBinding' => AccountCompanyBinding::class, 'AccountRequestOperation' => AccountRequestOperation::class, 'PersonAccountLink' => PersonAccountLink::class, 'PersonProductAccess' => PersonProductAccess::class, 'ServicePrincipal' => ServicePrincipal::class, 'ProductOperationReceipt' => ProductOperationReceipt::class, 'ProvisioningReceipt' => ProvisioningReceipt::class, 'CompanyAccessReceipt' => CompanyAccessReceipt::class, 'WorkosInvitationAttempt' => WorkosInvitationAttempt::class, 'WorkosSyncRun' => WorkosSyncRun::class, 'AuditLog' => AuditLog::class, 'User' => User::class, 'Company' => Company::class, 'Account' => Account::class, 'Role' => Role::class, 'Permission' => App\Models\Permission::class],
+    'models' => ['AccountCompanyBinding' => AccountCompanyBinding::class, 'AccountRequestOperation' => AccountRequestOperation::class, 'PersonAccountLink' => PersonAccountLink::class, 'PersonProductAccess' => PersonProductAccess::class, 'ServicePrincipal' => ServicePrincipal::class, 'ProductOperationReceipt' => ProductOperationReceipt::class, 'ProvisioningReceipt' => ProvisioningReceipt::class, 'CompanyAccessReceipt' => CompanyAccessReceipt::class, 'WorkosInvitationAttempt' => WorkosInvitationAttempt::class, 'WorkosSyncRun' => WorkosSyncRun::class, 'AuditLog' => AuditLog::class, 'User' => User::class, 'Role' => Role::class, 'Permission' => App\Models\Permission::class],
     'account_config' => 'services.account',
     'bootstrap_config' => 'oceanix',
     'access' => [

@@ -7,7 +7,6 @@ use App\Actions\Modules\ReorderSharedModuleAssessment;
 use App\Actions\Videos\DetachEditorVideo;
 use App\Actions\Videos\UploadEditorContentImage;
 use App\Enums\Permission;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Module;
@@ -15,10 +14,12 @@ use App\Models\ModuleVersion;
 use App\Models\Question;
 use App\Models\Video;
 use App\Services\CourseEditor\EditorRevision;
+use Database\Factories\AccountFactory;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Oceanix\Platform\Models\Account;
 use Tests\Support\CourseEditor\EditorContextCase;
 use Tests\Support\CourseEditor\EditorFixture;
 
@@ -79,7 +80,7 @@ it('executes shared course attach and reorder Actions and classifies stale autho
     expect(fn () => app(ReorderSharedCourseModules::class)->handle($version, $actor, array_reverse($ids), 'stale'))
         ->toThrow(ValidationException::class, __('The saved order is stale. Reload the draft and try again.'));
 
-    $inactive = Account::factory()->create(['is_platform_admin' => false, 'status' => 'active']);
+    $inactive = AccountFactory::new()->create(['is_platform_admin' => false, 'status' => 'active']);
     expect(fn () => app(AttachExistingSharedModule::class)->handle($version, $source->id, $inactive, app(EditorRevision::class)->forSharedCourse($course->fresh(), $version->fresh())))
         ->toThrow(LogicException::class, 'Only active platform administrators may attach modules to shared drafts.');
 
@@ -105,7 +106,7 @@ it('executes shared assessment mutation and reorder Actions and classifies autho
     expect(fn () => app(MutateSharedModuleAssessmentStructure::class)->handle($version, $actor, 'add_question', $version->id, null, 'stale'))
         ->toThrow(ValidationException::class, __('This module changed elsewhere. Reload the page before trying again.'));
 
-    $inactive = Account::factory()->create(['is_platform_admin' => false, 'status' => 'active']);
+    $inactive = AccountFactory::new()->create(['is_platform_admin' => false, 'status' => 'active']);
     expect(fn () => app(MutateSharedModuleAssessmentStructure::class)->handle($version, $inactive, 'add_question', $version->id, null, app(EditorRevision::class)->forSharedModule($version->fresh())))
         ->toThrow(LogicException::class, 'Only an active platform administrator can change shared content.');
 
@@ -129,11 +130,11 @@ it('executes image upload directly in company and platform contexts with exact a
     expect(fn () => app(UploadEditorContentImage::class)->handle(UploadedFile::fake()->image('denied.png'), course: $course, actor: $viewer))
         ->toThrow(AuthorizationException::class);
 
-    $platform = Account::factory()->platformAdmin()->create();
+    $platform = AccountFactory::new()->platformAdmin()->create();
     $sharedImage = app(UploadEditorContentImage::class)->handle(UploadedFile::fake()->image('shared.png'), platformActor: $platform);
     expect($sharedImage->company_id)->toBeNull()->and($sharedImage->is_shared)->toBeTrue();
 
-    $inactive = Account::factory()->create(['is_platform_admin' => false, 'status' => 'active']);
+    $inactive = AccountFactory::new()->create(['is_platform_admin' => false, 'status' => 'active']);
     expect(fn () => app(UploadEditorContentImage::class)->handle(UploadedFile::fake()->image('platform-denied.png'), platformActor: $inactive))
         ->toThrow(LogicException::class, 'Only an active platform administrator can upload shared content images.');
 });

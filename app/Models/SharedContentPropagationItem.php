@@ -6,6 +6,7 @@ use App\Enums\SharedContentPropagationItemStatus;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Oceanix\Platform\Models\Company;
 
 #[Fillable(['propagation_id', 'course_id', 'company_id', 'status', 'source_course_version_id', 'result_course_version_id', 'attempt_count', 'last_error', 'started_at', 'completed_at'])]
 class SharedContentPropagationItem extends Model

@@ -6,7 +6,6 @@ use App\Actions\Videos\Concerns\LocksEditorMediaTarget;
 use App\Contracts\VideoProvider;
 use App\Data\Video\VideoUpload;
 use App\Enums\VideoStatus;
-use App\Models\Account;
 use App\Models\Lesson;
 use App\Models\User;
 use App\Models\Video;
@@ -14,6 +13,7 @@ use App\Services\Audit\AuditLogger;
 use App\Services\CourseEditor\EditorRevision;
 use Illuminate\Support\Facades\DB;
 use LogicException;
+use Oceanix\Platform\Models\Account;
 use Throwable;
 
 /**

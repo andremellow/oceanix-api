@@ -3,7 +3,6 @@
 use App\Actions\Courses\CreateDraftFromVersion;
 use App\Actions\Documents\UploadLessonDocument;
 use App\Actions\Modules\CreateModuleDraft;
-use App\Models\Account;
 use App\Models\CoursePreviewLink;
 use App\Models\Lesson;
 use App\Models\LessonDocument;
@@ -15,6 +14,7 @@ use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
+use Oceanix\Platform\Models\Account;
 use Tests\Support\CourseEditor\EditorContextCase;
 use Tests\Support\CourseEditor\EditorFixture;
 

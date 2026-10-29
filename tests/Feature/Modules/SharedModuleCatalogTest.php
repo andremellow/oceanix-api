@@ -1,8 +1,8 @@
 <?php
 
-use App\Models\Account;
 use App\Models\Module;
 use App\Services\SharedContent\SharedContentCatalog;
+use Database\Factories\AccountFactory;
 use Livewire\Livewire;
 
 it('lists the published identity with an independent draft flag and ignores discarded versions', function () {
@@ -34,7 +34,7 @@ it('shows unpublished active drafts but omits discarded-only retired-only archiv
 });
 
 it('renders published version numbers and draft availability without discarded status or total version counts', function () {
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $published = Module::factory()->shared()->create(['title' => 'Visible publication', 'status' => 'published', 'version_number' => 2]);
     Module::factory()->shared()->create(['lineage_uuid' => $published->lineage_uuid, 'code' => $published->code, 'version_number' => 3, 'status' => 'draft', 'title' => 'Hidden draft title']);
     Module::factory()->shared()->create(['lineage_uuid' => $published->lineage_uuid, 'code' => $published->code, 'version_number' => 4, 'status' => 'discarded']);

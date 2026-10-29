@@ -6,13 +6,13 @@ use App\Enums\AssignmentStatus;
 use App\Enums\SharedContentPropagationItemStatus;
 use App\Enums\SharedContentPropagationStatus;
 use App\Jobs\PropagateSharedModuleToCourse;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\ModuleVersion;
 use App\Models\SharedContentPropagation;
 use App\Models\UserTrainingAssignment;
 use Illuminate\Support\Str;
+use Oceanix\Platform\Models\Account;
 
 class DispatchModulePropagation
 {

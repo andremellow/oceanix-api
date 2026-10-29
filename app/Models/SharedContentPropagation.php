@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Oceanix\Platform\Models\Account;
 
 #[Fillable(['uuid', 'lesson_id', 'module_version_id', 'initiated_by_account_id', 'restart_in_progress', 'status', 'affected_count', 'not_started_count', 'in_progress_count', 'processed_count', 'succeeded_count', 'failed_count', 'started_at', 'completed_at'])]
 class SharedContentPropagation extends Model

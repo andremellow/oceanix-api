@@ -2,7 +2,6 @@
 
 use App\Actions\Courses\GenerateCoursePreviewLink;
 use App\Actions\Courses\PublishCourseVersion;
-use App\Models\Company;
 use App\Models\CoursePreviewLink;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
@@ -12,10 +11,12 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\Courses\PublicPreviewResolver;
 use App\Tenancy\TenantContext;
+use Database\Factories\CompanyFactory;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Oceanix\Platform\Models\Company;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 foreach (['DB_CONNECTION' => 'pgsql', 'DB_URL' => '', 'DB_HOST' => '127.0.0.1', 'DB_PORT' => '55439', 'DB_DATABASE' => 'preview_test', 'DB_USERNAME' => 'preview_test', 'DB_PASSWORD' => '', 'APP_ENV' => 'testing', 'CACHE_STORE' => 'array', 'SESSION_DRIVER' => 'array', 'NIGHTWATCH_ENABLED' => 'false'] as $key => $value) {
@@ -37,7 +38,7 @@ Http::preventStrayRequests();
 $mode = $argv[1];
 if ($mode === 'setup') {
     Artisan::call('migrate:fresh', ['--force' => true]);
-    $company = Company::factory()->create();
+    $company = CompanyFactory::new()->create();
     app(TenantContext::class)->set($company);
     $user = User::factory()->create();
     $role = Role::factory()->create(['key' => 'admin', 'is_protected' => true]);

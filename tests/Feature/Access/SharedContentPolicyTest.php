@@ -1,9 +1,9 @@
 <?php
 
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\Module;
 use App\Models\User;
+use Database\Factories\AccountFactory;
 use Illuminate\Support\Facades\Gate;
 
 it('does not let the tenant administrator bypass shared course write ownership', function (): void {
@@ -28,7 +28,7 @@ it('does not let the tenant administrator bypass shared module write ownership',
 
 it('lets a platform administrator write shared course and module records', function (): void {
     $platformAdministrator = User::factory()->create([
-        'account_id' => Account::factory()->platformAdmin(),
+        'account_id' => AccountFactory::new()->platformAdmin(),
     ]);
     $sharedCourse = (new Course)->forceFill(['company_id' => null, 'is_shared' => true]);
     $sharedModule = (new Module)->forceFill(['company_id' => null, 'is_shared' => true]);

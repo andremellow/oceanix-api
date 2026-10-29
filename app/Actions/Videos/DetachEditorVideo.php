@@ -3,12 +3,12 @@
 namespace App\Actions\Videos;
 
 use App\Actions\Videos\Concerns\LocksEditorMediaTarget;
-use App\Models\Account;
 use App\Models\Lesson;
 use App\Models\User;
 use App\Models\Video;
 use App\Services\CourseEditor\EditorRevision;
 use Illuminate\Support\Facades\DB;
+use Oceanix\Platform\Models\Account;
 
 final class DetachEditorVideo
 {

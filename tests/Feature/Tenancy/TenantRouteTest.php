@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\Company;
+use Database\Factories\CompanyFactory;
 
 it('puts authenticated operational pages below the company slug', function (): void {
     expect(route('dashboard'))->toContain('/c/'.currentCompany()->slug.'/dashboard');
@@ -32,7 +32,7 @@ it('turns the bare company URL into the correct tenant entry point', function ()
 
 it('does not allow a person from one company into another company route', function (): void {
     $user = employeeUser();
-    $other = Company::factory()->create();
+    $other = CompanyFactory::new()->create();
 
     $this->actingAs($user)
         ->get(route('dashboard', ['company' => $other]))

@@ -3,7 +3,6 @@
 namespace App\Actions\Videos\Concerns;
 
 use App\Enums\ModuleVersionStatus;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
@@ -19,6 +18,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use LogicException;
+use Oceanix\Platform\Models\Account;
 
 trait LocksEditorMediaTarget
 {

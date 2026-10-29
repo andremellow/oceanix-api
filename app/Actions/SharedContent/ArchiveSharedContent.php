@@ -5,7 +5,6 @@ namespace App\Actions\SharedContent;
 use App\Enums\CourseStatus;
 use App\Enums\ModuleStatus;
 use App\Enums\ModuleVersionStatus;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\Module;
 use App\Models\ModuleVersion;
@@ -14,6 +13,7 @@ use App\Services\Modules\ModuleLineageLock;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use LogicException;
+use Oceanix\Platform\Models\Account;
 
 class ArchiveSharedContent
 {

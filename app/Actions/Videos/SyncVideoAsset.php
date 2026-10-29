@@ -7,7 +7,6 @@ use App\Contracts\VideoProvider;
 use App\Enums\ModuleVersionStatus;
 use App\Enums\VideoStatus;
 use App\Exceptions\VideoProviderException;
-use App\Models\Account;
 use App\Models\Lesson;
 use App\Models\User;
 use App\Models\Video;
@@ -15,6 +14,7 @@ use App\Services\CourseEditor\EditorRevision;
 use Closure;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Oceanix\Platform\Models\Account;
 
 /**
  * Reconciles a local video row with the provider's encoding state.

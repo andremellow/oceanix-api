@@ -6,13 +6,13 @@ use Andremellow\Tasks\Models\TaskComment;
 use Andremellow\Tasks\Models\TaskStatusChange;
 use Andremellow\Tasks\Models\TaskTag;
 use Andremellow\Tasks\Models\TaskType;
-use App\Models\Account;
 use App\Models\User;
+use Database\Factories\AccountFactory;
 
 function configurePlatformTaskApi(array $account = [], array $user = []): array
 {
     $key = 'test-key-'.str()->random(40);
-    $platformAccount = Account::factory()->platformAdmin()->create($account);
+    $platformAccount = AccountFactory::new()->platformAdmin()->create($account);
     $actor = User::factory()->create([
         'account_id' => $platformAccount->id,
         'email' => $platformAccount->email,

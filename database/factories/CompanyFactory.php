@@ -2,14 +2,16 @@
 
 namespace Database\Factories;
 
-use App\Models\Company;
 use App\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
+use Oceanix\Platform\Models\Company;
 
 /** @extends Factory<Company> */
 class CompanyFactory extends Factory
 {
+    protected $model = Company::class;
+
     public function configure(): static
     {
         return $this->afterCreating(fn (Company $company) => app(TenantContext::class)->set($company));

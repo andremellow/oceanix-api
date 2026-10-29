@@ -1,16 +1,17 @@
 <?php
 
 use App\Actions\People\QueueWorkosInvitations;
-use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\WorkosInvitationAttempt;
 use App\Tenancy\TenantContext;
+use Database\Factories\CompanyFactory;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Oceanix\Platform\Models\Company;
 use Symfony\Component\Process\Process;
 
 require dirname(__DIR__, 3).'/vendor/autoload.php';
@@ -28,7 +29,7 @@ if (($argv[1] ?? '') === 'child') {
     exit;
 }
 Artisan::call('migrate:fresh', ['--force' => true]);
-$company = Company::factory()->create(['workos_organization_id' => 'org_probe']);
+$company = CompanyFactory::new()->create(['workos_organization_id' => 'org_probe']);
 app(TenantContext::class)->set($company);
 $actor = User::factory()->create();
 $actor->roles()->attach(Role::factory()->create(['key' => 'admin']));

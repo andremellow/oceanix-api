@@ -1,7 +1,6 @@
 <?php
 
 use App\Actions\Courses\MakeCourseShared;
-use App\Models\Account;
 use App\Models\Certificate;
 use App\Models\ComplianceEvent;
 use App\Models\Course;
@@ -9,6 +8,7 @@ use App\Models\CourseAttempt;
 use App\Models\CourseVersion;
 use App\Models\UserTrainingAssignment;
 use App\Services\Courses\CoursePromotionImpact;
+use Database\Factories\AccountFactory;
 
 it('preserves historical version assignment attempt and certificate references during promotion', function (): void {
     $company = currentCompany();
@@ -31,7 +31,7 @@ it('preserves historical version assignment attempt and certificate references d
     ]);
     $token = app(CoursePromotionImpact::class)->preview($course, $company)['token'];
 
-    app(MakeCourseShared::class)->handle($course, $company, Account::factory()->platformAdmin()->create(), $token);
+    app(MakeCourseShared::class)->handle($course, $company, AccountFactory::new()->platformAdmin()->create(), $token);
 
     expect($version->fresh()->course_id)->toBe($course->id)
         ->and($assignment->fresh()->course_id)->toBe($course->id)

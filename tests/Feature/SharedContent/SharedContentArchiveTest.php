@@ -10,7 +10,6 @@ use App\Enums\ModuleStatus;
 use App\Enums\ModuleVersionStatus;
 use App\Enums\Permission;
 use App\Enums\TargetScope;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Module;
@@ -23,6 +22,7 @@ use App\Services\CourseEditor\EditorRevision;
 use App\Services\Modules\EligibleModuleCatalog;
 use App\Services\Requirements\AssignmentMaterializationService;
 use App\Services\SharedContent\SharedContentCatalog;
+use Database\Factories\AccountFactory;
 use Illuminate\Support\Facades\DB;
 
 function archivableSharedCourse(): Course
@@ -35,7 +35,7 @@ function archivableSharedCourse(): Course
 }
 
 it('archives a shared course with explicit platform audit and blocks new operational use', function (): void {
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $course = archivableSharedCourse();
     $company = currentCompany();
     $tenantActor = userWithPermissions([Permission::SharedCoursesAdd]);
@@ -51,7 +51,7 @@ it('archives a shared course with explicit platform audit and blocks new operati
 });
 
 it('allows an existing assignment to continue after its shared course is archived', function (): void {
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $course = archivableSharedCourse();
     $assignment = UserTrainingAssignment::factory()->create([
         'course_id' => $course->id,
@@ -75,7 +75,7 @@ it('does not materialize new requirement assignments for an archived shared cour
     ]);
     app(ArchiveSharedContent::class)->handle(
         $course,
-        Account::factory()->platformAdmin()->create(),
+        AccountFactory::new()->platformAdmin()->create(),
         'Stop materialization',
     );
 
@@ -85,7 +85,7 @@ it('does not materialize new requirement assignments for an archived shared cour
 });
 
 it('excludes an archived shared module from catalogs and new compositions', function (): void {
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $module = Module::factory()->shared()->create(['status' => ModuleStatus::Active]);
     $version = ModuleVersion::factory()->published()->create(['module_id' => $module->id]);
     $module->update(['current_published_version_id' => $version->id]);

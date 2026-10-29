@@ -2,7 +2,6 @@
 
 namespace App\Actions\Documents;
 
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\Lesson;
 use App\Models\User;
@@ -12,6 +11,7 @@ use App\Services\Modules\ModuleLineageLock;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use Oceanix\Platform\Models\Account;
 
 final class ReuseLessonDocument
 {

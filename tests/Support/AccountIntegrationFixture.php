@@ -5,10 +5,8 @@ namespace Tests\Support;
 use App\Actions\ControlPlane\ApplyInvitationObservation;
 use App\Enums\Permission;
 use App\Enums\UserStatus;
-use App\Models\Account;
 use App\Models\AccountCompanyBinding;
 use App\Models\AccountRequestOperation;
-use App\Models\Company;
 use App\Models\PersonAccountLink;
 use App\Models\PersonProductAccess;
 use App\Models\Role;
@@ -23,6 +21,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
+use Oceanix\Platform\Models\Account;
+use Oceanix\Platform\Models\Company;
 use Ramsey\Uuid\Uuid;
 
 final class AccountIntegrationFixture

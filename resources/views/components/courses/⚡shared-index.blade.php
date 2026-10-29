@@ -3,7 +3,7 @@
 use App\Actions\Courses\AssociateSharedCourse;
 use App\Enums\Permission;
 use App\Models\Course;
-use App\Models\Company;
+use Oceanix\Platform\Models\Company;
 use App\Services\SharedContent\SharedContentCatalog;
 use App\Tenancy\TenantContext;
 use Livewire\Component;

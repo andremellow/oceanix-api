@@ -17,7 +17,6 @@ use App\Actions\Videos\RequestVideoUpload;
 use App\Actions\Videos\SyncVideoAsset;
 use App\Actions\Videos\UploadEditorContentImage;
 use App\Enums\PlatformPermission;
-use App\Models\Account;
 use App\Services\CourseEditor\EditorContentImageLibrary;
 use App\Services\CourseEditor\EditorSaveCommand;
 use App\Services\CourseEditor\EditorSaveResult;
@@ -26,9 +25,10 @@ use App\Services\CourseEditor\EditorSnapshotBuilder;
 use App\Services\Documents\LessonDocumentLibrary;
 use App\Services\Modules\ModulePropagationImpact;
 use App\Services\Modules\ModuleVersionValidator;
-use App\Services\Platform\PlatformAccess;
 use App\Services\Video\VideoLibrary;
 use LogicException;
+use Oceanix\Platform\Models\Account;
+use Oceanix\Platform\Services\Platform\PlatformAccess;
 
 final class SharedModuleEditorContext implements EditorContext
 {

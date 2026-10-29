@@ -4,13 +4,13 @@ use App\Actions\Modules\CreateModule;
 use App\Enums\PlatformPermission as Permission;
 use App\Models\Module;
 use App\Services\Modules\ModuleStatusPresentation;
-use App\Services\Platform\PlatformAccess;
+use Oceanix\Platform\Services\Platform\PlatformAccess;
 use App\Services\SharedContent\SharedContentCatalog;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
-new #[Layout('layouts::platform')] class extends Component
+new #[Layout('oceanix-platform::layouts.platform')] class extends Component
 {
     #[Url]
     public string $search = '';
@@ -50,7 +50,7 @@ new #[Layout('layouts::platform')] class extends Component
 
 <div class="space-y-7">
     <x-page-hero :kicker="__('Platform administration')" :title="__('Shared Modules')" :description="__('Create and manage reusable training modules for every company.')" />
-    <x-status-message />
+    <x-oceanix-platform::status-message />
     <div class="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
         <form wire:submit="create" class="form-panel space-y-4 rounded-[20px] border border-[#dde3e7] p-5">
             <h2 class="font-bold">{{ __('New Shared Module') }}</h2>

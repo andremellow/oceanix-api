@@ -3,7 +3,6 @@
 use App\Http\Middleware\EnsureComplianceAccess;
 use App\Http\Middleware\EnsurePersonProductAccess;
 use App\Http\Middleware\EnsurePlatformTaskApiAccess;
-use App\Http\Middleware\IdentifyCompany;
 use App\Http\Middleware\PublicCoursePreview;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
@@ -14,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\TokenMismatchException;
 use Laravel\Nightwatch\Facades\Nightwatch;
+use Oceanix\Platform\Http\Middleware\IdentifyCompany;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))

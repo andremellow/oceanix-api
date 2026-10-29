@@ -1,18 +1,18 @@
 <?php
 
-use App\Models\Account;
 use App\Models\AuditLog;
-use App\Models\Company;
 use App\Models\User;
 use App\Tenancy\TenantContext;
+use Database\Factories\AccountFactory;
+use Database\Factories\CompanyFactory;
 use Illuminate\Database\QueryException;
 
 it('links one global account to distinct people in different companies', function (): void {
-    $account = Account::factory()->create(['email' => 'andre@example.com']);
+    $account = AccountFactory::new()->create(['email' => 'andre@example.com']);
     $firstCompany = currentCompany();
     $first = User::factory()->create(['account_id' => $account->id, 'email' => 'andre@example.com']);
 
-    $secondCompany = Company::factory()->create();
+    $secondCompany = CompanyFactory::new()->create();
     app(TenantContext::class)->set($secondCompany);
     $second = User::factory()->create(['account_id' => $account->id, 'email' => 'andre@example.com']);
 
@@ -23,9 +23,9 @@ it('links one global account to distinct people in different companies', functio
 });
 
 it('switches to another linked company and records the context change', function (): void {
-    $account = Account::factory()->create();
+    $account = AccountFactory::new()->create();
     $first = User::factory()->create(['account_id' => $account->id, 'email' => $account->email]);
-    $secondCompany = Company::factory()->create();
+    $secondCompany = CompanyFactory::new()->create();
     $second = User::factory()->create(['account_id' => $account->id, 'email' => $account->email]);
     app(TenantContext::class)->set($first->company);
 
@@ -43,6 +43,6 @@ it('allows the same email once per company', function (): void {
 
     expect(fn () => User::factory()->create(['email' => 'person@example.com']))->toThrow(QueryException::class);
 
-    Company::factory()->create();
+    CompanyFactory::new()->create();
     expect(User::factory()->create(['email' => 'person@example.com']))->toBeInstanceOf(User::class);
 });

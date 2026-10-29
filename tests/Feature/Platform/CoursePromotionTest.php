@@ -1,9 +1,7 @@
 <?php
 
 use App\Actions\Courses\MakeCourseShared;
-use App\Models\Account;
 use App\Models\AuditLog;
-use App\Models\Company;
 use App\Models\CompanyCourse;
 use App\Models\Course;
 use App\Models\CourseVersion;
@@ -11,6 +9,8 @@ use App\Models\CourseVersionModule;
 use App\Models\ModuleVersion;
 use App\Services\Courses\CoursePromotionImpact;
 use App\Tenancy\TenantContext;
+use Database\Factories\AccountFactory;
+use Database\Factories\CompanyFactory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -48,7 +48,7 @@ it('atomically promotes the course and reused modules and keeps a source associa
     [$course, $module, $affected] = promotionGraph();
     $company = currentCompany();
     $tenantAdministrator = adminUser();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $preview = app(CoursePromotionImpact::class)->preview($course, $company);
 
     $result = app(MakeCourseShared::class)->handle($course, $company, $actor, $preview['token']);
@@ -66,7 +66,7 @@ it('atomically promotes the course and reused modules and keeps a source associa
 it('rejects a stale preview without partially changing ownership', function (): void {
     [$course, $module] = promotionGraph();
     $company = currentCompany();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $token = app(CoursePromotionImpact::class)->preview($course, $company)['token'];
     DB::table('lessons')->where('id', $module->id)->update(['title' => 'Changed after preview', 'updated_at' => now()->addSecond()]);
 
@@ -80,7 +80,7 @@ it('rejects a stale preview without partially changing ownership', function (): 
 it('rejects an invalid ownership graph without changing any record', function (): void {
     [$course, $module] = promotionGraph();
     $company = currentCompany();
-    $otherCompany = Company::factory()->create();
+    $otherCompany = CompanyFactory::new()->create();
     $foreignVersion = ModuleVersion::query()->create([
         'company_id' => $otherCompany->id, 'is_shared' => false, 'code' => 'FOREIGN',
         'lineage_uuid' => (string) Str::uuid(), 'version_number' => 1, 'status' => 'published',

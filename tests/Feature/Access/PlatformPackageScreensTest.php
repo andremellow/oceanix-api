@@ -1,7 +1,6 @@
 <?php
 
 use App\Enums\Permission;
-use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
 use App\Tenancy\TenantContext;
@@ -12,6 +11,7 @@ use Oceanix\Platform\Livewire\People;
 use Oceanix\Platform\Livewire\Person;
 use Oceanix\Platform\Livewire\Profile;
 use Oceanix\Platform\Livewire\Profiles;
+use Oceanix\Platform\Models\Company;
 
 beforeEach(function () {
     seedAccessCatalog();

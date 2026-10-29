@@ -5,7 +5,6 @@ use App\Enums\Permission as PermissionEnum;
 use App\Enums\QuestionType;
 use App\Enums\RequirementStatus;
 use App\Enums\TargetScope;
-use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
@@ -30,6 +29,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Oceanix\Platform\Models\Company;
 use Tests\TestCase;
 
 pest()->extend(TestCase::class)

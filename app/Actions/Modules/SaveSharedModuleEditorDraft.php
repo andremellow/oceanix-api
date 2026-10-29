@@ -2,12 +2,12 @@
 
 namespace App\Actions\Modules;
 
-use App\Models\Account;
 use App\Models\ModuleVersion;
 use App\Services\Modules\ModuleLineageLock;
 use App\Services\Modules\SharedModuleDraftWriter;
 use Illuminate\Support\Facades\DB;
 use LogicException;
+use Oceanix\Platform\Models\Account;
 
 class SaveSharedModuleEditorDraft
 {

@@ -2,9 +2,9 @@
 
 use App\Actions\Courses\AssociateSharedCourse;
 use App\Enums\Permission;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
+use Database\Factories\AccountFactory;
 
 function publishedSharedCourseForCatalog(array $attributes = []): Course
 {
@@ -49,7 +49,7 @@ it('never offers tenant editing for an associated shared course even to a platfo
     $actor = adminUser();
 
     app(AssociateSharedCourse::class)->handle($course, $actor);
-    $actor->update(['account_id' => Account::factory()->platformAdmin()->create()->id]);
+    $actor->update(['account_id' => AccountFactory::new()->platformAdmin()->create()->id]);
 
     Livewire\Livewire::actingAs($actor)
         ->test('courses.show', ['company' => currentCompany(), 'course' => $course])

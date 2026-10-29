@@ -3,11 +3,11 @@
 namespace App\Services\Courses;
 
 use App\Actions\Courses\GenerateCoursePreviewLink;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
+use Oceanix\Platform\Models\Account;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 final readonly class CoursePreviewPanel

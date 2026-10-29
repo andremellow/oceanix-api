@@ -6,7 +6,7 @@ use App\Actions\Courses\RemoveSharedCourse;
 use App\Enums\CourseVersionStatus;
 use App\Enums\Permission;
 use App\Exceptions\CoursePublicationException;
-use App\Models\Company;
+use Oceanix\Platform\Models\Company;
 use App\Models\CompanyCourse;
 use App\Models\Course;
 use App\Models\CourseVersion;

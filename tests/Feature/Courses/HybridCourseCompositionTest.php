@@ -6,7 +6,6 @@ use App\Actions\Courses\UpdateCourseModuleComposition;
 use App\Enums\CourseVersionStatus;
 use App\Enums\ModuleStatus;
 use App\Exceptions\CoursePublicationException;
-use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
@@ -21,6 +20,7 @@ use App\Services\Courses\CourseVersionComposition;
 use App\Services\Courses\CourseVersionValidator;
 use App\Services\Courses\PublicPreviewResolver;
 use App\Tenancy\TenantContext;
+use Database\Factories\CompanyFactory;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -56,7 +56,7 @@ it('orders company and shared module snapshots in a company course draft', funct
 it('rejects cross-tenant module injection and published-course mutation', function (): void {
     $course = Course::factory()->draft()->create();
     $draft = CourseVersion::factory()->create(['course_id' => $course->id]);
-    $other = Company::factory()->create();
+    $other = CompanyFactory::new()->create();
     app(TenantContext::class)->set($other);
     $foreign = activeModuleVersion(['company_id' => $other->id, 'is_shared' => false]);
     app(TenantContext::class)->set($course->company);

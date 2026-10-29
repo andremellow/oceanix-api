@@ -6,12 +6,12 @@ use App\Enums\Permission;
 use App\Enums\UserStatus;
 use App\Enums\WorkosInvitationState;
 use App\Enums\WorkosOperationStatus;
-use App\Models\Account;
 use App\Models\AuditLog;
-use App\Models\Company;
 use App\Models\User;
 use App\Models\WorkosInvitationAttempt;
 use App\Tenancy\TenantContext;
+use Database\Factories\AccountFactory;
+use Database\Factories\CompanyFactory;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Tests\Support\AccountIntegrationFixture as Fixture;
@@ -20,7 +20,7 @@ beforeEach(function () {
     currentCompany()->update(['workos_organization_id' => 'org_current']);
     config(['services.account.invitation_ownership_enabled' => true, 'services.workos.api_key' => 'test-key', 'services.account.url' => 'https://account.example.test', 'services.account.token' => 'synthetic', 'services.account.actor_assertion_secret' => 'synthetic-proof-secret']);
     $this->actingAs(userWithPermissions([Permission::PeopleInvite]));
-    auth()->user()->forceFill(['workos_user_id' => 'user_recovery_actor', 'account_id' => Account::factory()->create()->id])->save();
+    auth()->user()->forceFill(['workos_user_id' => 'user_recovery_actor', 'account_id' => AccountFactory::new()->create()->id])->save();
     Queue::fake();
 });
 
@@ -122,7 +122,7 @@ it('preserves a newer invitation after a successful but stale POST and restores 
         return Http::response(['data' => []]);
     });
     $company = currentCompany();
-    $other = Company::factory()->create();
+    $other = CompanyFactory::new()->create();
     app(TenantContext::class)->set($other);
     $job = new App\Jobs\SendWorkosInvitation($company->id, $person->id, $attempt->actor_id, $attempt->id);
     $job->protocolVersion = 2;

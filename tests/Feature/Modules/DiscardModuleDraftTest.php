@@ -6,7 +6,6 @@ use App\Actions\Modules\DiscardModuleDraft;
 use App\Actions\Modules\PublishModuleVersion;
 use App\Enums\ModuleVersionStatus;
 use App\Enums\PlatformPermission;
-use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
@@ -14,13 +13,14 @@ use App\Models\ModuleVersion;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Video;
+use Database\Factories\AccountFactory;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 function moduleDiscardFixture(): array
 {
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $module = app(CreateModule::class)->handle($actor, 'DISCARD-01', 'Original module');
 
     return [$actor, $module, $module->versions()->sole(), app(DiscardModuleDraft::class)];
@@ -160,7 +160,7 @@ it('keeps company-owned modules outside the platform discard boundary', function
 
 it('denies direct module detail access to a non-platform account', function () {
     [$actor, $module] = moduleDiscardFixture();
-    $account = Account::factory()->create();
+    $account = AccountFactory::new()->create();
     $this->withSession(['platform_account_id' => $account->id]);
     $this->get(route('platform.shared-modules.show', $module))->assertRedirect(route('platform.login'));
     Livewire::test('platform.shared-modules.show', ['module' => $module])->assertForbidden();

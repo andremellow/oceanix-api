@@ -2,9 +2,9 @@
 
 namespace App\Services\Courses;
 
-use App\Models\Company;
 use App\Models\Course;
 use Illuminate\Database\Eloquent\Collection;
+use Oceanix\Platform\Models\Company;
 
 class CompanyCourseLibrary
 {

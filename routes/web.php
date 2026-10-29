@@ -2,9 +2,7 @@
 
 use App\Actions\Auth\StartUserImpersonation;
 use App\Actions\Auth\StopUserImpersonation;
-use App\Actions\Platform\EnterCompany;
 use App\Enums\UserStatus;
-use App\Http\Controllers\Auth\WorkosController;
 use App\Http\Controllers\CertificateDownloadController;
 use App\Http\Controllers\CertificateVerificationController;
 use App\Http\Controllers\ComplianceExportController;
@@ -19,19 +17,18 @@ use App\Http\Middleware\EnsurePersonProductAccess;
 use App\Http\Middleware\EnsurePlatformHasPermission;
 use App\Http\Middleware\EnsureUserCanAccessControlCenter;
 use App\Http\Middleware\EnsureUserHasPermission;
-use App\Http\Middleware\EnsureUserIsPlatformAdmin;
-use App\Http\Middleware\IdentifyCompany;
 use App\Http\Middleware\PublicCoursePreview;
 use App\Http\Middleware\SetLocale;
-use App\Models\Account;
-use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
-use App\Services\Platform\PlatformAccess;
 use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
-use Oceanix\Platform\Http\Controllers\Auth\LogoutController;
+use Oceanix\Platform\Http\Middleware\EnsurePlatformAdministrator;
+use Oceanix\Platform\Http\Middleware\IdentifyCompany;
+use Oceanix\Platform\Models\Account;
+use Oceanix\Platform\Models\Company;
+use Oceanix\Platform\Services\Platform\PlatformAccess;
 
 Route::get('/', function () {
     if (Auth::check()) {
@@ -68,7 +65,6 @@ if (app()->environment('local')) {
 }
 
 Route::middleware('guest')->group(function (): void {
-    Route::livewire('/platform/login', 'oceanix-platform.login')->name('platform.login');
 
     // Local-only bypass so the application can be opened before WorkOS is configured.
     // Registered only in the local environment and only for the single configured
@@ -108,21 +104,15 @@ Route::middleware('guest')->group(function (): void {
         })->middleware(IdentifyCompany::class)->name('auth.local');
     }
 
-    Route::get('/auth/workos/platform/redirect', [WorkosController::class, 'platformRedirect'])
-        ->middleware('throttle:auth')
-        ->name('auth.workos.platform.redirect');
 });
 
 Route::prefix('platform')
-    ->middleware(EnsureUserIsPlatformAdmin::class)
+    ->middleware(EnsurePlatformAdministrator::class)
     ->group(function (): void {
         Route::get('/lesson-document-library/{document}', [LessonDocumentLibraryController::class, 'platform'])
             ->whereUuid('document')->middleware(EnsurePlatformHasPermission::class.':lesson-documents.view')->name('platform.lesson-documents.library.open');
         Route::post('/editor-uploads/{platformAccount}', [EditorFileUploadController::class, 'handle'])
             ->whereNumber('platformAccount')->name('platform.editor-uploads.store');
-        Route::livewire('/', 'platform.dashboard')->name('platform.dashboard');
-        Route::livewire('/companies', 'oceanix-platform.platform-companies')->name('platform.companies');
-        Route::livewire('/users', 'oceanix-platform.platform-users')->name('platform.users');
         Route::livewire('/shared-courses', 'platform.shared-courses.index')->name('platform.shared-courses.index');
         Route::livewire('/shared-courses/{course}', 'platform.shared-courses.show')->name('platform.shared-courses.show');
         Route::livewire('/shared-courses/{course}/editor', 'platform.shared-courses.editor')->name('platform.shared-courses.editor');
@@ -137,14 +127,7 @@ Route::prefix('platform')
         Route::livewire('/shared-modules/{module}/editor', 'platform.shared-modules.editor')->middleware(EnsurePlatformHasPermission::class.':shared-modules.update')->name('platform.shared-modules.editor');
         Route::livewire('/shared-modules/{module}/preview', 'platform.shared-modules.preview')->middleware(EnsurePlatformHasPermission::class.':shared-modules.view')->name('platform.shared-modules.preview');
         Route::get('/shared-modules/{module}/preview/documents/{document}', [LessonDocumentController::class, 'platformModule'])->middleware(EnsurePlatformHasPermission::class.':shared-modules.view')->whereUuid('document')->name('platform.shared-modules.documents');
-        Route::livewire('/companies/{company}', 'platform.company')->name('platform.companies.show');
         Route::livewire('/companies/{company}/courses/{course}', 'platform.shared-courses.show')->name('platform.companies.courses.show');
-        Route::post('/companies/{company}/enter', function (Company $company, EnterCompany $action) {
-            $action->handle($company);
-
-            return redirect()->route('dashboard', ['company' => $company]);
-        })->name('platform.companies.enter');
-        Route::post('/logout', LogoutController::class)->name('platform.logout');
     });
 
 // Keep existing bookmarks and notification links useful while tenant URLs migrate to
@@ -301,5 +284,5 @@ Route::match(['get', 'post'], '/c/{company:slug}/courses/{course}/versions/{vers
     ->middleware(['auth', EnsureUserHasPermission::class.':courses.preview-links.generate', 'throttle:10,1'])
     ->name('courses.preview-link');
 Route::match(['get', 'post'], '/platform/shared-courses/{course}/versions/{version}/preview-link', [CoursePreviewController::class, 'operator'])
-    ->middleware([EnsureUserIsPlatformAdmin::class, EnsurePlatformHasPermission::class.':shared-courses.preview-links.generate', 'throttle:10,1'])
+    ->middleware([EnsurePlatformAdministrator::class, EnsurePlatformHasPermission::class.':shared-courses.preview-links.generate', 'throttle:10,1'])
     ->name('platform.shared-courses.preview-link');

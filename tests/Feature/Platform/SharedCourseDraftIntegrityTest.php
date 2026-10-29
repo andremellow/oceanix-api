@@ -14,7 +14,6 @@ use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
 use App\Enums\ModuleVersionStatus;
 use App\Exceptions\CoursePublicationException;
-use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Course;
 use App\Models\CourseVersion;
@@ -32,10 +31,12 @@ use App\Services\Courses\LessonContentSanitizer;
 use App\Services\Modules\SharedModuleDraftWriter;
 use App\Services\SharedContent\SharedContentCatalog;
 use App\Tenancy\TenantContext;
+use Database\Factories\AccountFactory;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Oceanix\Platform\Models\Account;
 use PHPUnit\Framework\Assert;
 use Symfony\Component\Process\Process;
 
@@ -70,9 +71,9 @@ function prepareSharedEditor(Course $course, Account $actor): CourseVersion
 it('enforces the active platform administrator role on shared-course routes', function (): void {
     $course = Course::factory()->shared()->create();
     CourseVersion::factory()->create(['course_id' => $course, 'publication_kind' => 'manual']);
-    $active = Account::factory()->platformAdmin()->create();
-    $inactive = Account::factory()->platformAdmin()->create(['status' => 'inactive']);
-    $nonAdmin = Account::factory()->create(['is_platform_admin' => false, 'status' => 'active']);
+    $active = AccountFactory::new()->platformAdmin()->create();
+    $inactive = AccountFactory::new()->platformAdmin()->create(['status' => 'inactive']);
+    $nonAdmin = AccountFactory::new()->create(['is_platform_admin' => false, 'status' => 'active']);
 
     $this->withSession(['platform_account_id' => $active->id])->get(route('platform.shared-courses.show', $course))->assertOk();
     $this->withSession(['platform_account_id' => $inactive->id])->get(route('platform.shared-courses.show', $course))->assertRedirect(route('platform.login'));
@@ -81,13 +82,13 @@ it('enforces the active platform administrator role on shared-course routes', fu
 
 it('rejects inactive and non-admin actors in draft creation preparation and publication without writes', function (array $actorState): void {
     [$course, $published, $module] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->create($actorState);
+    $actor = AccountFactory::new()->create($actorState);
     $versionCount = CourseVersion::query()->count();
 
     expect(fn () => app(CreateDraftFromVersion::class)->handle($published, $actor))->toThrow(LogicException::class)
         ->and(CourseVersion::query()->count())->toBe($versionCount);
 
-    $valid = Account::factory()->platformAdmin()->create();
+    $valid = AccountFactory::new()->platformAdmin()->create();
     $draft = app(CreateDraftFromVersion::class)->handle($published, $valid);
     $prepare = app(PrepareSharedCourseEditor::class);
     $pivotId = $draft->moduleCompositions()->sole()->lesson_id;
@@ -103,7 +104,7 @@ it('rejects inactive and non-admin actors in draft creation preparation and publ
 
 it('copies the exact shared composition while preserving all five questions and twenty answers', function (): void {
     [$course, $published, $module] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
 
     $draft = app(CreateDraftFromVersion::class)->handle($published, $actor);
     $composition = $draft->moduleCompositions()->sole();
@@ -135,7 +136,7 @@ it('copies multiple shared references in exact source order with required flags 
     $beta = Module::factory()->shared()->create(['course_version_id' => null, 'status' => 'published']);
     CourseVersionModule::query()->create(['course_version_id' => $source->id, 'lesson_id' => $alpha->id, 'position' => 2, 'is_required' => false]);
     CourseVersionModule::query()->create(['course_version_id' => $source->id, 'lesson_id' => $beta->id, 'position' => 1, 'is_required' => true]);
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
 
     $draft = app(CreateDraftFromVersion::class)->handle($source, $actor);
 
@@ -157,7 +158,7 @@ it('treats canonical compositions as authoritative and ignores hybrid legacy row
     $legacy = Module::factory()->shared()->create(['course_version_id' => $source->id, 'status' => 'published', 'position' => 2]);
     $source->moduleCompositions()->where('lesson_id', $legacy->id)->delete();
     $lessonCount = Module::query()->count();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
 
     $draft = app(CreateDraftFromVersion::class)->handle($source, $actor);
 
@@ -186,7 +187,7 @@ it('atomically rejects an ineligible composition on a platform shared course', f
     $source = CourseVersion::factory()->published()->create(['course_id' => $course]);
     $private = Module::factory()->create(['course_version_id' => null]);
     CourseVersionModule::query()->create(['course_version_id' => $source->id, 'lesson_id' => $private->id, 'position' => 1, 'is_required' => true]);
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $before = CourseVersion::query()->withoutGlobalScopes()->count();
 
     expect(fn () => app(CreateDraftFromVersion::class)->handle($source, $actor))->toThrow(LogicException::class)
@@ -196,7 +197,7 @@ it('atomically rejects an ineligible composition on a platform shared course', f
 
 it('rejects draft creation after a referenced module lineage is archived without writes', function (): void {
     [$course, $published, $module] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     app(ArchiveSharedContent::class)->handle($module, $actor, 'No longer eligible');
 
     expect(fn () => app(CreateDraftFromVersion::class)->handle($published, $actor))->toThrow(LogicException::class)
@@ -206,7 +207,7 @@ it('rejects draft creation after a referenced module lineage is archived without
 
 it('rejects discard after its module lineage is archived without status pivot or audit mutation', function (): void {
     [$course, $published, $module] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $draft = app(CreateDraftFromVersion::class)->handle($published, $actor);
     $revision = app(DiscardSharedCourseDraft::class)->revision($draft);
     $before = $draft->moduleCompositions()->get()->toArray();
@@ -225,7 +226,7 @@ it('rolls back the new draft compositions and audit when draft creation fails af
         $module = Module::factory()->shared()->create(['course_version_id' => null, 'status' => 'published']);
         CourseVersionModule::query()->create(['course_version_id' => $source->id, 'lesson_id' => $module->id, 'position' => $position, 'is_required' => true]);
     }
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $audit = Mockery::mock(AuditLogger::class);
     $audit->shouldReceive('log')->once()->andThrow(new RuntimeException('simulated audit failure'));
     $beforeVersions = CourseVersion::query()->withoutGlobalScopes()->count();
@@ -241,7 +242,7 @@ it('rolls back the new draft compositions and audit when draft creation fails af
 
 it('discards a broken empty draft without deleting its graph and allows a clean replacement draft', function (): void {
     [$course, $published, $module] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $broken = CourseVersion::factory()->create(['course_id' => $course, 'version_number' => 3, 'publication_kind' => 'manual']);
     $action = app(DiscardSharedCourseDraft::class);
 
@@ -265,7 +266,7 @@ it('discards a broken empty draft without deleting its graph and allows a clean 
 
 it('discards a nonempty draft while preserving every pivot and assessment record', function (): void {
     [$course, $published, $module] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $draft = app(CreateDraftFromVersion::class)->handle($published, $actor);
     $pivotIds = $draft->moduleCompositions()->pluck('id')->all();
     $questionIds = $module->questions()->pluck('id')->all();
@@ -290,7 +291,7 @@ it('discards a nonempty draft while preserving every pivot and assessment record
 
 it('normalizes discarded composition away from mutable module drafts without deleting their graph', function (): void {
     [$course, $published, $publishedModule] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $draft = app(CreateDraftFromVersion::class)->handle($published, $actor);
     $editable = ModuleVersion::factory()->create(['module_id' => $publishedModule->id, 'version_number' => 3]);
     $newModule = ModuleVersion::query()->findOrFail(Module::factory()->shared()->create(['course_version_id' => null, 'source_lesson_id' => null, 'version_number' => 1])->id);
@@ -338,7 +339,7 @@ it('atomically rejects an invalid declared discard source', function (string $in
     ])->id);
     $pivot = CourseVersionModule::query()->create(['course_version_id' => $draft->id, 'lesson_id' => $editable->id, 'position' => 1, 'is_required' => true]);
     $before = $pivot->only(['id', 'course_version_id', 'lesson_id', 'position', 'is_required']);
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $action = app(DiscardSharedCourseDraft::class);
 
     expect(fn () => $action->handle($draft, $actor, 'Must remain', $action->revision($draft)))
@@ -350,7 +351,7 @@ it('atomically rejects an invalid declared discard source', function (string $in
 
 it('serializes discard against publication so a stale publisher cannot revive the draft', function (): void {
     [$course, $published, $module] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $draft = app(CreateDraftFromVersion::class)->handle($published, $actor);
     $stalePublisherVersion = CourseVersion::query()->findOrFail($draft->id);
     $discard = app(DiscardSharedCourseDraft::class);
@@ -365,7 +366,7 @@ it('serializes discard against publication so a stale publisher cannot revive th
 
 it('serializes publication against discard so a stale discard cannot retire published work', function (): void {
     [$course, $published, $module] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $draft = app(CreateDraftFromVersion::class)->handle($published, $actor);
     $discard = app(DiscardSharedCourseDraft::class);
     $staleRevision = $discard->revision($draft);
@@ -379,7 +380,7 @@ it('serializes publication against discard so a stale discard cannot retire publ
 
 it('removes only the requested association with reason and audit and compacts positions', function (): void {
     [$course, $published, $first] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $draft = app(CreateDraftFromVersion::class)->handle($published, $actor);
     $second = Module::factory()->shared()->create(['course_version_id' => null, 'status' => 'published']);
     $third = Module::factory()->shared()->create(['course_version_id' => null, 'status' => 'published']);
@@ -403,9 +404,9 @@ it('removes only the requested association with reason and audit and compacts po
 });
 
 it('rejects every ineligible course version and actor for removal and discard without side effects', function (): void {
-    $active = Account::factory()->platformAdmin()->create();
-    $inactive = Account::factory()->platformAdmin()->create(['status' => 'inactive']);
-    $nonAdmin = Account::factory()->create(['is_platform_admin' => false, 'status' => 'active']);
+    $active = AccountFactory::new()->platformAdmin()->create();
+    $inactive = AccountFactory::new()->platformAdmin()->create(['status' => 'inactive']);
+    $nonAdmin = AccountFactory::new()->create(['is_platform_admin' => false, 'status' => 'active']);
     $cases = [];
 
     foreach ([$inactive, $nonAdmin] as $actor) {
@@ -441,7 +442,7 @@ it('rejects every ineligible course version and actor for removal and discard wi
 
 it('rejects blank reasons stale confirmations revoked actors and ineligible drafts without mutation', function (): void {
     [$course, $published] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $draft = app(CreateDraftFromVersion::class)->handle($published, $actor);
     $composition = $draft->moduleCompositions()->sole();
     $remove = app(RemoveSharedCourseModule::class);
@@ -465,7 +466,7 @@ it('rejects blank reasons stale confirmations revoked actors and ineligible draf
 function assertInvalidCompositionSave(callable $payload): void
 {
     [$course, $published] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $draft = app(CreateDraftFromVersion::class)->handle($published, $actor);
     $second = Module::factory()->shared()->create(['course_version_id' => null, 'status' => 'draft']);
     CourseVersionModule::query()->create(['course_version_id' => $draft->id, 'lesson_id' => $second->id, 'position' => 2, 'is_required' => true]);
@@ -510,7 +511,7 @@ it('rejects an unknown-module editor payload without changing composition or con
 
 it('rolls back course fields and preserves composition when the module writer fails', function (): void {
     [$course, $published] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $draft = app(CreateDraftFromVersion::class)->handle($published, $actor);
     $module = $draft->moduleCompositions()->with('moduleVersion')->sole()->moduleVersion;
     $writer = Mockery::mock(SharedModuleDraftWriter::class);
@@ -543,7 +544,7 @@ it('saves multiple modules successfully while leaving every composition row unch
             QuestionOption::factory()->create(['company_id' => null, 'question_id' => $question->id, 'position' => $optionPosition, 'is_correct' => $optionPosition === 1]);
         }
     }
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $writer = app(SharedModuleDraftWriter::class);
     $action = app(SaveSharedCourseEditorDraft::class);
     $before = $draft->moduleCompositions()->get()->map->only(['id', 'lesson_id', 'position', 'is_required'])->all();
@@ -623,7 +624,7 @@ it('rolls back a real first module graph write when the second module writer fai
             'options' => $q->options->map(fn ($o, $index): array => ['id' => $o->id, 'text' => 'Changed option', 'is_correct' => $index === 0])->all(),
         ])->all(),
     ];
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $records = [$payload($first, 'First changed'), $payload($second, 'Second changed')];
     $courseRevision = app(SaveSharedCourseEditorDraft::class)->revision($course->fresh(), $draft->fresh());
     $moduleRevisions = [
@@ -649,7 +650,7 @@ it('rolls back a real first module graph write when the second module writer fai
 it('rejects direct module creation on propagation drafts without content pivot or audit writes', function (): void {
     $course = Course::factory()->shared()->create();
     $propagation = CourseVersion::factory()->create(['course_id' => $course, 'publication_kind' => 'shared_propagation']);
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $modulesBefore = Module::query()->count();
     $pivotsBefore = CourseVersionModule::query()->count();
 
@@ -682,7 +683,7 @@ it('fails migration preflight without silently changing duplicate production dra
 
 it('removes only the selected draft association through the unified editor', function (): void {
     [$course, $published, $module] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $draft = app(CreateDraftFromVersion::class)->handle($published, $actor);
     prepareSharedEditor($course, $actor);
     $this->withSession(['platform_account_id' => $actor->id]);
@@ -706,7 +707,7 @@ it('removes only the selected draft association through the unified editor', fun
 
 it('renders the incident-shaped module with all five questions and twenty answers in the editor', function (): void {
     [$course, $published] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     app(CreateDraftFromVersion::class)->handle($published, $actor);
     prepareSharedEditor($course, $actor);
     $this->withSession(['platform_account_id' => $actor->id]);
@@ -722,7 +723,7 @@ it('renders the incident-shaped module with all five questions and twenty answer
 
 it('keeps direct editor mounting read-only and requires explicit preparation intent', function (): void {
     [$course, $published, $module] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $draft = app(CreateDraftFromVersion::class)->handle($published, $actor);
     $pivotBefore = $draft->moduleCompositions()->sole()->only(['id', 'lesson_id', 'position', 'is_required']);
     $moduleCount = ModuleVersion::query()->where('lineage_uuid', $module->lineage_uuid)->count();
@@ -740,7 +741,7 @@ it('keeps direct editor mounting read-only and requires explicit preparation int
 
 it('rejects stale editor preparation without creating drafts or changing pivots', function (): void {
     [$course, $published, $module] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $draft = app(CreateDraftFromVersion::class)->handle($published, $actor);
     $action = app(PrepareSharedCourseEditor::class);
     $revision = $action->revision($course->fresh(), $draft->fresh());
@@ -774,7 +775,7 @@ it('rolls back multi-module preparation when a later draft creation fails', func
     };
     $action = new PrepareSharedCourseEditor($creator);
     $before = $draft->moduleCompositions()->orderBy('position')->get()->toArray();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
 
     expect(fn () => $action->handle($course, $actor, $action->revision($course->fresh(), $draft->fresh())))
         ->toThrow(RuntimeException::class, 'second preparation failed')
@@ -784,7 +785,7 @@ it('rolls back multi-module preparation when a later draft creation fails', func
 
 it('discards through the detail confirmation and revokes both lifecycle actions immediately', function (): void {
     [$course, $published] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $draft = app(CreateDraftFromVersion::class)->handle($published, $actor);
     $this->withSession(['platform_account_id' => $actor->id]);
 
@@ -823,7 +824,7 @@ it('discards through the detail confirmation and revokes both lifecycle actions 
 });
 
 it('selects only the manual draft when propagation and manual drafts coexist', function (): void {
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $course = Course::factory()->shared()->create();
     $propagation = CourseVersion::factory()->create(['course_id' => $course, 'version_number' => 1, 'publication_kind' => 'shared_propagation', 'title' => 'Technical propagation']);
     $manual = CourseVersion::factory()->create(['course_id' => $course, 'version_number' => 2, 'publication_kind' => 'manual', 'title' => 'Manual draft']);
@@ -857,7 +858,7 @@ it('uses only the manual draft for assignment impact when propagation and manual
 });
 
 it('never exposes a propagation-only draft as editable and rejects direct saves', function (): void {
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $course = Course::factory()->shared()->create();
     $propagation = CourseVersion::factory()->create(['course_id' => $course, 'publication_kind' => 'shared_propagation']);
     $this->withSession(['platform_account_id' => $actor->id]);
@@ -878,7 +879,7 @@ it('never exposes a propagation-only draft as editable and rejects direct saves'
 });
 
 it('rejects technical propagation versions from both manual publication entries without writes or audit', function (): void {
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $course = Course::factory()->shared()->create();
     $propagation = CourseVersion::factory()->create(['course_id' => $course, 'publication_kind' => 'shared_propagation']);
     $before = $propagation->refresh()->toArray();
@@ -892,7 +893,7 @@ it('rejects technical propagation versions from both manual publication entries 
 
 it('rejects publication when a composed module lineage was archived after draft creation', function (): void {
     [$course, $published, $module] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $draft = app(CreateDraftFromVersion::class)->handle($published, $actor);
     app(ArchiveSharedContent::class)->handle($module, $actor, 'Withdraw module');
     $pivotBefore = $draft->moduleCompositions()->get()->toArray();
@@ -905,7 +906,7 @@ it('rejects publication when a composed module lineage was archived after draft 
 
 it('denies discard immediately after platform access is revoked', function (): void {
     [$course, $published] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     app(CreateDraftFromVersion::class)->handle($published, $actor);
     prepareSharedEditor($course, $actor);
     $this->withSession(['platform_account_id' => $actor->id]);
@@ -927,8 +928,8 @@ it('serializes two manual draft writers on PostgreSQL connections', function ():
     $source = CourseVersion::factory()->published()->create(['course_id' => $course, 'publication_kind' => 'manual']);
     $module = Module::factory()->shared()->create(['course_version_id' => null, 'status' => 'published']);
     CourseVersionModule::query()->create(['course_version_id' => $source->id, 'lesson_id' => $module->id, 'position' => 1, 'is_required' => true]);
-    $firstActor = Account::factory()->platformAdmin()->create();
-    $secondActor = Account::factory()->platformAdmin()->create();
+    $firstActor = AccountFactory::new()->platformAdmin()->create();
+    $secondActor = AccountFactory::new()->platformAdmin()->create();
     $barrier = 9042025;
     DB::commit(); // Make the fixture visible to both independent PostgreSQL sessions.
     DB::statement("select pg_advisory_lock({$barrier})");
@@ -941,7 +942,7 @@ Illuminate\Support\Facades\DB::statement("set application_name = 'oceanix_draft_
 Illuminate\Support\Facades\DB::statement('select pg_advisory_lock_shared(%d)');
 try {
     $source = App\Models\CourseVersion::query()->findOrFail(%d);
-    $actor = App\Models\Account::query()->findOrFail(%d);
+    $actor = Oceanix\Platform\Models\Account::query()->findOrFail(%d);
     app(App\Actions\Courses\CreateDraftFromVersion::class)->handle($source, $actor);
     echo 'RESULT:created';
 } catch (App\Exceptions\CoursePublicationException) {
@@ -987,7 +988,7 @@ it('serializes competing PostgreSQL publish and discard actions without partial 
         throw new RuntimeException('PostgreSQL concurrency tests require an isolated test database.');
     }
     [$course, $published, $module] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $draft = app(CreateDraftFromVersion::class)->handle($published, $actor);
     prepareSharedEditor($course, $actor);
     $discard = app(DiscardSharedCourseDraft::class);
@@ -1004,7 +1005,7 @@ Illuminate\Support\Facades\DB::statement("set application_name = 'oceanix_concur
 Illuminate\Support\Facades\DB::statement('select pg_advisory_lock_shared(%d)');
 try {
     $draft = App\Models\CourseVersion::query()->findOrFail(%d);
-    $actor = App\Models\Account::query()->findOrFail(%d);
+    $actor = Oceanix\Platform\Models\Account::query()->findOrFail(%d);
     %s
     echo 'RESULT:%s';
 } catch (Throwable $e) {
@@ -1058,7 +1059,7 @@ it('serializes competing PostgreSQL preparation and publication without partial 
         throw new RuntimeException('PostgreSQL concurrency tests require an isolated test database.');
     }
     [$course, $published, $module] = sharedPublishedCourseWithAssessment();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $v1 = Module::factory()->shared()->create([
         'lineage_uuid' => $module->lineage_uuid, 'version_number' => 1, 'status' => 'retired',
     ]);
@@ -1078,7 +1079,7 @@ Illuminate\Support\Facades\DB::statement('select pg_advisory_lock_shared(%d)');
 try {
     $course = App\Models\Course::query()->findOrFail(%d);
     $draft = App\Models\CourseVersion::query()->findOrFail(%d);
-    $actor = App\Models\Account::query()->findOrFail(%d);
+    $actor = Oceanix\Platform\Models\Account::query()->findOrFail(%d);
     %s
     echo 'RESULT:%s';
 } catch (Throwable $e) {
@@ -1129,7 +1130,7 @@ it('serializes two PostgreSQL propagation actions to one idempotent result', fun
     if (! str_contains(strtolower($database), 'test')) {
         throw new RuntimeException('PostgreSQL concurrency tests require an isolated test database.');
     }
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $course = Course::factory()->create();
     $source = CourseVersion::factory()->published()->create(['course_id' => $course]);
     $old = Module::factory()->shared()->create(['status' => 'published', 'version_number' => 1]);
@@ -1230,7 +1231,7 @@ $app = require 'bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 Illuminate\Support\Facades\DB::statement("set application_name = 'oceanix_compose_publish_%s'");
 Illuminate\Support\Facades\DB::statement('select pg_advisory_lock_shared(%d)');
-app(App\Tenancy\TenantContext::class)->set(App\Models\Company::query()->withoutGlobalScopes()->findOrFail(%d));
+app(App\Tenancy\TenantContext::class)->set(Oceanix\Platform\Models\Company::query()->withoutGlobalScopes()->findOrFail(%d));
 try {
     $draft = App\Models\CourseVersion::query()->findOrFail(%d);
     $actor = App\Models\User::query()->findOrFail(%d);
@@ -1281,7 +1282,7 @@ it('serializes PostgreSQL second-generation draft creation against lineage archi
     if (! str_contains(strtolower($database), 'test')) {
         throw new RuntimeException('PostgreSQL concurrency tests require an isolated test database.');
     }
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $v1 = Module::factory()->shared()->create(['version_number' => 1, 'status' => 'retired']);
     $v2 = ModuleVersion::factory()->shared()->published()->create([
         'module_id' => $v1->id, 'lineage_uuid' => $v1->lineage_uuid, 'version_number' => 2,
@@ -1297,7 +1298,7 @@ Illuminate\Support\Facades\DB::statement("set application_name = 'oceanix_lineag
 Illuminate\Support\Facades\DB::statement('select pg_advisory_lock_shared(%d)');
 try {
     $version = App\Models\ModuleVersion::query()->withoutGlobalScopes()->findOrFail(%d);
-    $actor = App\Models\Account::query()->findOrFail(%d);
+    $actor = Oceanix\Platform\Models\Account::query()->findOrFail(%d);
     %s
     echo 'RESULT:%s';
 } catch (Throwable $e) {
@@ -1345,7 +1346,7 @@ it('serializes every shared module save path against PostgreSQL lineage archive'
         throw new RuntimeException('PostgreSQL concurrency tests require an isolated test database.');
     }
     [$course, $published, $source] = sharedPublishedCourseWithAssessment(1);
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $courseDraft = app(CreateDraftFromVersion::class)->handle($published, $actor);
     $courseDraft = prepareSharedEditor($course, $actor);
     $module = $courseDraft->moduleCompositions()->sole()->moduleVersion;
@@ -1417,7 +1418,7 @@ Illuminate\Support\Facades\DB::statement("set application_name = 'oceanix_save_a
 Illuminate\Support\Facades\DB::statement('select pg_advisory_lock_shared(%d)');
 try {
     $module = App\Models\ModuleVersion::query()->withoutGlobalScopes()->findOrFail(%d);
-    $actor = App\Models\Account::query()->findOrFail(%d);
+    $actor = Oceanix\Platform\Models\Account::query()->findOrFail(%d);
     %s
     echo 'RESULT:%s';
 } catch (Throwable $e) {
@@ -1472,7 +1473,7 @@ it('serializes PostgreSQL module publication against lineage archive with exact 
     if (! str_contains(strtolower($database), 'test')) {
         throw new RuntimeException('PostgreSQL concurrency tests require an isolated test database.');
     }
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $sourceId = Module::factory()->shared()->create(['status' => 'published', 'version_number' => 1])->id;
     $source = ModuleVersion::query()->withoutGlobalScopes()->findOrFail($sourceId);
     $draft = app(CreateModuleDraft::class)->handle($source, $actor);
@@ -1490,7 +1491,7 @@ Illuminate\Support\Facades\DB::statement("set application_name = 'oceanix_publis
 Illuminate\Support\Facades\DB::statement('select pg_advisory_lock_shared(%d)');
 try {
     $draft = App\Models\ModuleVersion::query()->withoutGlobalScopes()->findOrFail(%d);
-    $actor = App\Models\Account::query()->findOrFail(%d);
+    $actor = Oceanix\Platform\Models\Account::query()->findOrFail(%d);
     %s
     echo 'RESULT:%s';
 } catch (Throwable $e) {

@@ -1,15 +1,17 @@
 <?php
 
-use App\Actions\Auth\AuthenticatePlatformAccount;
-use App\Actions\Platform\InvitePlatformAdministrator;
-use App\Models\Account;
-use App\Services\Platform\PlatformAccess;
+use Database\Factories\AccountFactory;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
+use Oceanix\Platform\Actions\Auth\AuthenticatePlatformAccount;
+use Oceanix\Platform\Actions\Platform\InvitePlatformAdministrator;
 use Oceanix\Platform\Auth\Data\SocialIdentity;
 use Oceanix\Platform\Auth\Exceptions\SocialLoginProviderException;
 use Oceanix\Platform\Livewire\PlatformCompanies;
+use Oceanix\Platform\Livewire\PlatformCompany;
 use Oceanix\Platform\Livewire\PlatformUsers;
+use Oceanix\Platform\Models\Account;
+use Oceanix\Platform\Services\Platform\PlatformAccess;
 
 function platformIdentityList(?array $identity = null): array
 {
@@ -19,20 +21,20 @@ function platformIdentityList(?array $identity = null): array
 beforeEach(function () {
     Http::preventStrayRequests();
     config(['app.locale' => 'en', 'oceanix-platform.auth.workos.api_key' => 'sk_test']);
-    $this->platformActor = Account::factory()->platformAdmin()->create();
+    $this->platformActor = AccountFactory::new()->platformAdmin()->create();
     $this->withSession(['platform_account_id' => $this->platformActor->id, 'locale' => 'en']);
 });
 
-it('routes global users and companies to SDK classes with the existing shell', function () {
-    Livewire::test('platform.users')->assertSee('Platform administrators');
+it('routes global users and companies to SDK classes and package shell', function () {
+    Livewire::test(PlatformUsers::class)->assertSee('Platform administrators');
     Livewire::test(PlatformCompanies::class)->assertSee('Companies');
     $this->get(route('platform.users'))->assertOk()->assertSee('Tasks')->assertSee('Platform administrators')->assertSeeLivewire(PlatformUsers::class);
-    expect(app(Oceanix\Platform\Services\Platform\PlatformAccess::class))->toBeInstanceOf(PlatformAccess::class);
-    expect(app(InvitePlatformAdministrator::class))->toBeInstanceOf(Oceanix\Platform\Actions\Platform\InvitePlatformAdministrator::class);
+    expect(app(PlatformAccess::class))->toBeInstanceOf(PlatformAccess::class);
+    expect(app(InvitePlatformAdministrator::class))->toBeInstanceOf(InvitePlatformAdministrator::class);
 });
 
 it('reuses a verified WorkOS account without sending an invitation', function () {
-    $existing = Account::factory()->create(['email' => 'verified@example.com', 'workos_user_id' => null, 'provider' => null, 'provider_id' => null]);
+    $existing = AccountFactory::new()->create(['email' => 'verified@example.com', 'workos_user_id' => null, 'provider' => null, 'provider_id' => null]);
     Http::fake(['api.workos.com/user_management/users*' => Http::response(platformIdentityList(['object' => 'user', 'id' => 'user_verified', 'email' => $existing->email, 'email_verified' => true]))]);
 
     Livewire::test(PlatformUsers::class)->set('administratorName', 'Verified Administrator')->set('administratorEmail', 'VERIFIED@example.com')
@@ -60,7 +62,7 @@ it('keeps an unverified existing account blocked until verified login', function
 
 it('does not grant administrator access on provider or identity errors', function (string $failure) {
     $email = 'target@example.com';
-    $existing = Account::factory()->create(['email' => $email, 'is_platform_admin' => false, 'provider' => 'workos', 'provider_id' => $failure === 'conflict' ? 'user_other' : null, 'workos_user_id' => $failure === 'conflict' ? 'user_other' : null]);
+    $existing = AccountFactory::new()->create(['email' => $email, 'is_platform_admin' => false, 'provider' => 'workos', 'provider_id' => $failure === 'conflict' ? 'user_other' : null, 'workos_user_id' => $failure === 'conflict' ? 'user_other' : null]);
     Http::fake(['api.workos.com/user_management/users*' => match ($failure) {
         'provider' => Http::response([], 503),
         'malformed' => Http::response(['data' => []]),
@@ -95,11 +97,11 @@ it('revokes SDK actions even when the linked account relation was already loaded
     Http::assertNothingSent();
 });
 
-it('delegates company operations while retaining the Compliance company screen', function () {
+it('resolves SDK company actions directly and composes the domain child', function () {
     foreach (['EnterCompany', 'ChangeCompanyStatus', 'GrantPlatformCompanyAccess', 'InviteCompanyAdministrator'] as $action) {
-        expect(app('App\\Actions\\Platform\\'.$action))->toBeInstanceOf('Oceanix\\Platform\\Actions\\Platform\\'.$action);
+        expect(app('Oceanix\\Platform\\Actions\\Platform\\'.$action))->toBeInstanceOf('Oceanix\\Platform\\Actions\\Platform\\'.$action);
     }
-    Livewire::test('platform.company', ['company' => currentCompany()])->assertSee('Company administrators')->assertSee('Courses');
+    Livewire::test(PlatformCompany::class, ['company' => currentCompany()])->assertSee('Company administrators')->assertSee('Courses');
 });
 
 it('uses the existing WorkOS service configuration for SDK registration', function () {

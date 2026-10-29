@@ -10,7 +10,6 @@ use App\Enums\CourseVersionStatus;
 use App\Enums\SharedContentPropagationItemStatus;
 use App\Enums\SharedContentPropagationStatus;
 use App\Jobs\PropagateSharedModuleToCourse;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Question;
@@ -18,11 +17,12 @@ use App\Models\QuestionOption;
 use App\Models\SharedContentPropagation;
 use App\Models\Video;
 use App\Services\CourseEditor\EditorRevision;
+use Database\Factories\AccountFactory;
 use Illuminate\Support\Facades\Queue;
 
 function propagatedCourseFixture(bool $withDraft = false): array
 {
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $module = app(CreateModule::class)->handle($actor, 'PROP-'.fake()->unique()->numerify('###'), 'Propagation module');
     $lesson = $module->versions()->sole();
     Video::query()->create(['company_id' => null, 'lesson_id' => $lesson->id, 'provider_asset_id' => fake()->uuid(), 'status' => 'ready']);

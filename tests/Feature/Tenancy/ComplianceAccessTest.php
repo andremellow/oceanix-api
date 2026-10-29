@@ -1,14 +1,13 @@
 <?php
 
-use App\Actions\Auth\AuthenticateSocialLogin;
-use App\Models\Account;
 use App\Models\AuditLog;
-use App\Models\Company;
 use App\Models\ComplianceEvent;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\Tenancy\CompanyComplianceAccess;
 use App\Tenancy\TenantContext;
+use Database\Factories\AccountFactory;
+use Database\Factories\CompanyFactory;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -16,7 +15,9 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
+use Oceanix\Platform\Actions\Auth\AuthenticateSocialLogin;
 use Oceanix\Platform\Auth\Data\SocialIdentity;
+use Oceanix\Platform\Models\Account;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 beforeEach(function () {
@@ -68,7 +69,7 @@ it('SC-03 denies identity linking after disable before any account or user write
 });
 it('SC-04 SC-05 keeps global recovery usable while blocking targeted platform entry', function () {
     $company = currentCompany();
-    $account = Account::factory()->create(['is_platform_admin' => true, 'status' => 'active']);
+    $account = AccountFactory::new()->create(['is_platform_admin' => true, 'status' => 'active']);
     $company->update(['compliance_access_enabled' => false]);
     $this->withSession(['platform_account_id' => $account->id, 'company_id' => $company->id])->get('/platform')->assertOk();
     $this->get('/platform/companies/'.$company->id)->assertOk();
@@ -97,7 +98,7 @@ it('SC-04 blocks uploads playback and event writes after positive controls', fun
 
 it('SC-02 SC-05 checks every verified component in a mixed global and tenant batch', function () {
     $company = currentCompany();
-    $account = Account::factory()->create(['is_platform_admin' => true, 'status' => 'active']);
+    $account = AccountFactory::new()->create(['is_platform_admin' => true, 'status' => 'active']);
     $user = adminUser();
     $user->update(['account_id' => $account->id]);
     $this->actingAs($user);
@@ -118,9 +119,9 @@ it('SC-02 SC-05 checks every verified component in a mixed global and tenant bat
 
 it('SC-04 SC-05 rejects a disabled switch target without changing B identity session context or evidence', function () {
     $a = currentCompany();
-    $account = Account::factory()->create();
+    $account = AccountFactory::new()->create();
     $userA = User::factory()->create(['company_id' => $a->id, 'account_id' => $account->id]);
-    $b = Company::factory()->create();
+    $b = CompanyFactory::new()->create();
     app(TenantContext::class)->set($b);
     $userB = User::factory()->create(['company_id' => $b->id, 'account_id' => $account->id]);
     $this->actingAs($userB)->withSession(['company_id' => $b->id])->post(route('company.switch', ['targetCompany' => $a]))->assertRedirect();

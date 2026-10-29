@@ -2,12 +2,12 @@
 
 namespace App\Actions\Documents;
 
-use App\Models\Account;
 use App\Models\LessonDocumentArchive;
 use App\Models\User;
 use App\Services\Documents\LessonDocumentLibraryAccess;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Oceanix\Platform\Models\Account;
 
 final class ArchiveLessonDocument
 {

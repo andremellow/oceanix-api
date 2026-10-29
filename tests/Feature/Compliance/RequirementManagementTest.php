@@ -5,7 +5,6 @@ use App\Enums\Permission;
 use App\Enums\RequirementStatus;
 use App\Enums\TargetScope;
 use App\Models\AuditLog;
-use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Department;
@@ -16,6 +15,7 @@ use App\Models\User;
 use App\Models\UserTrainingAssignment;
 use App\Services\Audit\AuditLogger;
 use App\Tenancy\TenantContext;
+use Database\Factories\CompanyFactory;
 use Livewire\Livewire;
 
 function assignableCourseForRequirements(): Course
@@ -292,7 +292,7 @@ it('rejects a whole batch containing an unavailable function', function (string 
     $company = currentCompany();
     $bad = match ($invalid) {
         'inactive' => JobFunction::factory()->create(['status' => 'inactive'])->id,
-        'foreign' => JobFunction::factory()->create(['company_id' => Company::factory()->create()->id])->id,
+        'foreign' => JobFunction::factory()->create(['company_id' => CompanyFactory::new()->create()->id])->id,
         default => 999999,
     };
 

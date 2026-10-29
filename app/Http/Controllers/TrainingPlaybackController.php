@@ -3,13 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\IngestComplianceEventsRequest;
-use App\Models\Company;
 use App\Models\Lesson;
 use App\Models\UserTrainingAssignment;
 use App\Services\Compliance\ComplianceEventRecorder;
 use App\Services\Training\LessonProgressProjector;
 use App\Services\Video\PlaybackAuthorizationService;
 use Illuminate\Http\JsonResponse;
+use Oceanix\Platform\Models\Company;
 
 /**
  * Playback authorization and event ingestion for the lesson player.

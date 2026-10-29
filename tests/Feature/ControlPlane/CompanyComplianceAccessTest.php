@@ -1,6 +1,5 @@
 <?php
 
-use App\Actions\Auth\AuthenticateSocialLogin;
 use App\Enums\Permission;
 use App\Enums\UserStatus;
 use App\Models\AccountCompanyBinding;
@@ -11,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Oceanix\Platform\Actions\Auth\AuthenticateSocialLogin;
 use Oceanix\Platform\Auth\Data\SocialIdentity;
 use Oceanix\Platform\Auth\Exceptions\SocialLoginProviderException;
 

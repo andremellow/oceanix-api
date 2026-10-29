@@ -4,14 +4,14 @@ use App\Actions\Courses\CreateCourse;
 use App\Actions\Courses\PublishCourseVersion;
 use App\Enums\CourseStatus;
 use App\Enums\QuestionType;
-use App\Models\Account;
 use App\Models\Lesson;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Video;
+use Database\Factories\AccountFactory;
 
 it('creates and publishes a shared course with platform-account provenance', function (): void {
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $course = app(CreateCourse::class)->handle('global-01', 'Global safety', platformActor: $actor);
     $version = $course->versions()->sole();
     $lesson = Lesson::query()->create([
@@ -39,7 +39,7 @@ it('creates and publishes a shared course with platform-account provenance', fun
 });
 
 it('requires a platform administrator account to publish a shared course', function (): void {
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $course = app(CreateCourse::class)->handle('GLOBAL-02', 'Global safety', platformActor: $actor);
 
     expect(fn () => app(PublishCourseVersion::class)->handle($course->versions()->sole(), 123))

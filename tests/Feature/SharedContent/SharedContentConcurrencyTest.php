@@ -7,7 +7,6 @@ use App\Actions\Modules\CreateModule;
 use App\Actions\Modules\CreateModuleDraft;
 use App\Actions\Modules\PublishModuleVersion;
 use App\Jobs\PropagateSharedModuleToCourse;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Question;
@@ -15,11 +14,12 @@ use App\Models\QuestionOption;
 use App\Models\SharedContentPropagation;
 use App\Models\Video;
 use App\Services\CourseEditor\EditorRevision;
+use Database\Factories\AccountFactory;
 use Illuminate\Support\Facades\Queue;
 
 function concurrencyPropagationFixture(): array
 {
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $module = app(CreateModule::class)->handle($actor, 'CONCURRENT', 'Concurrent module');
     $lesson = $module->versions()->sole();
     Video::query()->create(['company_id' => null, 'lesson_id' => $lesson->id, 'provider_asset_id' => fake()->uuid(), 'status' => 'ready']);

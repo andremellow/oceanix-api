@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Certificate;
-use App\Models\Company;
 use App\Tenancy\TenantContext;
 use Illuminate\Contracts\View\View;
+use Oceanix\Platform\Models\Company;
 
 /**
  * Public certificate verification.

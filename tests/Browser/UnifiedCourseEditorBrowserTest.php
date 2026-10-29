@@ -2,13 +2,13 @@
 
 use App\Enums\Permission;
 use App\Enums\VideoStatus;
-use App\Models\Account;
 use App\Models\Lesson;
 use App\Models\Module;
 use App\Models\ModuleVersion;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Video;
+use Oceanix\Platform\Models\Account;
 use Pest\Browser\Api\Webpage;
 use Pest\Browser\Playwright\Client;
 use Tests\Support\CourseEditor\BrowserEnvironment;

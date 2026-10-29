@@ -4,8 +4,6 @@ use App\Actions\Modules\CreateModule;
 use App\Actions\Modules\CreateModuleDraft;
 use App\Actions\Modules\PublishModuleVersion;
 use App\Jobs\PropagateSharedModuleToCourse;
-use App\Models\Account;
-use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
@@ -15,6 +13,8 @@ use App\Models\SharedContentPropagation;
 use App\Models\Video;
 use App\Services\Modules\ModulePropagationImpact;
 use App\Tenancy\TenantContext;
+use Database\Factories\AccountFactory;
+use Database\Factories\CompanyFactory;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
@@ -32,7 +32,7 @@ it('seeds deterministic shared content and cross-company associations without ex
 
 it('summarizes and fans out propagation across one hundred companies without query growth', function (): void {
     Queue::fake();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $module = app(CreateModule::class)->handle($actor, 'SCALE-100', 'Scale module');
     $lesson = $module->versions()->sole();
     Video::query()->create(['company_id' => null, 'lesson_id' => $lesson->id, 'provider_asset_id' => 'scale-video', 'status' => 'ready']);
@@ -42,7 +42,7 @@ it('summarizes and fans out propagation across one hundred companies without que
     $published = app(PublishModuleVersion::class)->handle($module->versions()->sole(), $actor);
 
     foreach (range(1, 100) as $number) {
-        $company = Company::factory()->create(['slug' => sprintf('scale-%03d', $number)]);
+        $company = CompanyFactory::new()->create(['slug' => sprintf('scale-%03d', $number)]);
         app(TenantContext::class)->set($company);
         $course = Course::factory()->create(['code' => sprintf('SCALE-%03d', $number)]);
         $version = CourseVersion::factory()->published()->create(['course_id' => $course->id]);

@@ -4,12 +4,12 @@ namespace App\Services\Notifications;
 
 use App\Enums\ComplianceEventType;
 use App\Enums\NotificationType;
-use App\Models\Account;
 use App\Models\ScheduledNotification;
 use App\Models\UserTrainingAssignment;
 use App\Services\Compliance\ComplianceEventRecorder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
+use Oceanix\Platform\Models\Account;
 
 /**
  * Decides which reminders an assignment owes today.

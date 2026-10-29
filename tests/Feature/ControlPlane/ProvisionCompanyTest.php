@@ -2,7 +2,6 @@
 
 use App\Actions\ControlPlane\EnsureCompany;
 use App\Models\AccountCompanyBinding;
-use App\Models\Company;
 use App\Models\ProvisioningReceipt;
 use App\Models\ServicePrincipal;
 use App\Models\User;
@@ -11,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Oceanix\Platform\Models\Company;
 use Tests\Support\AccountIntegrationFixture;
 
 beforeEach(function () {

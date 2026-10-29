@@ -4,11 +4,11 @@ use App\Enums\ModuleVersionStatus;
 use App\Enums\PlatformPermission as Permission;
 use App\Models\Module;
 use App\Models\ModuleVersion;
-use App\Services\Platform\PlatformAccess;
+use Oceanix\Platform\Services\Platform\PlatformAccess;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
-new #[Layout('layouts::platform')] class extends Component
+new #[Layout('oceanix-platform::layouts.platform')] class extends Component
 {
     public Module $module;
     public ModuleVersion $version;

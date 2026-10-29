@@ -1,18 +1,18 @@
 <?php
 
 use App\Http\Middleware\AuthenticatePlatformTaskUser;
-use App\Http\Middleware\EnsureUserIsPlatformAdmin;
 use App\Models\PlatformTaskUser;
+use Oceanix\Platform\Http\Middleware\EnsurePlatformAdministrator;
 
 return [
     'user_model' => PlatformTaskUser::class,
     'ability' => 'tasks.access',
-    'layout' => 'layouts.platform',
+    'layout' => 'oceanix-platform-layouts::platform',
     'web' => [
         'enabled' => true,
         'prefix' => 'platform/tasks',
         'name' => 'platform.tasks.',
-        'middleware' => ['web', EnsureUserIsPlatformAdmin::class, AuthenticatePlatformTaskUser::class, 'tasks.access'],
+        'middleware' => ['web', EnsurePlatformAdministrator::class, AuthenticatePlatformTaskUser::class, 'tasks.access'],
     ],
     'api' => [
         'enabled' => false,

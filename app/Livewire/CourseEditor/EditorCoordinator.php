@@ -10,7 +10,6 @@ use App\Services\CourseEditor\EditorSaveCommand;
 use App\Services\CourseEditor\EditorSnapshot;
 use App\Services\CourseEditor\EditorStagedState;
 use App\Services\CourseEditor\EditorStagedStateRebaser;
-use App\Services\Platform\PlatformAccess;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\URL;
@@ -22,6 +21,7 @@ use Livewire\Component;
 use Livewire\Features\SupportFileUploads\FileUploadConfiguration;
 use Livewire\WithFileUploads;
 use LogicException;
+use Oceanix\Platform\Services\Platform\PlatformAccess;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 

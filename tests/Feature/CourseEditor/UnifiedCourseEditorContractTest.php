@@ -1,7 +1,6 @@
 <?php
 
 use App\Enums\VideoStatus;
-use App\Models\Account;
 use App\Models\ContentImage;
 use App\Models\Course;
 use App\Models\CourseVersion;
@@ -15,6 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Client\Factory;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use Oceanix\Platform\Models\Account;
 use Tests\Support\CourseEditor\EditorContextCase;
 use Tests\Support\CourseEditor\EditorFixture;
 
