@@ -4,7 +4,6 @@ namespace App\Jobs;
 
 use App\Enums\ComplianceEventType;
 use App\Mail\TrainingNotificationMail;
-use App\Models\Company;
 use App\Models\NotificationDelivery;
 use App\Models\ScheduledNotification;
 use App\Services\Compliance\ComplianceEventRecorder;
@@ -12,6 +11,7 @@ use App\Tenancy\TenantContext;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Mail;
+use Oceanix\Platform\Models\Company;
 use Throwable;
 
 /**

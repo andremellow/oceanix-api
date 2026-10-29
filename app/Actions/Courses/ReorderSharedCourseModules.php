@@ -4,7 +4,6 @@ namespace App\Actions\Courses;
 
 use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
@@ -12,6 +11,7 @@ use App\Services\CourseEditor\EditorRevision;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use LogicException;
+use Oceanix\Platform\Models\Account;
 
 final class ReorderSharedCourseModules
 {

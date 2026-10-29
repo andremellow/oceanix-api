@@ -1,7 +1,6 @@
 <?php
 
 use App\Actions\Courses\GenerateCoursePreviewLink;
-use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
@@ -9,6 +8,7 @@ use App\Models\Lesson;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Tenancy\TenantContext;
+use Database\Factories\CompanyFactory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
@@ -102,7 +102,7 @@ it('rejects real foreign compositions and legacy lesson identifiers', function (
     $version = CourseVersion::factory()->create();
     $own = Lesson::factory()->create(['course_version_id' => $version->id, 'title' => 'Allowed']);
     $ownCompany = currentCompany();
-    $foreignCompany = Company::factory()->create();
+    $foreignCompany = CompanyFactory::new()->create();
     $foreignVersion = CourseVersion::factory()->for(Course::factory()->create(['company_id' => $foreignCompany->id]))->create();
     $foreign = Lesson::factory()->create(['company_id' => $foreignCompany->id, 'course_version_id' => $foreignVersion->id, 'title' => 'Foreign confidential item']);
     $foreignItem = CourseVersionModule::where('lesson_id', $foreign->id)->first();

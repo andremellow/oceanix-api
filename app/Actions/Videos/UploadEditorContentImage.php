@@ -2,7 +2,6 @@
 
 namespace App\Actions\Videos;
 
-use App\Models\Account;
 use App\Models\ContentImage;
 use App\Models\Course;
 use App\Models\User;
@@ -12,6 +11,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use LogicException;
+use Oceanix\Platform\Models\Account;
 use Throwable;
 
 final class UploadEditorContentImage

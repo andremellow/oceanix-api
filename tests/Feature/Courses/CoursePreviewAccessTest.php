@@ -2,11 +2,11 @@
 
 use App\Actions\Courses\GenerateCoursePreviewLink;
 use App\Enums\Permission;
-use App\Models\Account;
-use App\Models\Company;
 use App\Models\Course;
 use App\Models\CoursePreviewLink;
 use App\Models\CourseVersion;
+use Database\Factories\AccountFactory;
+use Database\Factories\CompanyFactory;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
@@ -39,7 +39,7 @@ it('applies ownership guards even to administrator bypass and mismatched version
     Gate::before(fn () => true);
     $own = CourseVersion::factory()->create();
     expect(app(GenerateCoursePreviewLink::class)->handle($own->course, $own, $admin)['state'])->toBe('active');
-    $foreign = CourseVersion::factory()->for(Course::factory()->create(['company_id' => Company::factory()->create()->id]))->create();
+    $foreign = CourseVersion::factory()->for(Course::factory()->create(['company_id' => CompanyFactory::new()->create()->id]))->create();
     $shared = CourseVersion::factory()->shared()->create();
     foreach ([$foreign, $shared] as $version) {
         expect(fn () => app(GenerateCoursePreviewLink::class)->handle($version->course, $version, $admin))->toThrow(HttpException::class);
@@ -49,7 +49,7 @@ it('applies ownership guards even to administrator bypass and mismatched version
 it('keeps public access independent of inactive company and locale sessions', function () {
     $version = CourseVersion::factory()->create();
     $data = app(GenerateCoursePreviewLink::class)->handle($version->course, $version, adminUser());
-    $inactive = Company::factory()->create(['status' => 'inactive']);
+    $inactive = CompanyFactory::new()->create(['status' => 'inactive']);
     $this->withSession(['company_id' => $inactive->id, 'locale' => 'en', 'preview_locale' => 'invalid'])->get($data['url'])->assertOk()->assertSee('Prévia do rascunho')->assertSessionHas('company_id', $inactive->id);
     $token = basename($data['url']);
     $this->post(route('course-preview.locale', ['token' => $token, 'locale' => 'en']))->assertRedirect($data['url']);
@@ -96,7 +96,7 @@ it('shows the sharing panel in the company draft editor without saving unsaved f
 it('returns 201 for new or renewed generations and 200 for reuse in both authoring contexts', function (bool $platform) {
     $version = $platform ? CourseVersion::factory()->shared()->create() : CourseVersion::factory()->create();
     if ($platform) {
-        $account = Account::factory()->create(['is_platform_admin' => true, 'status' => 'active']);
+        $account = AccountFactory::new()->create(['is_platform_admin' => true, 'status' => 'active']);
         $this->withSession(['platform_account_id' => $account->id]);
     } else {
         $this->actingAs(adminUser());

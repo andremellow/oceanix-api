@@ -4,13 +4,13 @@ namespace App\Actions\Videos;
 
 use App\Actions\Videos\Concerns\LocksEditorMediaTarget;
 use App\Enums\VideoStatus;
-use App\Models\Account;
 use App\Models\User;
 use App\Models\Video;
 use App\Services\Audit\AuditLogger;
 use App\Services\CourseEditor\EditorRevision;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Oceanix\Platform\Models\Account;
 
 final class FailVideoUpload
 {

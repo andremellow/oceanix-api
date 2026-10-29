@@ -1,14 +1,15 @@
 <?php
 
-use App\Models\Account;
 use App\Models\LessonDocument;
 use App\Models\ModuleVersion;
+use Database\Factories\AccountFactory;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Livewire\Facades\GenerateSignedUploadUrlFacade;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\Livewire;
+use Oceanix\Platform\Models\Account;
 use Tests\Support\CourseEditor\EditorContextCase;
 use Tests\Support\CourseEditor\EditorFixture;
 
@@ -61,7 +62,7 @@ it('rechecks platform authorization before writing an issued upload', function (
         'missing' => session()->forget('platform_account_id'),
         'revoked' => $account->update(['is_platform_admin' => false]),
         'inactive' => $account->update(['status' => 'inactive']),
-        'different' => session()->put('platform_account_id', Account::factory()->platformAdmin()->create()->id),
+        'different' => session()->put('platform_account_id', AccountFactory::new()->platformAdmin()->create()->id),
     };
     $response = $this->post($url, ['files' => [UploadedFile::fake()->create('test.pdf', 1, 'application/pdf')]]);
     expect($response->status())->toBeIn([302, 403]);
@@ -82,7 +83,7 @@ it('rejects an altered or expired platform signature without storing files', fun
 
 it('rejects a different signed actor even with a valid signature', function () {
     [$fixture, $editor] = platformTransportEditor('shared course');
-    $other = Account::factory()->platformAdmin()->create();
+    $other = AccountFactory::new()->platformAdmin()->create();
     $url = URL::temporarySignedRoute('platform.editor-uploads.store', now()->addMinutes(5), ['platformAccount' => $other->id]);
     $this->post($url, ['files' => [UploadedFile::fake()->create('test.pdf', 1, 'application/pdf')]])->assertForbidden();
     expect(Storage::disk('tmp-for-tests')->allFiles())->toBeEmpty();
@@ -106,7 +107,7 @@ it('retains native temporary upload throttling', function () {
 
 it('retains tenant transport and denies disabled tenants even with a platform session', function () {
     $fixture = EditorFixture::create(EditorContextCase::companyCourse());
-    $this->actingAs($fixture->user)->withSession(['platform_account_id' => Account::factory()->platformAdmin()->create()->id, 'company_id' => currentCompany()->id]);
+    $this->actingAs($fixture->user)->withSession(['platform_account_id' => AccountFactory::new()->platformAdmin()->create()->id, 'company_id' => currentCompany()->id]);
     $editor = Livewire::test($fixture->context->component, $fixture->routeParameters());
     $url = platformTransportUrl($editor);
     expect(parse_url($url, PHP_URL_PATH))->toBe(parse_url(route('livewire.upload-file'), PHP_URL_PATH));

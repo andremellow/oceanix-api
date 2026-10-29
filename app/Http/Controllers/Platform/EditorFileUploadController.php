@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Platform;
 
-use App\Services\Platform\PlatformAccess;
 use Livewire\Features\SupportFileUploads\FileUploadController;
+use Oceanix\Platform\Services\Platform\PlatformAccess;
 
 class EditorFileUploadController extends FileUploadController
 {

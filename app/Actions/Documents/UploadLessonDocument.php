@@ -3,7 +3,6 @@
 namespace App\Actions\Documents;
 
 use App\Enums\UserStatus;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\Lesson;
 use App\Models\LessonDocument;
@@ -16,6 +15,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Oceanix\Platform\Models\Account;
 use Throwable;
 
 final class UploadLessonDocument

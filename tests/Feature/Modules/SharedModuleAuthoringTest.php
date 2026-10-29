@@ -4,11 +4,11 @@ use App\Actions\Modules\CreateModule;
 use App\Actions\Modules\CreateModuleDraft;
 use App\Actions\Modules\PublishModuleVersion;
 use App\Enums\ModuleVersionStatus;
-use App\Models\Account;
 use App\Models\ModuleVersion;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Video;
+use Database\Factories\AccountFactory;
 
 function addPublishableModuleLesson(ModuleVersion $version): void
 {
@@ -20,7 +20,7 @@ function addPublishableModuleLesson(ModuleVersion $version): void
 }
 
 it('creates and publishes a platform-owned shared module with explicit account provenance', function (): void {
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $module = app(CreateModule::class)->handle($actor, 'safe-01', 'Safety basics');
     $version = $module->versions()->sole();
     addPublishableModuleLesson($version);
@@ -38,7 +38,7 @@ it('creates and publishes a platform-owned shared module with explicit account p
 });
 
 it('creates a separate draft and leaves a published module version immutable', function (): void {
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $module = app(CreateModule::class)->handle($actor, 'IMM-01', 'Immutable');
     addPublishableModuleLesson($module->versions()->sole());
     $published = app(PublishModuleVersion::class)->handle($module->versions()->sole(), $actor);
@@ -53,7 +53,7 @@ it('creates a separate draft and leaves a published module version immutable', f
 });
 
 it('rejects shared authoring by a non-platform account', function (): void {
-    $account = Account::factory()->create();
+    $account = AccountFactory::new()->create();
 
     expect(fn () => app(CreateModule::class)->handle($account, 'DENIED', 'Denied'))
         ->toThrow(LogicException::class);

@@ -6,7 +6,6 @@ use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
 use App\Enums\ModuleVersionStatus;
 use App\Enums\PlatformPermission;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
@@ -17,9 +16,10 @@ use App\Models\Video;
 use App\Services\Courses\CoursePreviewPanel;
 use App\Services\Courses\CourseVersionComposition;
 use App\Services\Courses\LessonContentRenderer;
-use App\Services\Platform\PlatformAccess;
 use App\Services\Video\VideoLibrary;
 use Illuminate\Support\Facades\Gate;
+use Oceanix\Platform\Models\Account;
+use Oceanix\Platform\Services\Platform\PlatformAccess;
 
 final class EditorSnapshotBuilder
 {

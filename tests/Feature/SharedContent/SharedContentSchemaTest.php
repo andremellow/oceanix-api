@@ -1,10 +1,10 @@
 <?php
 
-use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
 use App\Models\Module;
+use Database\Factories\CompanyFactory;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -33,15 +33,15 @@ it('enforces paired content ownership fields in the database', function (): void
         ...$attributes,
     ]);
 
-    expect(fn () => $insert(['company_id' => Company::factory()->create()->id, 'is_shared' => true]))
+    expect(fn () => $insert(['company_id' => CompanyFactory::new()->create()->id, 'is_shared' => true]))
         ->toThrow(QueryException::class)
         ->and(fn () => $insert(['company_id' => null, 'is_shared' => false]))
         ->toThrow(QueryException::class);
 });
 
 it('provides explicit shared and company-owned scopes', function (): void {
-    $company = Company::factory()->create();
-    $other = Company::factory()->create();
+    $company = CompanyFactory::new()->create();
+    $other = CompanyFactory::new()->create();
 
     Module::create(['company_id' => null, 'is_shared' => true, 'code' => 'GLOBAL', 'title' => 'Global']);
     Module::create(['company_id' => $company->id, 'is_shared' => false, 'code' => 'LOCAL', 'title' => 'Local']);

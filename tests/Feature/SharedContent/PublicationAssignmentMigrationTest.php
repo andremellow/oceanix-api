@@ -5,12 +5,12 @@ use App\Actions\Training\StartAssignment;
 use App\Enums\AssignmentStatus;
 use App\Enums\ComplianceEventType;
 use App\Enums\NotificationType;
-use App\Models\Account;
 use App\Models\ComplianceEvent;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\ScheduledNotification;
 use App\Models\UserTrainingAssignment;
+use Database\Factories\AccountFactory;
 
 function publicationVersions(): array
 {
@@ -24,7 +24,7 @@ function publicationVersions(): array
 
 it('replaces unstarted assignments idempotently while preserving obligation data', function (): void {
     [$previous, $published] = publicationVersions();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $assignment = UserTrainingAssignment::factory()->create([
         'course_id' => $previous->course_id,
         'course_version_id' => $previous->id,
@@ -60,7 +60,7 @@ it('replaces unstarted assignments idempotently while preserving obligation data
 
 it('keeps started assignments unless restart is explicitly selected', function (): void {
     [$previous, $published] = publicationVersions();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $assignment = UserTrainingAssignment::factory()->create([
         'course_id' => $previous->course_id, 'course_version_id' => $previous->id,
     ]);
@@ -74,7 +74,7 @@ it('keeps started assignments unless restart is explicitly selected', function (
 
 it('resolves a cancelled predecessor to its replacement when a start races publication', function (): void {
     [$previous, $published] = publicationVersions();
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $assignment = UserTrainingAssignment::factory()->create([
         'course_id' => $previous->course_id, 'course_version_id' => $previous->id,
     ]);
@@ -93,6 +93,6 @@ it('never migrates completed or waived obligations', function (AssignmentStatus 
     ]);
 
     expect(app(ReplaceAssignmentsForPublication::class)->handle(
-        $previous, $published, Account::factory()->platformAdmin()->create(), true,
+        $previous, $published, AccountFactory::new()->platformAdmin()->create(), true,
     ))->toBe(0)->and($assignment->fresh()->status)->toBe($status);
 })->with([AssignmentStatus::Completed, AssignmentStatus::Waived]);

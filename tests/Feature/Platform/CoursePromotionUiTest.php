@@ -1,12 +1,12 @@
 <?php
 
-use App\Models\Account;
-use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
 use App\Models\Module;
 use App\Models\ModuleVersion;
+use Database\Factories\AccountFactory;
+use Database\Factories\CompanyFactory;
 use Illuminate\Support\Facades\DB;
 
 it('shows source company transferred modules and affected courses before confirmation', function (): void {
@@ -20,10 +20,10 @@ it('shows source company transferred modules and affected courses before confirm
     $affected = Course::factory()->create(['title' => 'Also Affected']);
     $affectedVersion = CourseVersion::factory()->published()->create(['course_id' => $affected->id]);
     CourseVersionModule::query()->create(['course_version_id' => $affectedVersion->id, 'module_version_id' => $moduleVersion->id, 'position' => 1]);
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $this->withSession(['platform_account_id' => $account->id]);
 
-    Livewire\Livewire::test('platform.company', ['company' => $company, 'course' => $course])
+    Livewire\Livewire::test('platform.company-courses', ['companyId' => $company->id])
         ->call('previewPromotion', $course->id)
         ->assertSet('confirmingPromotion', true)
         ->assertSee($company->name)->assertSee('Transferred Module')->assertSee('Also Affected')
@@ -32,9 +32,9 @@ it('shows source company transferred modules and affected courses before confirm
 
 it('rejects a company-course detail route whose course belongs to another company', function (): void {
     $company = currentCompany();
-    $other = Company::factory()->create();
+    $other = CompanyFactory::new()->create();
     $course = Course::factory()->create();
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
 
     $this->withSession(['platform_account_id' => $account->id])
         ->get(route('platform.companies.courses.show', ['company' => $company, 'course' => $course]))
@@ -54,10 +54,10 @@ it('shows company-owned and associated shared courses in one company course list
         'created_at' => now(),
         'updated_at' => now(),
     ]);
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $this->withSession(['platform_account_id' => $account->id]);
 
-    Livewire\Livewire::test('platform.company', ['company' => $company])
+    Livewire\Livewire::test('platform.company-courses', ['companyId' => $company->id])
         ->assertSee(__('Courses'))
         ->assertSee($owned->title)
         ->assertSee(__('Company-owned'))
@@ -76,7 +76,7 @@ it('opens the real course detail from a company for owned and associated shared 
         'created_at' => now(),
         'updated_at' => now(),
     ]);
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
 
     $this->withSession(['platform_account_id' => $account->id])
         ->get(route('platform.companies.courses.show', ['company' => $company, 'course' => $owned]))
@@ -94,10 +94,10 @@ it('opens the real course detail from a company for owned and associated shared 
 it('keeps a promoted course on the company screen and relabels it as shared', function (): void {
     $company = currentCompany();
     $course = Course::factory()->create(['company_id' => $company->id, 'title' => 'Course That Stays Visible']);
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $this->withSession(['platform_account_id' => $account->id]);
 
-    Livewire\Livewire::test('platform.company', ['company' => $company])
+    Livewire\Livewire::test('platform.company-courses', ['companyId' => $company->id])
         ->call('previewPromotion', $course->id)
         ->call('makeShared')
         ->assertNoRedirect()

@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
@@ -8,6 +7,7 @@ use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Tenancy\TenantContext;
 use Illuminate\Contracts\Console\Kernel;
+use Oceanix\Platform\Models\Company;
 
 require dirname(__DIR__, 3).'/vendor/autoload.php';
 $app = require dirname(__DIR__, 3).'/bootstrap/app.php';

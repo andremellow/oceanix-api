@@ -2,10 +2,10 @@
 
 namespace App\Console\Commands\Concerns;
 
-use App\Models\Company;
 use App\Services\Settings\ApplicationSettings;
 use App\Tenancy\TenantContext;
 use Closure;
+use Oceanix\Platform\Models\Company;
 
 trait RunsForEachCompany
 {

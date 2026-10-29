@@ -3,7 +3,6 @@
 namespace Tests\Support\CourseEditor;
 
 use App\Enums\Permission;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
@@ -13,6 +12,7 @@ use App\Models\ModuleVersion;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\User;
+use Database\Factories\AccountFactory;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
@@ -82,7 +82,7 @@ final readonly class EditorFixture
 
     private static function sharedCourse(EditorContextCase $context, string $token): self
     {
-        $account = Account::factory()->platformAdmin()->create(['name' => "{$token} Platform Owner"]);
+        $account = AccountFactory::new()->platformAdmin()->create(['name' => "{$token} Platform Owner"]);
         $course = Course::factory()->shared()->draft()->create(['title' => "{$token} Shared Course"]);
         $version = CourseVersion::factory()->create([
             'course_id' => $course,
@@ -107,7 +107,7 @@ final readonly class EditorFixture
 
     private static function sharedModule(EditorContextCase $context, string $token): self
     {
-        $account = Account::factory()->platformAdmin()->create(['name' => "{$token} Platform Owner"]);
+        $account = AccountFactory::new()->platformAdmin()->create(['name' => "{$token} Platform Owner"]);
         [$module, $version] = self::sharedModuleRecord("{$token} Standalone Module", 1, questionCount: 3);
 
         return new self($context, $module, null, ['platform_account_id' => $account->id], [$version->id], $token);

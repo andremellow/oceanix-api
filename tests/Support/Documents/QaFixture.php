@@ -4,8 +4,6 @@ require __DIR__.'/QaBootstrap.php';
 
 use App\Actions\Modules\CreateModuleDraft;
 use App\Enums\Permission;
-use App\Models\Account;
-use App\Models\Company;
 use App\Models\Course;
 use App\Models\CoursePreviewLink;
 use App\Models\CourseVersion;
@@ -18,6 +16,8 @@ use App\Models\Role;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
 use App\Tenancy\TenantContext;
+use Database\Factories\AccountFactory;
+use Database\Factories\CompanyFactory;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -104,9 +104,9 @@ if (is_file($directory.'/database.sqlite')) {
 touch($directory.'/database.sqlite');
 mkdir($directory.'/sessions');
 Artisan::call('migrate', ['--force' => true]);
-$company = Company::factory()->create(['slug' => 'pdf-qa', 'name' => 'PDF QA Company']);
+$company = CompanyFactory::new()->create(['slug' => 'pdf-qa', 'name' => 'PDF QA Company']);
 app(TenantContext::class)->set($company);
-$account = Account::factory()->platformAdmin()->create();
+$account = AccountFactory::new()->platformAdmin()->create();
 $author = User::factory()->create(['account_id' => $account->id, 'name' => 'PDF QA Author']);
 $role = Role::factory()->create(['key' => 'admin', 'name' => 'Administrator']);
 $author->roles()->attach($role);
@@ -151,12 +151,12 @@ foreach ([$editorRole->id => [Permission::CoursesUpdate], $libraryRole->id => [P
 }
 $manifest['libraryUser'] = $libraryUser->id;
 $manifest['libraryRole'] = $libraryRole->id;
-$companyB = Company::factory()->create(['slug' => 'pdf-qa-b', 'name' => 'PDF QA Company B']);
+$companyB = CompanyFactory::new()->create(['slug' => 'pdf-qa-b', 'name' => 'PDF QA Company B']);
 $authorB = User::factory()->create(['name' => 'Company B PDF Author']);
 $roleB = Role::factory()->create(['key' => 'admin', 'name' => 'Administrator']);
 $authorB->roles()->attach($roleB);
 $manifest['authorB'] = $authorB->id;
-$emptyCompany = Company::factory()->create(['slug' => 'pdf-qa-empty']);
+$emptyCompany = CompanyFactory::new()->create(['slug' => 'pdf-qa-empty']);
 app(TenantContext::class)->set($emptyCompany);
 $emptyAuthor = User::factory()->create();
 $emptyAuthor->roles()->attach(Role::factory()->create(['key' => 'admin']));

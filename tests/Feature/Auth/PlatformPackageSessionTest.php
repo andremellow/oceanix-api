@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\Account;
+use Database\Factories\AccountFactory;
 
 it('uses the shared logout controller for the company session and clears its data', function () {
     $this->withSession(['logout_marker' => 'remove-me'])->actingAs(employeeUser());
@@ -13,7 +13,7 @@ it('uses the shared logout controller for the company session and clears its dat
 });
 
 it('uses the same shared logout controller to clear the global platform session', function () {
-    $account = Account::factory()->create(['is_platform_admin' => true, 'status' => 'active']);
+    $account = AccountFactory::new()->create(['is_platform_admin' => true, 'status' => 'active']);
     $this->withSession(['platform_account_id' => $account->id, 'logout_marker' => 'remove-me']);
 
     $this->post(route('platform.logout'))->assertRedirect(route('login'))

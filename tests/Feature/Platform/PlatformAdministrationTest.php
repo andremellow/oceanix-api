@@ -4,23 +4,29 @@ use Andremellow\Tasks\Actions\AddTaskComment;
 use Andremellow\Tasks\Models\Task;
 use Andremellow\Tasks\Models\TaskComment;
 use Andremellow\Tasks\Models\TaskType;
-use App\Actions\Auth\AuthenticatePlatformAccount;
 use App\Http\Middleware\AuthenticatePlatformTaskUser;
-use App\Http\Middleware\EnsureUserIsPlatformAdmin;
-use App\Models\Account;
 use App\Models\AuditLog;
-use App\Models\Company;
 use App\Models\PlatformTaskUser;
 use App\Models\User;
-use App\Services\Platform\PlatformOverview;
 use App\Tenancy\TenantContext;
+use Database\Factories\AccountFactory;
+use Database\Factories\CompanyFactory;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
 use Livewire\Exceptions\MethodNotFoundException;
 use Livewire\Mechanisms\PersistentMiddleware\PersistentMiddleware;
+use Oceanix\Platform\Actions\Auth\AuthenticatePlatformAccount;
 use Oceanix\Platform\Auth\Data\SocialIdentity;
+use Oceanix\Platform\Http\Middleware\EnsurePlatformAdministrator;
+use Oceanix\Platform\Livewire\PlatformCompanies;
+use Oceanix\Platform\Livewire\PlatformCompany;
+use Oceanix\Platform\Livewire\PlatformDashboard;
+use Oceanix\Platform\Livewire\PlatformUsers;
+use Oceanix\Platform\Models\Account;
+use Oceanix\Platform\Models\Company;
+use Oceanix\Platform\Services\Platform\PlatformOverview;
 use Tests\Support\AccountIntegrationFixture;
 
 it('denies the platform area to a company administrator', function (): void {
@@ -42,9 +48,9 @@ it('offers platform sign-in instead of forbidding an unauthenticated visitor', f
 });
 
 it('allows a platform administrator to view cross-company metrics', function (): void {
-    Company::factory()->create();
+    CompanyFactory::new()->create();
     $user = adminUser();
-    $account = Account::factory()->platformAdmin()->create(['email' => $user->email]);
+    $account = AccountFactory::new()->platformAdmin()->create(['email' => $user->email]);
     $user->update(['account_id' => $account->id]);
 
     $this->actingAs($user)
@@ -57,7 +63,7 @@ it('allows a platform administrator to view cross-company metrics', function ():
 
 it('authenticates a platform administrator in the tasks area as a normal user', function (): void {
     $user = User::factory()->create();
-    $account = Account::factory()->platformAdmin()->create(['email' => $user->email]);
+    $account = AccountFactory::new()->platformAdmin()->create(['email' => $user->email]);
     $user->update(['account_id' => $account->id]);
 
     $this->withSession(['platform_account_id' => $account->id])
@@ -73,28 +79,28 @@ it('authenticates a platform administrator in the tasks area as a normal user', 
 });
 
 it('keeps platform task authentication on Livewire updates and lists each account once', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     User::factory()->create([
         'account_id' => $account->id,
-        'company_id' => Company::factory()->create()->id,
+        'company_id' => CompanyFactory::new()->create()->id,
         'email' => $account->email,
     ]);
     User::factory()->create([
         'account_id' => $account->id,
-        'company_id' => Company::factory()->create()->id,
+        'company_id' => CompanyFactory::new()->create()->id,
         'email' => $account->email,
     ]);
 
     $middleware = app(PersistentMiddleware::class)->getPersistentMiddleware();
 
     expect($middleware)
-        ->toContain(EnsureUserIsPlatformAdmin::class)
+        ->toContain(EnsurePlatformAdministrator::class)
         ->toContain(AuthenticatePlatformTaskUser::class)
         ->and(PlatformTaskUser::query()->where('account_id', $account->id)->count())->toBe(1);
 });
 
 it('lets a platform administrator add a persistent comment to a task', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $user = User::factory()->create([
         'account_id' => $account->id,
         'email' => $account->email,
@@ -145,12 +151,12 @@ it('lets a platform administrator add a persistent comment to a task', function 
 });
 
 it('lets only the comment owner remove it while preserving the record', function (): void {
-    $ownerAccount = Account::factory()->platformAdmin()->create();
+    $ownerAccount = AccountFactory::new()->platformAdmin()->create();
     User::factory()->create([
         'account_id' => $ownerAccount->id,
         'email' => $ownerAccount->email,
     ]);
-    $otherAccount = Account::factory()->platformAdmin()->create();
+    $otherAccount = AccountFactory::new()->platformAdmin()->create();
     User::factory()->create([
         'account_id' => $otherAccount->id,
         'email' => $otherAccount->email,
@@ -201,7 +207,7 @@ it('ships the kanban as a responsive four-column board with self-contained drag 
 });
 
 it('denies task comments without global platform access and revokes access immediately', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $platformUser = User::factory()->create([
         'account_id' => $account->id,
         'email' => $account->email,
@@ -232,32 +238,32 @@ it('denies task comments without global platform access and revokes access immed
 });
 
 it('links each company on the platform dashboard to its administration page', function (): void {
-    $company = Company::factory()->create(['name' => 'Linked Maritime']);
-    $viewer = Account::factory()->platformAdmin()->create();
+    $company = CompanyFactory::new()->create(['name' => 'Linked Maritime']);
+    $viewer = AccountFactory::new()->platformAdmin()->create();
     $this->withSession(['platform_account_id' => $viewer->id]);
 
-    Livewire\Livewire::test('platform.dashboard')
+    Livewire\Livewire::test(PlatformDashboard::class)
         ->assertSee('Linked Maritime')
         ->assertSee(route('platform.companies.show', ['company' => $company]), escape: false);
 });
 
 it('lists every platform administrator and excludes regular accounts', function (): void {
-    $viewer = Account::factory()->platformAdmin()->create([
+    $viewer = AccountFactory::new()->platformAdmin()->create([
         'name' => 'Platform Owner',
         'email' => 'owner@platform.example',
     ]);
-    Account::factory()->platformAdmin()->create([
+    AccountFactory::new()->platformAdmin()->create([
         'name' => 'Platform Operator',
         'email' => 'operator@platform.example',
     ]);
-    Account::factory()->create([
+    AccountFactory::new()->create([
         'name' => 'Regular Account',
         'email' => 'regular@example.com',
     ]);
 
     $this->withSession(['platform_account_id' => $viewer->id]);
 
-    Livewire\Livewire::test('platform.users')
+    Livewire\Livewire::test(PlatformUsers::class)
         ->assertSee(__('Platform administrators'))
         ->assertSee('Platform Owner')
         ->assertSee('owner@platform.example')
@@ -268,14 +274,14 @@ it('lists every platform administrator and excludes regular accounts', function 
 it('invites and authorizes a new platform administrator without an environment allowlist', function (): void {
     config()->set('services.workos.api_key', 'sk_test');
     config()->set('oceanix.platform_admin_emails', []);
-    $viewer = Account::factory()->platformAdmin()->create();
+    $viewer = AccountFactory::new()->platformAdmin()->create();
     $this->withSession(['platform_account_id' => $viewer->id]);
     Http::fake([
         'api.workos.com/user_management/users*' => Http::response(['object' => 'list', 'data' => [], 'list_metadata' => ['before' => null, 'after' => null]]),
         'api.workos.com/user_management/invitations' => Http::response(['id' => 'inv_platform'], 201),
     ]);
 
-    Livewire\Livewire::test('platform.users')
+    Livewire\Livewire::test(PlatformUsers::class)
         ->set('administratorName', 'New Platform Admin')
         ->set('administratorEmail', 'new-platform@example.com')
         ->call('inviteAdministrator')
@@ -299,14 +305,14 @@ it('invites and authorizes a new platform administrator without an environment a
 });
 
 it('keeps platform users limited to platform administrators', function (): void {
-    $viewer = Account::factory()->platformAdmin()->create();
+    $viewer = AccountFactory::new()->platformAdmin()->create();
     $companyPerson = User::factory()->create([
         'name' => 'Tenant Only Person',
         'email' => 'tenant-only@example.com',
     ]);
     $this->withSession(['platform_account_id' => $viewer->id]);
 
-    Livewire\Livewire::test('platform.users')
+    Livewire\Livewire::test(PlatformUsers::class)
         ->assertSee($viewer->email)
         ->assertDontSee($companyPerson->email);
 });
@@ -321,14 +327,14 @@ it('keeps company inspection and entry while directing creation to Account', fun
     Http::fake();
     $company = currentCompany();
     $user = adminUser();
-    $account = Account::factory()->platformAdmin()->create(['email' => $user->email]);
+    $account = AccountFactory::new()->platformAdmin()->create(['email' => $user->email]);
     $user->update(['account_id' => $account->id]);
     $this->actingAs($user);
 
-    foreach (['platform.companies' => [], 'platform.company' => ['company' => $company]] as $component => $parameters) {
+    foreach (['oceanix-platform.platform-companies' => [], 'oceanix-platform.platform-company' => ['company' => $company]] as $component => $parameters) {
         Livewire\Livewire::test($component, $parameters)
             ->assertSee($company->name)
-            ->assertSee(__('Create companies and enable Compliance in Account.'))
+            ->assertSee(__('Create companies and enable product access in Account.'))
             ->assertSee(__('Enter company'))
             ->assertDontSeeHtml('wire:submit="create"')
             ->assertDontSeeHtml('wire:click="provisionWorkos')
@@ -346,9 +352,9 @@ it('rejects removed company methods without persistence or provider side effects
     Http::fake(['*' => Http::response(['id' => 'org_obsolete'], 201)]);
     $company = currentCompany();
     adminUser();
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $this->withSession(['platform_account_id' => $account->id]);
-    $page = Livewire\Livewire::test($component, $component === 'platform.company' ? ['company' => $company] : [])
+    $page = Livewire\Livewire::test($component, $component === 'oceanix-platform.platform-company' ? ['company' => $company] : [])
         ->assertSee($company->name);
 
     // A stale browser can retain valid form data from before deployment.
@@ -361,9 +367,9 @@ it('rejects removed company methods without persistence or provider side effects
     $snapshot = fn (): array => collect(['companies', 'users', 'roles', 'permissions', 'role_user', 'account_company_bindings', 'provisioning_receipts', 'audit_logs'])
         ->mapWithKeys(fn (string $table): array => [$table => DB::table($table)->get()->toJson()])->all();
     $before = $snapshot();
-    $arguments = $component === 'platform.companies' && $method === 'provisionWorkos' ? [$company->id] : [];
+    $arguments = $component === 'oceanix-platform.platform-companies' && $method === 'provisionWorkos' ? [$company->id] : [];
 
-    if ($revoked && $component === 'platform.companies') {
+    if ($revoked) {
         $page->call($method, ...$arguments)->assertForbidden();
     } else {
         expect(fn () => $page->call($method, ...$arguments))->toThrow(MethodNotFoundException::class);
@@ -371,17 +377,17 @@ it('rejects removed company methods without persistence or provider side effects
     expect($snapshot())->toBe($before);
     Http::assertNothingSent();
 })->with([
-    'list create authorized' => ['platform.companies', 'create', false],
-    'list provision authorized' => ['platform.companies', 'provisionWorkos', false],
-    'detail provision authorized' => ['platform.company', 'provisionWorkos', false],
-    'list create revoked' => ['platform.companies', 'create', true],
-    'list provision revoked' => ['platform.companies', 'provisionWorkos', true],
-    'detail provision revoked' => ['platform.company', 'provisionWorkos', true],
+    'list create authorized' => ['oceanix-platform.platform-companies', 'create', false],
+    'list provision authorized' => ['oceanix-platform.platform-companies', 'provisionWorkos', false],
+    'detail provision authorized' => ['oceanix-platform.platform-company', 'provisionWorkos', false],
+    'list create revoked' => ['oceanix-platform.platform-companies', 'create', true],
+    'list provision revoked' => ['oceanix-platform.platform-companies', 'provisionWorkos', true],
+    'detail provision revoked' => ['oceanix-platform.platform-company', 'provisionWorkos', true],
 ]);
 
 it('shows only platform-owned metrics on the global dashboard', function (): void {
     $user = adminUser();
-    $account = Account::factory()->platformAdmin()->create(['email' => $user->email]);
+    $account = AccountFactory::new()->platformAdmin()->create(['email' => $user->email]);
     $user->update(['account_id' => $account->id]);
 
     $this->actingAs($user)
@@ -399,12 +405,12 @@ it('shows only platform-owned metrics on the global dashboard', function (): voi
 
 it('allows a platform administrator to suspend and reactivate a company with an audit trail', function (): void {
     $user = adminUser();
-    $account = Account::factory()->platformAdmin()->create(['email' => $user->email]);
+    $account = AccountFactory::new()->platformAdmin()->create(['email' => $user->email]);
     $user->update(['account_id' => $account->id]);
     $company = currentCompany();
 
     Livewire\Livewire::actingAs($user)
-        ->test('platform.company', ['company' => $company])
+        ->test(PlatformCompany::class, ['company' => $company])
         ->call('changeStatus', 'suspended')
         ->assertHasNoErrors();
 
@@ -413,7 +419,7 @@ it('allows a platform administrator to suspend and reactivate a company with an 
     expect(AuditLog::query()->where('action', 'platform.company_status_changed')->count())->toBe(1);
 
     Livewire\Livewire::actingAs($user)
-        ->test('platform.company', ['company' => $company])
+        ->test(PlatformCompany::class, ['company' => $company])
         ->call('changeStatus', 'active')
         ->assertHasNoErrors();
 
@@ -422,7 +428,7 @@ it('allows a platform administrator to suspend and reactivate a company with an 
 
 it('logs out the tenant guard when leaving the platform', function (): void {
     $user = adminUser();
-    $account = Account::factory()->platformAdmin()->create(['email' => $user->email]);
+    $account = AccountFactory::new()->platformAdmin()->create(['email' => $user->email]);
     $user->update(['account_id' => $account->id]);
 
     $this->actingAs($user)
@@ -435,10 +441,10 @@ it('logs out the tenant guard when leaving the platform', function (): void {
 it('offers every linked company identity instead of an ambiguous return button', function (): void {
     $firstCompany = currentCompany();
     $firstPerson = adminUser();
-    $account = Account::factory()->platformAdmin()->create(['email' => $firstPerson->email]);
+    $account = AccountFactory::new()->platformAdmin()->create(['email' => $firstPerson->email]);
     $firstPerson->update(['account_id' => $account->id, 'employee_id' => 'FIRST-CPF']);
 
-    $secondCompany = Company::factory()->create(['name' => 'Second Maritime']);
+    $secondCompany = CompanyFactory::new()->create(['name' => 'Second Maritime']);
     app(TenantContext::class)->set($secondCompany);
     User::factory()->create([
         'account_id' => $account->id,
@@ -474,13 +480,13 @@ it('redirects an old unscoped tenant URL to its company-scoped equivalent', func
 it('shows Account guidance for an empty company list without a local create form', function (): void {
     Company::query()->delete();
     app(TenantContext::class)->clear();
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $this->withSession(['platform_account_id' => $account->id]);
     Http::fake();
 
-    Livewire\Livewire::test('platform.companies')
+    Livewire\Livewire::test(PlatformCompanies::class)
         ->assertSee(__('No companies'))
-        ->assertSee(__('Create companies and enable Compliance in Account.'))
+        ->assertSee(__('Create companies and enable product access in Account.'))
         ->assertDontSeeHtml('wire:submit="create"');
     expect(Company::query()->count())->toBe(0);
     Http::assertNothingSent();
@@ -490,7 +496,7 @@ it('lets a platform administrator explicitly create access to an existing compan
     config()->set('services.workos.api_key', 'sk_test');
     $company = currentCompany();
     $company->update(['workos_organization_id' => 'org_company']);
-    $account = Account::factory()->platformAdmin()->create(['email' => 'platform-owner@example.com']);
+    $account = AccountFactory::new()->platformAdmin()->create(['email' => 'platform-owner@example.com']);
     $this->withSession(['platform_account_id' => $account->id]);
     AccountIntegrationFixture::fakePlatformConnection($company);
     Http::fake([
@@ -499,7 +505,7 @@ it('lets a platform administrator explicitly create access to an existing compan
             ->push(['id' => 'om_platform']),
     ]);
 
-    Livewire\Livewire::test('platform.company', ['company' => $company])
+    Livewire\Livewire::test(PlatformCompany::class, ['company' => $company])
         ->call('grantMyAccess')
         ->assertHasNoErrors();
 
@@ -515,8 +521,8 @@ it('creates a membership instead of inviting an existing WorkOS user', function 
     config()->set('services.workos.api_key', 'sk_test');
     $company = currentCompany();
     $company->update(['workos_organization_id' => 'org_company']);
-    $platformAccount = Account::factory()->platformAdmin()->create();
-    Account::factory()->create([
+    $platformAccount = AccountFactory::new()->platformAdmin()->create();
+    AccountFactory::new()->create([
         'email' => 'existing-admin@example.com',
         'provider' => 'workos',
         'provider_id' => 'user_existing',
@@ -530,7 +536,7 @@ it('creates a membership instead of inviting an existing WorkOS user', function 
             ->push(['id' => 'om_existing']),
     ]);
 
-    Livewire\Livewire::test('platform.company', ['company' => $company])
+    Livewire\Livewire::test(PlatformCompany::class, ['company' => $company])
         ->set('administratorName', 'Existing Administrator')
         ->set('administratorEmail', 'existing-admin@example.com')
         ->call('inviteAdministrator')
@@ -552,14 +558,14 @@ it('lets a platform administrator invite another company administrator', functio
     config()->set('services.workos.api_key', 'sk_test');
     $company = currentCompany();
     $company->update(['workos_organization_id' => 'org_company']);
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $this->withSession(['platform_account_id' => $account->id]);
     AccountIntegrationFixture::fakePlatformConnection($company);
     Http::fake([
         'api.workos.com/user_management/invitations' => Http::response(['id' => 'inv_admin', 'email' => 'tenant-admin@example.com', 'organization_id' => 'org_company', 'state' => 'pending', 'created_at' => '2026-10-01T00:00:00Z'], 201),
     ]);
 
-    Livewire\Livewire::test('platform.company', ['company' => $company])
+    Livewire\Livewire::test(PlatformCompany::class, ['company' => $company])
         ->set('administratorName', 'Tenant Administrator')
         ->set('administratorEmail', 'tenant-admin@example.com')
         ->call('inviteAdministrator')
@@ -584,16 +590,16 @@ it('lists every administrator for the selected company and no one from another c
     $second = adminUser();
     $second->update(['name' => 'Beta Administrator', 'email' => 'beta-admin@example.com']);
 
-    $otherCompany = Company::factory()->create();
+    $otherCompany = CompanyFactory::new()->create();
     app(TenantContext::class)->set($otherCompany);
     $foreign = adminUser();
     $foreign->update(['name' => 'Foreign Administrator', 'email' => 'foreign-admin@example.com']);
     app(TenantContext::class)->set($company);
 
-    $platformAccount = Account::factory()->platformAdmin()->create();
+    $platformAccount = AccountFactory::new()->platformAdmin()->create();
     $this->withSession(['platform_account_id' => $platformAccount->id]);
 
-    Livewire\Livewire::test('platform.company', ['company' => $company])
+    Livewire\Livewire::test(PlatformCompany::class, ['company' => $company])
         ->assertSee(__('Company administrators'))
         ->assertSee('Alpha Administrator')
         ->assertSee('alpha-admin@example.com')

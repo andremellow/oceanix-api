@@ -2,13 +2,14 @@
 
 use App\Actions\Documents\ReuseLessonDocument;
 use App\Enums\Permission;
-use App\Models\Account;
 use App\Models\Lesson;
 use App\Models\LessonDocument;
 use App\Services\Documents\LessonDocumentLibrary;
+use Database\Factories\AccountFactory;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Oceanix\Platform\Models\Account;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 beforeEach(fn () => Storage::fake('lesson_documents'));
@@ -72,7 +73,7 @@ it('reuses the same bytes in every draft context and saves only explicitly', fun
     if ($fixture->user) {
         $this->actingAs(employeeUser())->get($url)->assertForbidden();
     } else {
-        $this->withSession(['platform_account_id' => Account::factory()->create()->id])->get($url)->assertRedirect();
+        $this->withSession(['platform_account_id' => AccountFactory::new()->create()->id])->get($url)->assertRedirect();
     }
 })->with('course editor contexts');
 

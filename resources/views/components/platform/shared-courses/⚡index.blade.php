@@ -3,14 +3,14 @@
 use App\Actions\Courses\CreateCourse;
 use App\Actions\Courses\PrepareSharedCourseEditor;
 use App\Models\Course;
-use App\Services\Platform\PlatformAccess;
+use Oceanix\Platform\Services\Platform\PlatformAccess;
 use App\Services\SharedContent\SharedContentCatalog;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithPagination;
 
-new #[Layout('layouts::platform')] class extends Component
+new #[Layout('oceanix-platform::layouts.platform')] class extends Component
 {
     use WithPagination;
 
@@ -65,7 +65,7 @@ new #[Layout('layouts::platform')] class extends Component
         <flux:button wire:click="$set('creating', true)" variant="primary" class="admin-primary-action">{{ __('New shared course') }}</flux:button>
     </x-page-hero>
 
-    <x-status-message />
+    <x-oceanix-platform::status-message />
 
     <div class="form-panel rounded-[20px] border border-[#dde3e7] p-4 sm:p-5">
         <flux:input wire:model.live.debounce.400ms="search" icon="magnifying-glass" :label="__('Search')" :placeholder="__('Course title or code')" />

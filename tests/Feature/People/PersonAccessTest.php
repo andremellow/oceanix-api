@@ -2,7 +2,6 @@
 
 use App\Enums\Permission;
 use App\Enums\TargetScope;
-use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Department;
@@ -13,6 +12,7 @@ use App\Models\TrainingRequirementTarget;
 use App\Models\User;
 use App\Models\WorkosInvitationAttempt;
 use App\Tenancy\TenantContext;
+use Database\Factories\CompanyFactory;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
@@ -65,7 +65,7 @@ it('rejects a management scope from another company', function (): void {
     $company = currentCompany();
     $operator = adminUser();
     $person = User::factory()->create();
-    $otherCompany = Company::factory()->create();
+    $otherCompany = CompanyFactory::new()->create();
     app(TenantContext::class)->set($otherCompany);
     $foreignDepartment = Department::factory()->create();
     app(TenantContext::class)->set($company);

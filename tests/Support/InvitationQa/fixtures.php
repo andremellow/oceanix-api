@@ -1,13 +1,10 @@
 <?php
 
-use App\Actions\Auth\RecordTenantAccess;
 use App\Enums\RequirementStatus;
 use App\Enums\TargetScope;
 use App\Enums\UserStatus;
 use App\Enums\WorkosInvitationState;
-use App\Models\Account;
 use App\Models\AuditLog;
-use App\Models\Company;
 use App\Models\ComplianceEvent;
 use App\Models\Course;
 use App\Models\CourseVersion;
@@ -23,12 +20,16 @@ use App\Models\WorkosInvitationAttempt;
 use App\Models\WorkosSyncRun;
 use App\Services\Requirements\AssignmentMaterializationService;
 use App\Tenancy\TenantContext;
+use Database\Factories\AccountFactory;
+use Database\Factories\CompanyFactory;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Oceanix\Platform\Actions\Auth\RecordTenantAccess;
+use Oceanix\Platform\Models\Company;
 
 function qaProviderState(): array
 {
@@ -46,14 +47,14 @@ function qaInvitation(User $person, string $state, string $id, string $date = '2
 function qaReset(): array
 {
     Artisan::call('migrate:fresh', ['--force' => true]);
-    $company = Company::factory()->create(['name' => 'Invitation QA Company', 'slug' => 'invitation-qa', 'workos_organization_id' => 'org_qa']);
-    $other = Company::factory()->create(['name' => 'Other isolated company', 'slug' => 'invitation-other', 'workos_organization_id' => 'org_other']);
+    $company = CompanyFactory::new()->create(['name' => 'Invitation QA Company', 'slug' => 'invitation-qa', 'workos_organization_id' => 'org_qa']);
+    $other = CompanyFactory::new()->create(['name' => 'Other isolated company', 'slug' => 'invitation-other', 'workos_organization_id' => 'org_other']);
     app(TenantContext::class)->set($company);
     (new PermissionSeeder)->run();
     (new RoleSeeder)->run();
     $invitations = [];
     foreach (['QA Admin', 'QA Sync Operator', 'QA Invite Operator', 'QA Denied Operator', 'Pending Recipient', 'Accepted Recipient', 'Expired Recipient', 'Revoked Recipient', 'No Invitation Recipient', 'Deleted Invitation Recipient', 'Malformed Recipient', 'Failure Recipient', 'Member Recipient', 'Suspended Recipient', 'Terminated Recipient', 'External Signin Recipient', 'Race Recipient', 'Callback Recipient', 'Invalid Identity Recipient', 'Inactive Account Recipient', 'Legacy Active Recipient', 'Platform Entry Recipient'] as $name) {
-        $account = Account::factory()->create(['name' => $name, 'email' => str($name)->slug().'@qa.example', 'status' => $name === 'Inactive Account Recipient' ? 'inactive' : 'active', 'is_platform_admin' => $name === 'Platform Entry Recipient', 'workos_user_id' => null]);
+        $account = AccountFactory::new()->create(['name' => $name, 'email' => str($name)->slug().'@qa.example', 'status' => $name === 'Inactive Account Recipient' ? 'inactive' : 'active', 'is_platform_admin' => $name === 'Platform Entry Recipient', 'workos_user_id' => null]);
         $person = User::factory()->create(['account_id' => $account->id, 'name' => $name, 'email' => $account->email, 'workos_user_id' => null,
             'status' => match ($name) {
                 'Suspended Recipient' => UserStatus::Suspended, 'Terminated Recipient' => UserStatus::Terminated, 'Legacy Active Recipient', 'QA Admin', 'QA Sync Operator', 'QA Invite Operator', 'QA Denied Operator' => UserStatus::Active, default => UserStatus::Invited

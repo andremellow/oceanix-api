@@ -1,14 +1,14 @@
 <?php
 
 use App\Enums\AssignmentStatus;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseAttempt;
 use App\Models\CourseVersion;
 use App\Models\UserTrainingAssignment;
+use Database\Factories\AccountFactory;
 
 it('shows publication impact and leaves in-progress restart unchecked by default', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $course = Course::factory()->shared()->draft()->create();
     $published = CourseVersion::factory()->published()->create(['course_id' => $course->id]);
     CourseVersion::factory()->create(['course_id' => $course->id, 'version_number' => 2]);
@@ -37,7 +37,7 @@ it('shows publication impact and leaves in-progress restart unchecked by default
 });
 
 it('shows an actionable empty state for a shared course draft without modules', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $course = Course::factory()->shared()->draft()->create();
     CourseVersion::factory()->create(['course_id' => $course->id]);
     $this->withSession(['platform_account_id' => $account->id]);

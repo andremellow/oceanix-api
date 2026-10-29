@@ -3,10 +3,10 @@
 namespace App\Services\Modules;
 
 use App\Enums\Permission;
-use App\Models\Company;
 use App\Models\Module;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
+use Oceanix\Platform\Models\Company;
 
 class EligibleModuleCatalog
 {

@@ -19,6 +19,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Oceanix\Platform\Access\EffectivePermissions;
 use Oceanix\Platform\Contracts\Person;
+use Oceanix\Platform\Models\Account;
 
 #[Fillable([
     'account_id', 'name', 'email', 'email_verified_at', 'password', 'avatar_url', 'provider', 'provider_id',

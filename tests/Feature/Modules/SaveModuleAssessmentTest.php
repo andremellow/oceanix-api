@@ -1,17 +1,17 @@
 <?php
 
 use App\Actions\Modules\SaveModuleAssessment;
-use App\Models\Account;
-use App\Models\Company;
 use App\Models\Module;
 use App\Models\ModuleVersion;
 use App\Models\Question;
 use App\Models\QuestionOption;
+use Database\Factories\AccountFactory;
+use Database\Factories\CompanyFactory;
 use Illuminate\Validation\ValidationException;
 
 function assessmentFixture(): array
 {
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $module = Module::factory()->shared()->create(['status' => 'draft']);
     $version = ModuleVersion::query()->findOrFail($module->id);
     $question = Question::factory()->create(['lesson_id' => $version->id, 'company_id' => null, 'type' => 'single_choice', 'prompt' => 'Original question']);
@@ -94,11 +94,11 @@ it('rejects revoked actors and module versions outside a platform shared draft',
 
     expect(fn () => $action->handle($version, $actor, $payload, $revision))->toThrow(LogicException::class);
 
-    $activeActor = Account::factory()->platformAdmin()->create();
+    $activeActor = AccountFactory::new()->platformAdmin()->create();
     $version->update(['status' => 'published']);
     expect(fn () => $action->handle($version, $activeActor, $payload, $action->revision($version->fresh())))->toThrow(LogicException::class);
 
-    $version->update(['status' => 'draft', 'is_shared' => false, 'company_id' => Company::factory()->create()->id]);
+    $version->update(['status' => 'draft', 'is_shared' => false, 'company_id' => CompanyFactory::new()->create()->id]);
     expect(fn () => $action->handle($version, $activeActor, $payload, $action->revision($version->fresh())))->toThrow(LogicException::class);
     expect($question->fresh()->prompt)->toBe('Original question');
 });

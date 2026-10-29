@@ -2,7 +2,7 @@
 
 use App\Actions\Courses\CreateCourse;
 use App\Enums\CourseStatus;
-use App\Models\Company;
+use Oceanix\Platform\Models\Company;
 use App\Models\Course;
 use App\Services\Courses\CompanyCourseLibrary;
 use App\Tenancy\TenantContext;

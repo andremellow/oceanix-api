@@ -4,13 +4,13 @@ namespace App\Services\SharedContent;
 
 use App\Enums\AssignmentStatus;
 use App\Enums\CourseStatus;
-use App\Models\Company;
 use App\Models\CompanyCourse;
 use App\Models\Course;
 use App\Models\Module;
 use App\Models\ModuleVersion;
 use App\Models\UserTrainingAssignment;
 use Illuminate\Database\Eloquent\Collection;
+use Oceanix\Platform\Models\Company;
 
 class SharedContentCatalog
 {

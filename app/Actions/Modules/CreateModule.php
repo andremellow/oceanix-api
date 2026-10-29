@@ -3,7 +3,6 @@
 namespace App\Actions\Modules;
 
 use App\Enums\ModuleVersionStatus;
-use App\Models\Account;
 use App\Models\Module;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Database\QueryException;
@@ -12,6 +11,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use LogicException;
+use Oceanix\Platform\Models\Account;
 
 class CreateModule
 {

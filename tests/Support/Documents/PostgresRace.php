@@ -4,7 +4,6 @@
 use App\Actions\Courses\SaveCompanyCourseEditorDraft;
 use App\Actions\Documents\ArchiveLessonDocument;
 use App\Actions\Documents\ReuseLessonDocument;
-use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
@@ -14,6 +13,7 @@ use App\Models\User;
 use App\Services\CourseEditor\EditorSaveCommand;
 use App\Services\CourseEditor\EditorSnapshotBuilder;
 use App\Tenancy\TenantContext;
+use Database\Factories\CompanyFactory;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Oceanix\Platform\Models\Company;
 
 require dirname(__DIR__, 3).'/vendor/autoload.php';
 $app = require dirname(__DIR__, 3).'/bootstrap/app.php';
@@ -106,7 +107,7 @@ function raceProcess(string $operation, bool $held): array
     return [$process, $pipes];
 }
 foreach (['archive', 'reuse'] as $first) {
-    $company = Company::factory()->create();
+    $company = CompanyFactory::new()->create();
     $actor = User::factory()->create();
     $role = Role::factory()->create(['key' => 'admin']);
     $actor->roles()->attach($role);

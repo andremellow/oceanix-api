@@ -3,7 +3,6 @@
 use App\Enums\Permission;
 use App\Enums\UserStatus;
 use App\Enums\WorkosInvitationState;
-use App\Models\Company;
 use App\Models\Department;
 use App\Models\JobFunction;
 use App\Models\User;
@@ -12,6 +11,7 @@ use App\Models\WorkosInvitationAttempt;
 use App\Models\WorkosSyncRun;
 use App\Services\People\PeopleDirectory;
 use App\Tenancy\TenantContext;
+use Database\Factories\CompanyFactory;
 use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 
@@ -87,7 +87,7 @@ it('reports aggregate attempts beyond the bounded recipient outcomes and empty-c
         WorkosInvitationAttempt::create(['person_id' => $person->id, 'actor_id' => $actor->id, 'mode' => 'selected', 'status' => 'succeeded']);
     }
     Livewire::actingAs($actor)->test('organization.people')->assertViewHas('invitationAttempts', fn ($rows) => $rows->count() === 20)->assertSee('Processed 24 of 24')->assertSee('Successful 24, skipped 0, failed 0');
-    $other = Company::factory()->create();
+    $other = CompanyFactory::new()->create();
     app(TenantContext::class)->set($other);
     // A projection can represent a truly empty tenant without deleting operational data.
     $data = app(PeopleDirectory::class)->data();

@@ -3,10 +3,10 @@
 namespace App\Services\Compliance;
 
 use App\Enums\ComplianceEventType;
-use App\Models\Account;
 use App\Models\ComplianceEvent;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use Oceanix\Platform\Models\Account;
 
 /**
  * The only supported way to write the append-only trail.

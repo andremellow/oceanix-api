@@ -7,7 +7,6 @@ use App\Enums\Permission;
 use App\Http\Middleware\AuthenticatePlatformTaskUser;
 use App\Http\Middleware\EnsureComplianceAccess;
 use App\Http\Middleware\EnsurePersonProductAccess;
-use App\Http\Middleware\EnsureUserIsPlatformAdmin;
 use App\Models\Certificate;
 use App\Models\Course;
 use App\Models\CourseVersion;
@@ -29,7 +28,6 @@ use App\Policies\TrainingRequirementPolicy;
 use App\Policies\UserPolicy;
 use App\Policies\UserTrainingAssignmentPolicy;
 use App\Policies\WorkosSyncRunPolicy;
-use App\Services\Platform\ComplianceAuthenticationContext;
 use App\Services\Platform\ComplianceCompanyContextHook;
 use App\Services\Platform\ComplianceCompanyInitializer;
 use App\Services\Platform\CompliancePeopleDirectoryExtension;
@@ -38,6 +36,7 @@ use App\Services\Video\CloudflareStreamProvider;
 use App\Services\Video\FakeVideoProvider;
 use App\Tenancy\TenantContext;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
@@ -45,12 +44,11 @@ use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
 use Oceanix\Platform\Access\GateRegistrar;
-use Oceanix\Platform\Auth\Contracts\AuthenticationContext;
 use Oceanix\Platform\Contracts\CompanyContextHook;
 use Oceanix\Platform\Contracts\CompanyInitializer;
 use Oceanix\Platform\Contracts\PeopleDirectoryExtension;
-use Oceanix\Platform\Livewire\PlatformCompanies;
-use Oceanix\Platform\Livewire\PlatformUsers;
+use Oceanix\Platform\Models\Account;
+use Oceanix\Platform\Models\Company;
 use Tests\Support\AccountIntegrationFixture;
 
 class AppServiceProvider extends ServiceProvider
@@ -64,7 +62,6 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(PeopleDirectoryExtension::class, CompliancePeopleDirectoryExtension::class);
         $this->app->scoped(CompanyContextHook::class, ComplianceCompanyContextHook::class);
 
-        $this->app->scoped(AuthenticationContext::class, ComplianceAuthenticationContext::class);
         foreach (config('oceanix-platform.legacy_bindings', []) as $shared => $legacy) {
             $this->app->bind($shared, fn ($app) => $app->make($legacy));
         }
@@ -85,9 +82,11 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Relation::morphMap([
+            'App\\Models\\Account' => Account::class,
+            'App\\Models\\Company' => Company::class,
+        ]);
         // Retain historical Livewire aliases while using package-owned screen behavior.
-        Livewire::component('platform.users', PlatformUsers::class);
-        Livewire::component('platform.companies', PlatformCompanies::class);
 
         if (getenv('COMPANY_USER_QA_FIXTURE') === '1') {
             AccountIntegrationFixture::bootHttpQa();
@@ -97,7 +96,6 @@ class AppServiceProvider extends ServiceProvider
         Livewire::addPersistentMiddleware([
             EnsureComplianceAccess::class,
             EnsurePersonProductAccess::class,
-            EnsureUserIsPlatformAdmin::class,
             AuthenticatePlatformTaskUser::class,
         ]);
 

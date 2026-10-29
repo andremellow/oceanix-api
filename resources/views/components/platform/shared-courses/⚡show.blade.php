@@ -7,16 +7,16 @@ use App\Actions\SharedContent\ArchiveSharedContent;
 use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
 use App\Exceptions\CoursePublicationException;
-use App\Models\Company;
+use Oceanix\Platform\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
-use App\Services\Platform\PlatformAccess;
+use Oceanix\Platform\Services\Platform\PlatformAccess;
 use App\Services\Courses\CoursePreviewPanel;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
-new #[Layout('layouts::platform')] class extends Component
+new #[Layout('oceanix-platform::layouts.platform')] class extends Component
 {
     public Course $course;
 
@@ -171,7 +171,7 @@ new #[Layout('layouts::platform')] class extends Component
             style="--callout-heading: var(--ds-text-primary); --callout-background: var(--ds-surface-card); --callout-border: var(--ds-status-negative);"
         />
     @enderror
-    <x-status-message />
+    <x-oceanix-platform::status-message />
 
     <div class="grid gap-4 sm:grid-cols-3">
         <section class="metric-card metric-card--teal"><p class="metric-label">{{ __('Ownership') }}</p><p class="metric-value metric-value--text">{{ $course->is_shared ? __('Managed by platform') : __('Managed by company') }}</p></section>

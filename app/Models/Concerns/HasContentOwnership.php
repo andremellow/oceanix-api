@@ -2,11 +2,11 @@
 
 namespace App\Models\Concerns;
 
-use App\Models\Company;
 use App\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
+use Oceanix\Platform\Models\Company;
 
 trait HasContentOwnership
 {

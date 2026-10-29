@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\ModuleVersionStatus;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Oceanix\Platform\Models\Account;
 
 /** Backwards-compatible class name while module versions live directly in `lessons`. */
 class ModuleVersion extends Module

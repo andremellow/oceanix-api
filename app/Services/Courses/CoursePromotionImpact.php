@@ -3,12 +3,12 @@
 namespace App\Services\Courses;
 
 use App\Enums\CourseStatus;
-use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersionModule;
 use App\Models\Module;
 use DomainException;
 use Illuminate\Support\Collection;
+use Oceanix\Platform\Models\Company;
 
 class CoursePromotionImpact
 {

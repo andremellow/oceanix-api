@@ -3,7 +3,6 @@
 use App\Contracts\VideoProvider;
 use App\Data\Video\PlaybackAuthorization;
 use App\Exceptions\VideoProviderException;
-use App\Models\Account;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
 use App\Models\Lesson;
@@ -11,6 +10,7 @@ use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Video;
 use App\Services\Video\FakeVideoProvider;
+use Database\Factories\AccountFactory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
@@ -19,7 +19,7 @@ function learnerPreviewFixture(): array
 {
     app()->bind(VideoProvider::class, FakeVideoProvider::class);
     Storage::fake(FakeVideoProvider::DISK);
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $version = CourseVersion::factory()->shared()->published()->create(['title' => 'Published course']);
     $version->course->update(['current_published_version_id' => $version->id]);
     $lesson = Lesson::factory()->create(['company_id' => null, 'is_shared' => true, 'course_version_id' => null, 'title' => 'Exact published module', 'content_markdown' => "Before video\n\n:::video\n\nAfter video"]);

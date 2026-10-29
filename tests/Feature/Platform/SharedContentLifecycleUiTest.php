@@ -3,11 +3,11 @@
 use App\Enums\CourseStatus;
 use App\Enums\ModuleStatus;
 use App\Enums\ModuleVersionStatus;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Module;
 use App\Models\ModuleVersion;
+use Database\Factories\AccountFactory;
 use Livewire\Livewire;
 
 function platformUiArchivableSharedCourse(): Course
@@ -20,7 +20,7 @@ function platformUiArchivableSharedCourse(): Course
 }
 
 it('confirms and archives a shared course while explaining preserved evidence', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $course = platformUiArchivableSharedCourse();
     $this->withSession(['platform_account_id' => $account->id]);
 
@@ -38,7 +38,7 @@ it('confirms and archives a shared course while explaining preserved evidence', 
 });
 
 it('archives a shared module lineage without rewriting historical version statuses', function (): void {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $module = Module::factory()->shared()->create(['status' => ModuleStatus::Active]);
     $version = ModuleVersion::factory()->published()->create(['module_id' => $module->id]);
     $module->update(['current_published_version_id' => $version->id]);

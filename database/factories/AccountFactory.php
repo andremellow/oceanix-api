@@ -2,9 +2,9 @@
 
 namespace Database\Factories;
 
-use App\Models\Account;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
+use Oceanix\Platform\Models\Account;
 
 /** @extends Factory<Account> */
 class AccountFactory extends Factory

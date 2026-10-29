@@ -6,7 +6,7 @@ use App\Livewire\CourseEditor\EditorCoordinator;
 use App\Models\Module;
 use Livewire\Attributes\Layout;
 
-new #[Layout('layouts::platform')] class extends EditorCoordinator
+new #[Layout('oceanix-platform::layouts.platform')] class extends EditorCoordinator
 {
     public Module $module;
 

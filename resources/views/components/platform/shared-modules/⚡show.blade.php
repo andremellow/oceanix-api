@@ -8,12 +8,12 @@ use App\Enums\ModuleVersionStatus;
 use App\Enums\PlatformPermission as Permission;
 use App\Models\Module;
 use App\Services\Modules\ModuleStatusPresentation;
-use App\Services\Platform\PlatformAccess;
+use Oceanix\Platform\Services\Platform\PlatformAccess;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
-new #[Layout('layouts::platform')] class extends Component
+new #[Layout('oceanix-platform::layouts.platform')] class extends Component
 {
     public Module $module;
 
@@ -108,7 +108,7 @@ new #[Layout('layouts::platform')] class extends Component
             <flux:button wire:click="$set('confirmingArchive', true)" variant="danger">{{ __('Archive shared module') }}</flux:button>
         @endif
     </x-page-hero>
-    <x-status-message />
+    <x-oceanix-platform::status-message />
     <div class="grid gap-4 sm:grid-cols-3">
         <section class="metric-card metric-card--slate"><p class="metric-label">{{ __('Code') }}</p><p class="metric-value metric-value--text">{{ $module->code }}</p></section>
         <section class="metric-card metric-card--teal"><p class="metric-label">{{ __('Ownership') }}</p><p class="metric-value metric-value--text">{{ __('Managed by platform') }}</p></section>

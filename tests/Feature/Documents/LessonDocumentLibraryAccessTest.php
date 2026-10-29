@@ -3,18 +3,19 @@
 use App\Actions\Documents\ArchiveLessonDocument;
 use App\Actions\Documents\ReuseLessonDocument;
 use App\Enums\Permission;
-use App\Models\Account;
-use App\Models\Company;
 use App\Models\Lesson;
 use App\Models\LessonDocument;
 use App\Models\LessonDocumentArchive;
 use App\Services\Documents\LessonDocumentLibrary;
 use App\Services\Documents\LessonDocumentLibraryAccess;
 use App\Tenancy\TenantContext;
+use Database\Factories\AccountFactory;
+use Database\Factories\CompanyFactory;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Oceanix\Platform\Models\Account;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 function libraryPdf(array $attributes = []): LessonDocument
@@ -63,7 +64,7 @@ it('grants library view through a profile and revokes it on the next request', f
 it('keeps the admin bypass inside its owner and never grants learners the catalog', function (): void {
     $own = libraryPdf();
     $company = currentCompany();
-    $foreign = libraryPdf(['company_id' => Company::factory()->create()->id]);
+    $foreign = libraryPdf(['company_id' => CompanyFactory::new()->create()->id]);
     app(TenantContext::class)->set($company);
     $platform = libraryPdf(['company_id' => null, 'is_shared' => true]);
     $admin = adminUser();
@@ -123,7 +124,7 @@ it('checks all owner boundaries for open reuse and archive in each editor', func
     $actor = $fixture->user ?? Account::findOrFail($fixture->session['platform_account_id']);
     $lesson = Lesson::findOrFail($fixture->recordIds[0]);
     $company = currentCompany();
-    $otherCompany = Company::factory()->create();
+    $otherCompany = CompanyFactory::new()->create();
     app(TenantContext::class)->set($company);
     $companyFile = libraryPdf();
     $foreignFile = libraryPdf(['company_id' => $otherCompany->id]);
@@ -168,7 +169,7 @@ it('returns controlled missing bytes and rejects anonymous and inactive platform
     Storage::disk('lesson_documents')->delete($document->path);
     $this->actingAs(adminUser())->get($url)->assertNotFound();
     auth()->logout();
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $platform = libraryPdf(['company_id' => null, 'is_shared' => true]);
     $platformUrl = route('platform.lesson-documents.library.open', ['document' => $platform->public_id]);
     $this->withSession(['platform_account_id' => $account->id])->get($platformUrl)->assertOk();

@@ -7,12 +7,12 @@ use App\Enums\CourseVersionStatus;
 use App\Enums\Permission;
 use App\Enums\PlatformPermission;
 use App\Enums\UserStatus;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\User;
-use App\Services\Platform\PlatformAccess;
 use Illuminate\Support\Facades\Gate;
+use Oceanix\Platform\Models\Account;
+use Oceanix\Platform\Services\Platform\PlatformAccess;
 
 class CoursePreviewAuthority
 {

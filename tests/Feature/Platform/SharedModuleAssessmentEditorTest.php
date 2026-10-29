@@ -1,11 +1,11 @@
 <?php
 
-use App\Models\Account;
 use App\Models\ModuleVersion;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use Oceanix\Platform\Models\Account;
 use Tests\Support\CourseEditor\EditorContextCase;
 use Tests\Support\CourseEditor\EditorFixture;
 

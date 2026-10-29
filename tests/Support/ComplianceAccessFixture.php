@@ -2,10 +2,10 @@
 
 namespace Tests\Support;
 
-use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
 use App\Tenancy\TenantContext;
+use Database\Factories\CompanyFactory;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Process\Process;
 
@@ -13,7 +13,7 @@ class ComplianceAccessFixture
 {
     public static function create(bool $administrator = false): array
     {
-        $company = app(TenantContext::class)->get() ?? Company::factory()->create(['name' => 'Atlantic Access Fixture', 'slug' => 'atlantic-access-fixture']);
+        $company = app(TenantContext::class)->get() ?? CompanyFactory::new()->create(['name' => 'Atlantic Access Fixture', 'slug' => 'atlantic-access-fixture']);
         app(TenantContext::class)->set($company);
         $user = User::factory()->create(['company_id' => $company->id]);
         $role = Role::firstOrCreate(['key' => $administrator ? 'admin' : 'employee'], ['name' => $administrator ? 'Administrator' : 'Employee', 'is_protected' => true]);

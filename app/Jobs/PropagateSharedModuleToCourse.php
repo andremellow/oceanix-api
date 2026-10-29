@@ -5,7 +5,6 @@ namespace App\Jobs;
 use App\Actions\Courses\CreatePropagatedCourseVersion;
 use App\Enums\SharedContentPropagationItemStatus;
 use App\Enums\SharedContentPropagationStatus;
-use App\Models\Company;
 use App\Models\SharedContentPropagation;
 use App\Models\SharedContentPropagationItem;
 use App\Tenancy\TenantContext;
@@ -14,6 +13,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Oceanix\Platform\Models\Company;
 use Throwable;
 
 class PropagateSharedModuleToCourse implements ShouldQueue

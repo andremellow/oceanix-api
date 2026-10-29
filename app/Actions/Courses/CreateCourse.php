@@ -4,7 +4,6 @@ namespace App\Actions\Courses;
 
 use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\User;
@@ -15,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use LogicException;
+use Oceanix\Platform\Models\Account;
 
 /** Creates the permanent course identity together with its first draft version. */
 class CreateCourse

@@ -4,7 +4,6 @@ use App\Actions\Courses\AssociateSharedCourse;
 use App\Actions\Courses\RemoveSharedCourse;
 use App\Enums\Permission;
 use App\Models\AuditLog;
-use App\Models\Company;
 use App\Models\CompanyCourse;
 use App\Models\Course;
 use App\Models\CourseVersion;
@@ -12,6 +11,7 @@ use App\Models\TrainingRequirement;
 use App\Models\UserTrainingAssignment;
 use App\Services\Courses\CompanyCourseLibrary;
 use App\Tenancy\TenantContext;
+use Database\Factories\CompanyFactory;
 use Illuminate\Auth\Access\AuthorizationException;
 
 function publishedSharedCourseForAssociation(): Course
@@ -51,7 +51,7 @@ it('rejects private unpublished and cross-tenant association attempts', function
     expect(fn () => app(AssociateSharedCourse::class)->handle($private, $actor))->toThrow(DomainException::class)
         ->and(fn () => app(AssociateSharedCourse::class)->handle($unpublished, $actor))->toThrow(DomainException::class);
 
-    $other = Company::factory()->create();
+    $other = CompanyFactory::new()->create();
     app(TenantContext::class)->set($other);
 
     expect(fn () => app(AssociateSharedCourse::class)->handle(publishedSharedCourseForAssociation(), $actor))
@@ -90,7 +90,7 @@ it('does not leak one company shared library association into another company', 
     $course = publishedSharedCourseForAssociation();
     app(AssociateSharedCourse::class)->handle($course, $actor);
 
-    $secondCompany = Company::factory()->create();
+    $secondCompany = CompanyFactory::new()->create();
 
     expect(app(CompanyCourseLibrary::class)->sharedCourses($firstCompany)->modelKeys())->toBe([$course->id])
         ->and(app(CompanyCourseLibrary::class)->sharedCourses($secondCompany))->toBeEmpty();

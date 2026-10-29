@@ -3,7 +3,6 @@
 use App\Actions\Courses\GenerateCoursePreviewLink;
 use App\Contracts\VideoProvider;
 use App\Enums\PlatformPermission;
-use App\Models\Account;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
 use App\Models\Lesson;
@@ -11,11 +10,12 @@ use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Video;
 use App\Services\Video\FakeVideoProvider;
+use Database\Factories\AccountFactory;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 it('allows active platform administrators to share only platform drafts and denies revoked accounts', function () {
-    $account = Account::factory()->create(['is_platform_admin' => true, 'status' => 'active']);
+    $account = AccountFactory::new()->create(['is_platform_admin' => true, 'status' => 'active']);
     $version = CourseVersion::factory()->shared()->create(['title' => 'Platform saved draft']);
     $company = CourseVersion::factory()->create();
     $url = route('platform.shared-courses.preview-link', ['course' => $version->course_id, 'version' => $version->id]);
@@ -30,7 +30,7 @@ it('allows active platform administrators to share only platform drafts and deni
 });
 
 it('renders the platform draft sharing panel in detail and editor contexts', function () {
-    $account = Account::factory()->create(['is_platform_admin' => true, 'status' => 'active']);
+    $account = AccountFactory::new()->create(['is_platform_admin' => true, 'status' => 'active']);
     $version = CourseVersion::factory()->shared()->create();
     $this->withSession(['platform_account_id' => $account->id]);
     Livewire\Livewire::test('platform.shared-courses.show', ['course' => $version->course])->assertSee('Public draft preview');
@@ -39,7 +39,7 @@ it('renders the platform draft sharing panel in detail and editor contexts', fun
 
 it('projects the selected shared lineage version with its own questions and video rather than the newer version', function () {
     Storage::fake(FakeVideoProvider::DISK);
-    $account = Account::factory()->create(['is_platform_admin' => true, 'status' => 'active']);
+    $account = AccountFactory::new()->create(['is_platform_admin' => true, 'status' => 'active']);
     $this->withSession(['platform_account_id' => $account->id]);
     $version = CourseVersion::factory()->shared()->create();
     $selected = Lesson::factory()->create(['company_id' => null, 'is_shared' => true, 'course_version_id' => null, 'status' => 'published', 'content_markdown' => "Selected exact body\n\n:::video"]);
@@ -60,7 +60,7 @@ it('projects the selected shared lineage version with its own questions and vide
 });
 
 it('publishes only saved editor state in a newly generated platform preview', function () {
-    $account = Account::factory()->create(['is_platform_admin' => true, 'status' => 'active']);
+    $account = AccountFactory::new()->create(['is_platform_admin' => true, 'status' => 'active']);
     $version = CourseVersion::factory()->shared()->create(['description' => 'Persisted description']);
     $this->withSession(['platform_account_id' => $account->id]);
     Livewire\Livewire::test('platform.shared-courses.editor', ['course' => $version->course])
@@ -72,7 +72,7 @@ it('publishes only saved editor state in a newly generated platform preview', fu
 });
 
 it('redirects revoked platform sharing reads and writes to the real HTML login response without credentials', function () {
-    $account = Account::factory()->create(['is_platform_admin' => true, 'status' => 'active']);
+    $account = AccountFactory::new()->create(['is_platform_admin' => true, 'status' => 'active']);
     $version = CourseVersion::factory()->shared()->create();
     $url = route('platform.shared-courses.preview-link', ['course' => $version->course_id, 'version' => $version->id]);
     $link = $this->withSession(['platform_account_id' => $account->id])->postJson($url)->assertCreated()->json();

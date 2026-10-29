@@ -3,7 +3,6 @@
 use App\Actions\Documents\ArchiveLessonDocument;
 use App\Actions\Documents\ReuseLessonDocument;
 use App\Enums\Permission;
-use App\Models\Account;
 use App\Models\Lesson;
 use App\Models\LessonDocumentArchive;
 use App\Models\UserTrainingAssignment;
@@ -13,6 +12,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Oceanix\Platform\Models\Account;
 
 beforeEach(fn () => Storage::fake('lesson_documents'));
 

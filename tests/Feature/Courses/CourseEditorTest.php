@@ -2,7 +2,6 @@
 
 use App\Actions\Videos\DetachEditorVideo;
 use App\Enums\VideoStatus;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
@@ -15,6 +14,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Http;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use Oceanix\Platform\Models\Account;
 use Tests\Support\CourseEditor\EditorContextCase;
 use Tests\Support\CourseEditor\EditorFixture;
 

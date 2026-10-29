@@ -3,7 +3,6 @@
 use App\Actions\ControlPlane\ApplyProductOperation;
 use App\Enums\UserStatus;
 use App\Models\AccountCompanyBinding;
-use App\Models\Company;
 use App\Models\PersonAccountLink;
 use App\Models\PersonProductAccess;
 use App\Models\ProductOperationReceipt;
@@ -11,6 +10,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
 use App\Tenancy\TenantContext;
+use Database\Factories\CompanyFactory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -184,7 +184,7 @@ it('interleaves an identical receiver request before the first response without 
 
 it('keeps the same WorkOS identity mapped to distinct existing local IDs in two actual tenant receivers', function () {
     [$a, $personA, $principal, $token, $inputA] = migrationReceiver();
-    $b = Company::factory()->create(['workos_organization_id' => 'org_second_migration']);
+    $b = CompanyFactory::new()->create(['workos_organization_id' => 'org_second_migration']);
     $uuidB = (string) Str::uuid();
     AccountCompanyBinding::create(['account_company_uuid' => $uuidB, 'compliance_company_id' => $b->id, 'workos_organization_id' => $b->workos_organization_id]);
     $principal->update(['company_uuids' => [...$principal->company_uuids, $uuidB]]);

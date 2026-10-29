@@ -1,10 +1,10 @@
 <?php
 
-use App\Models\Company;
 use App\Models\Course;
 use App\Models\Department;
 use App\Models\User;
 use App\Tenancy\TenantContext;
+use Database\Factories\CompanyFactory;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -16,7 +16,7 @@ it('allows the same email and business codes in different companies', function (
     Department::factory()->create(['code' => 'OPS']);
     Course::factory()->create(['code' => 'SAFE']);
 
-    $second = Company::factory()->create(['slug' => 'second-company']);
+    $second = CompanyFactory::new()->create(['slug' => 'second-company']);
     app(TenantContext::class)->set($second);
 
     $user = User::factory()->create(['email' => 'person@example.com']);
@@ -36,7 +36,7 @@ it('allows the same email and business codes in different companies', function (
 it('returns a 404 when a user requests a record owned by another company', function (): void {
     $foreignCourse = Course::factory()->create();
 
-    $second = Company::factory()->create(['slug' => 'isolated-company']);
+    $second = CompanyFactory::new()->create(['slug' => 'isolated-company']);
     app(TenantContext::class)->set($second);
     $user = employeeUser();
 
@@ -50,7 +50,7 @@ it('selects the company before resolving an account with a shared email', functi
     $first = currentCompany();
     $firstUser = User::factory()->create(['email' => 'shared@example.com']);
 
-    $second = Company::factory()->create(['slug' => 'login-company']);
+    $second = CompanyFactory::new()->create(['slug' => 'login-company']);
     app(TenantContext::class)->set($second);
     $secondUser = User::factory()->create(['email' => 'shared@example.com']);
 

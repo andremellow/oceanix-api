@@ -6,7 +6,6 @@ use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
 use App\Enums\ModuleVersionStatus;
 use App\Exceptions\CoursePublicationException;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
@@ -19,6 +18,7 @@ use App\Services\Documents\LessonDocumentLinks;
 use App\Services\Modules\ModuleLineageLock;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Oceanix\Platform\Models\Account;
 
 /**
  * Editing a published version means cloning it into a new draft: the published edition is

@@ -1,14 +1,14 @@
 <?php
 
-use App\Actions\Auth\RecordTenantAccess;
-use App\Actions\Platform\EnterCompany;
 use App\Actions\Tenancy\SwitchCompany;
 use App\Enums\UserStatus;
-use App\Models\Account;
-use App\Models\Company;
 use App\Models\User;
 use App\Tenancy\TenantContext;
+use Database\Factories\AccountFactory;
+use Database\Factories\CompanyFactory;
 use Illuminate\Support\Facades\Http;
+use Oceanix\Platform\Actions\Auth\RecordTenantAccess;
+use Oceanix\Platform\Actions\Platform\EnterCompany;
 use Oceanix\Platform\Auth\OauthStateSigner;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -41,12 +41,12 @@ it('rejects blocked callback without activation', function ($status) {
 })->with([UserStatus::Suspended, UserStatus::Terminated]);
 
 it('records authorized platform entry and tenant switching without treating grants as access', function () {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $person = User::factory()->create(['account_id' => $account->id, 'status' => UserStatus::Invited]);
     $this->withSession(['platform_account_id' => $account->id]);
     $entered = app(EnterCompany::class)->handle(currentCompany());
     expect($entered->id)->toBe($person->id)->and($person->fresh()->first_access_at)->not->toBeNull()->and($person->fresh()->status)->toBe(UserStatus::Active);
-    $company = Company::factory()->create();
+    $company = CompanyFactory::new()->create();
     app(TenantContext::class)->set($company);
     $target = User::factory()->create(['account_id' => $account->id, 'status' => UserStatus::Invited]);
     app(TenantContext::class)->set($person->company);
@@ -57,7 +57,7 @@ it('records authorized platform entry and tenant switching without treating gran
 it('rejects inactive accounts and invalid identity without recording access', function ($inactive, $verified) {
     $person = User::factory()->create(['email' => 'invalid@example.com', 'status' => UserStatus::Invited]);
     if ($inactive) {
-        $account = Account::factory()->create(['email' => $person->email, 'status' => 'inactive']);
+        $account = AccountFactory::new()->create(['email' => $person->email, 'status' => 'inactive']);
         $person->forceFill(['account_id' => $account->id])->save();
     }
     Http::fake(['*/user_management/authenticate' => Http::response(['user' => ['id' => 'user_invalid', 'email' => $person->email, 'email_verified' => $verified]])]);
@@ -67,7 +67,7 @@ it('rejects inactive accounts and invalid identity without recording access', fu
 })->with([[true, true], [false, false]]);
 
 it('denies blocked platform entry without access evidence', function ($status) {
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $person = User::factory()->create(['account_id' => $account->id, 'status' => $status]);
     $this->withSession(['platform_account_id' => $account->id]);
     expect(fn () => app(EnterCompany::class)->handle(currentCompany()))->toThrow(HttpException::class);
@@ -87,9 +87,9 @@ it('cleans callback authentication when access recording fails after login', fun
 
 it('restores context and clears authenticated tenant on failed entry or switch recording', function ($switch) {
     $previous = currentCompany();
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $source = User::factory()->create(['account_id' => $account->id]);
-    $targetCompany = Company::factory()->create();
+    $targetCompany = CompanyFactory::new()->create();
     app(TenantContext::class)->set($targetCompany);
     $target = User::factory()->create(['account_id' => $account->id, 'status' => UserStatus::Invited]);
     app(TenantContext::class)->set($previous);
@@ -105,9 +105,9 @@ it('restores context and clears authenticated tenant on failed entry or switch r
 
 it('denies blocked target switching and preserves the allowed current session', function ($status) {
     $previous = currentCompany();
-    $account = Account::factory()->create();
+    $account = AccountFactory::new()->create();
     $source = User::factory()->create(['account_id' => $account->id]);
-    $targetCompany = Company::factory()->create();
+    $targetCompany = CompanyFactory::new()->create();
     app(TenantContext::class)->set($targetCompany);
     $target = User::factory()->create(['account_id' => $account->id, 'status' => $status]);
     app(TenantContext::class)->set($previous);
@@ -117,8 +117,8 @@ it('denies blocked target switching and preserves the allowed current session', 
 })->with([UserStatus::Suspended, UserStatus::Terminated]);
 
 it('keeps a provisioned company owner invited until authorized entry', function () {
-    $account = Account::factory()->platformAdmin()->create(['workos_user_id' => 'user_owner']);
-    $company = Company::factory()->create(['name' => 'New owner company']);
+    $account = AccountFactory::new()->platformAdmin()->create(['workos_user_id' => 'user_owner']);
+    $company = CompanyFactory::new()->create(['name' => 'New owner company']);
     app(TenantContext::class)->set($company);
     $person = adminUser();
     $person->forceFill(['account_id' => $account->id, 'workos_user_id' => $account->workos_user_id, 'status' => UserStatus::Invited])->save();

@@ -2,13 +2,13 @@
 
 namespace App\Actions\Modules;
 
-use App\Models\Account;
 use App\Models\ModuleVersion;
 use App\Services\CourseEditor\EditorRevision;
 use App\Services\Modules\ModuleLineageLock;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use LogicException;
+use Oceanix\Platform\Models\Account;
 
 final class ReorderSharedModuleAssessment
 {

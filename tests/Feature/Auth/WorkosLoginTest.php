@@ -1,13 +1,13 @@
 <?php
 
-use App\Models\Account;
-use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
 use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Oceanix\Platform\Auth\OauthStateSigner;
+use Oceanix\Platform\Models\Account;
+use Oceanix\Platform\Models\Company;
 
 beforeEach(function (): void {
     $this->withSession(['company_id' => currentCompany()->id]);

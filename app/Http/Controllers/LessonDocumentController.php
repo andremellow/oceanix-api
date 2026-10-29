@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
@@ -10,6 +9,7 @@ use App\Models\Module;
 use App\Models\UserTrainingAssignment;
 use App\Services\Documents\LessonDocumentAccess;
 use Illuminate\Http\Request;
+use Oceanix\Platform\Models\Company;
 
 final class LessonDocumentController extends Controller
 {

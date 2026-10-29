@@ -5,13 +5,13 @@ namespace App\Actions\Courses;
 use App\Actions\Modules\PublishModuleVersion;
 use App\Enums\ModuleVersionStatus;
 use App\Exceptions\CoursePublicationException;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Services\Courses\CourseVersionValidator;
 use App\Services\Modules\ModuleLineageLock;
 use App\Services\Modules\ModuleVersionValidator;
 use Illuminate\Support\Facades\DB;
+use Oceanix\Platform\Models\Account;
 
 class PublishSharedCourseDraft
 {

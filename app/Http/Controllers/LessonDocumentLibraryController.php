@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
 use App\Services\Documents\LessonDocumentLibraryAccess;
-use App\Services\Platform\PlatformAccess;
+use Oceanix\Platform\Models\Company;
+use Oceanix\Platform\Services\Platform\PlatformAccess;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LessonDocumentLibraryController extends Controller

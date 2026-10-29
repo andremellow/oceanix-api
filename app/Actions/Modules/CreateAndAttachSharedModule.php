@@ -4,7 +4,6 @@ namespace App\Actions\Modules;
 
 use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\CourseVersionModule;
@@ -15,6 +14,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use LogicException;
+use Oceanix\Platform\Models\Account;
 
 class CreateAndAttachSharedModule
 {

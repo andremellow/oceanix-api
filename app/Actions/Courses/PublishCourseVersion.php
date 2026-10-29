@@ -7,7 +7,6 @@ use App\Actions\Assignments\ReplaceOpenAssignmentsForCourseVersion;
 use App\Enums\CourseStatus;
 use App\Enums\CourseVersionStatus;
 use App\Exceptions\CoursePublicationException;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\User;
@@ -16,6 +15,7 @@ use App\Services\Courses\CourseVersionValidator;
 use App\Services\Modules\ModuleLineageLock;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Oceanix\Platform\Models\Account;
 
 /**
  * Publishing freezes a version forever and makes it the edition new assignments will

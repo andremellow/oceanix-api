@@ -4,9 +4,7 @@ use App\Actions\Videos\LinkExistingVideo;
 use App\Actions\Videos\RequestVideoUpload;
 use App\Actions\Videos\SyncVideoAsset;
 use App\Exceptions\VideoProviderException;
-use App\Models\Account;
 use App\Models\AuditLog;
-use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
@@ -16,8 +14,10 @@ use App\Services\CourseEditor\EditorRevision;
 use App\Services\Modules\ModuleVersionValidator;
 use App\Services\Video\CloudflareStreamProvider;
 use App\Tenancy\TenantContext;
+use Database\Factories\AccountFactory;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
+use Oceanix\Platform\Models\Company;
 
 it('tags uploads and only lists assets owned by the active company', function (): void {
     $company = currentCompany();
@@ -78,7 +78,7 @@ it('rejects unsigned and cross-company assets before linking', function (bool $s
 ]);
 
 it('allows platform administration to link a ready signed company video', function (): void {
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $lesson = Lesson::factory()->create(['company_id' => null, 'is_shared' => true]);
     app(TenantContext::class)->clear();
     Http::fake(['api.cloudflare.com/*' => Http::response(['result' => [
@@ -98,7 +98,7 @@ it('allows platform administration to link a ready signed company video', functi
 });
 
 it('records platform video upload requests without requiring a tenant', function (): void {
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $lesson = Lesson::factory()->create(['company_id' => null, 'is_shared' => true]);
     app(TenantContext::class)->clear();
     Http::fake(['api.cloudflare.com/*' => Http::response(['result' => [
@@ -116,7 +116,7 @@ it('records platform video upload requests without requiring a tenant', function
 });
 
 it('never lets an older ready candidate replace a newer requested video', function (): void {
-    $actor = Account::factory()->platformAdmin()->create();
+    $actor = AccountFactory::new()->platformAdmin()->create();
     $lesson = Lesson::factory()->create(['company_id' => null, 'is_shared' => true, 'status' => 'draft']);
     app(TenantContext::class)->clear();
     Http::fake(function ($request) {

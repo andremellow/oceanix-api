@@ -1,4 +1,4 @@
-@component('layouts::platform', ['title' => __('Preview as learner')])
+@component('oceanix-platform::layouts.platform', ['title' => __('Preview as learner')])
     <div class="space-y-7">
         @if($lesson)
             <x-page-hero :kicker="$version->title" :title="$lesson->title" :description="$lesson->description">

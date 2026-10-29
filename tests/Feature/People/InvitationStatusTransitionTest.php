@@ -2,17 +2,17 @@
 
 use App\Actions\ControlPlane\ApplyProductOperation;
 use App\Actions\People\ImportPeople;
-use App\Actions\Platform\GrantPlatformCompanyAccess;
 use App\Enums\Permission;
 use App\Enums\UserStatus;
-use App\Models\Account;
 use App\Models\AccountCompanyBinding;
 use App\Models\ComplianceEvent;
 use App\Models\User;
 use App\Models\UserTrainingAssignment;
 use App\Services\Requirements\AssignmentMaterializationService;
+use Database\Factories\AccountFactory;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Oceanix\Platform\Actions\Platform\GrantPlatformCompanyAccess;
 use Tests\Support\AccountIntegrationFixture;
 
 it('preserves obligation evidence during legacy transition', function () {
@@ -67,7 +67,7 @@ it('imports new people invited without changing existing protected statuses', fu
 it('grants a new tenant administrator invited and preserves existing suspended status', function () {
     currentCompany()->update(['workos_organization_id' => 'org_admin']);
     config(['services.workos.api_key' => 'test-key']);
-    $account = Account::factory()->platformAdmin()->create();
+    $account = AccountFactory::new()->platformAdmin()->create();
     $this->withSession(['platform_account_id' => $account->id]);
     AccountIntegrationFixture::fakePlatformConnection(currentCompany());
     $action = app(GrantPlatformCompanyAccess::class);

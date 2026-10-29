@@ -4,7 +4,6 @@ namespace App\Actions\Assignments;
 
 use App\Enums\AssignmentStatus;
 use App\Enums\ComplianceEventType;
-use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\ComplianceEvent;
 use App\Models\CourseVersion;
@@ -14,6 +13,7 @@ use App\Models\UserTrainingAssignment;
 use App\Services\Compliance\ComplianceEventRecorder;
 use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
+use Oceanix\Platform\Models\Account;
 
 class ReplaceAssignmentsForPublication
 {

@@ -2,8 +2,6 @@
 
 namespace App\Actions\Courses;
 
-use App\Models\Account;
-use App\Models\Company;
 use App\Models\CompanyCourse;
 use App\Models\Course;
 use App\Models\Module;
@@ -12,6 +10,8 @@ use App\Services\Courses\CoursePromotionImpact;
 use App\Tenancy\TenantContext;
 use DomainException;
 use Illuminate\Support\Facades\DB;
+use Oceanix\Platform\Models\Account;
+use Oceanix\Platform\Models\Company;
 
 class MakeCourseShared
 {

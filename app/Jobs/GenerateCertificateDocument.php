@@ -3,11 +3,11 @@
 namespace App\Jobs;
 
 use App\Models\Certificate;
-use App\Models\Company;
 use App\Services\Certificates\CertificateRenderer;
 use App\Tenancy\TenantContext;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Oceanix\Platform\Models\Company;
 
 /**
  * Rendering happens off the request: finishing a course must not wait on a PDF, and a

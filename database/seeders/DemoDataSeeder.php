@@ -11,7 +11,6 @@ use App\Enums\RenewalBasis;
 use App\Enums\RequirementStatus;
 use App\Enums\TargetScope;
 use App\Enums\UserStatus;
-use App\Models\Account;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Department;
@@ -26,6 +25,7 @@ use App\Models\User;
 use App\Models\UserTrainingAssignment;
 use App\Models\Video;
 use Illuminate\Database\Seeder;
+use Oceanix\Platform\Models\Account;
 
 /**
  * Offshore-flavored sample data for local development and visual review.

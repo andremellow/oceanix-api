@@ -3,10 +3,10 @@
 namespace App\Services\Documents;
 
 use App\Enums\Permission;
-use App\Models\Account;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
+use Oceanix\Platform\Models\Account;
 
 final class LessonDocumentLibrary
 {

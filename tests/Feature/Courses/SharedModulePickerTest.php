@@ -1,12 +1,12 @@
 <?php
 
 use App\Enums\Permission;
-use App\Models\Company;
 use App\Models\Course;
 use App\Models\CourseVersion;
 use App\Models\Module;
 use App\Models\ModuleVersion;
 use App\Services\Modules\EligibleModuleCatalog;
+use Database\Factories\CompanyFactory;
 use Livewire\Livewire;
 
 function pickerModule(Module $module): Module
@@ -22,7 +22,7 @@ it('searches eligible company and shared modules without leaking another tenant'
     $actor->forceFill(['company_id' => $company->id])->save();
     pickerModule(Module::factory()->create(['title' => 'Company Escape']));
     pickerModule(Module::factory()->shared()->create(['title' => 'Shared Escape']));
-    pickerModule(Module::factory()->create(['company_id' => Company::factory()->create()->id, 'title' => 'Foreign Escape']));
+    pickerModule(Module::factory()->create(['company_id' => CompanyFactory::new()->create()->id, 'title' => 'Foreign Escape']));
 
     $groups = app(EligibleModuleCatalog::class)->forCourseEditor($company, $actor, 'Escape');
 

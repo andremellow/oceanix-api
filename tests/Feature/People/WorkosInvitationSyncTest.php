@@ -5,12 +5,12 @@ use App\Enums\Permission;
 use App\Enums\UserStatus;
 use App\Enums\WorkosInvitationState;
 use App\Enums\WorkosOperationStatus;
-use App\Models\Account;
 use App\Models\AccountRequestOperation;
-use App\Models\Company;
 use App\Models\User;
 use App\Models\WorkosSyncRun;
 use App\Tenancy\TenantContext;
+use Database\Factories\AccountFactory;
+use Database\Factories\CompanyFactory;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -33,7 +33,7 @@ beforeEach(function () {
 
 it('SC-07 SC-13 receives every lifecycle through Account while preserving operational access', function (string $state, bool $active) {
     $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
-    $actor->forceFill(['workos_user_id' => 'user_sync_actor', 'account_id' => Account::factory()->create()->id])->save();
+    $actor->forceFill(['workos_user_id' => 'user_sync_actor', 'account_id' => AccountFactory::new()->create()->id])->save();
     knownSyncInvitationLink($actor);
     $person = employeeUser();
     $person->forceFill(['workos_user_id' => 'user_exact', 'workos_invitation_id' => $state === 'none' ? null : 'invitation_exact', 'invitation_generation' => 3, 'workos_active_membership' => $active])->save();
@@ -48,7 +48,7 @@ it('SC-07 SC-13 receives every lifecycle through Account while preserving operat
 
 it('SC-16 preserves last verification on transport and malformed receipt failures', function (string $failure) {
     $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
-    $actor->forceFill(['workos_user_id' => 'user_sync_actor', 'account_id' => Account::factory()->create()->id])->save();
+    $actor->forceFill(['workos_user_id' => 'user_sync_actor', 'account_id' => AccountFactory::new()->create()->id])->save();
     knownSyncInvitationLink($actor);
     $person = employeeUser();
     $person->forceFill(['workos_invitation_id' => 'invitation_retained', 'invitation_generation' => 2, 'invitation_state' => WorkosInvitationState::Accepted, 'invitation_verified_at' => now()->subDay(), 'invitation_accepted_history_at' => now()->subDays(2)])->save();
@@ -62,7 +62,7 @@ it('SC-16 preserves last verification on transport and malformed receipt failure
 
 it('SC-15 rejects revoked actors before any Account or provider request with an authorized positive control', function () {
     $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
-    $actor->forceFill(['workos_user_id' => 'user_sync_actor', 'account_id' => Account::factory()->create()->id])->save();
+    $actor->forceFill(['workos_user_id' => 'user_sync_actor', 'account_id' => AccountFactory::new()->create()->id])->save();
     knownSyncInvitationLink($actor);
     $person = employeeUser();
     knownSyncInvitationLink($person);
@@ -77,7 +77,7 @@ it('SC-15 rejects revoked actors before any Account or provider request with an 
 
 it('SC-12 keeps a queued sync running until its original Account receipt completes', function () {
     $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
-    $actor->forceFill(['workos_user_id' => 'user_sync_actor', 'account_id' => Account::factory()->create()->id])->save();
+    $actor->forceFill(['workos_user_id' => 'user_sync_actor', 'account_id' => AccountFactory::new()->create()->id])->save();
     knownSyncInvitationLink($actor);
     $person = employeeUser();
     knownSyncInvitationLink($person);
@@ -93,7 +93,7 @@ it('SC-12 keeps a queued sync running until its original Account receipt complet
 
 it('SC-18 reports exhausted Account targets as terminal failures without replacing last verified evidence', function () {
     $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
-    $actor->forceFill(['workos_user_id' => 'user_terminal_actor', 'account_id' => Account::factory()->create()->id])->save();
+    $actor->forceFill(['workos_user_id' => 'user_terminal_actor', 'account_id' => AccountFactory::new()->create()->id])->save();
     $person = employeeUser();
     knownSyncInvitationLink($actor);
     knownSyncInvitationLink($person);
@@ -121,7 +121,7 @@ it('SC-18 reports exhausted Account targets as terminal failures without replaci
 
 it('SC-19 preserves a newer invitation and independent access written while an Account result is in flight', function () {
     $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
-    $actor->forceFill(['workos_user_id' => 'user_interleaved_actor', 'account_id' => Account::factory()->create()->id])->save();
+    $actor->forceFill(['workos_user_id' => 'user_interleaved_actor', 'account_id' => AccountFactory::new()->create()->id])->save();
     $person = employeeUser();
     $person->forceFill(['invitation_generation' => 1, 'workos_invitation_id' => 'invitation_old'])->save();
     knownSyncInvitationLink($person);
@@ -138,7 +138,7 @@ it('SC-19 preserves a newer invitation and independent access written while an A
 
 it('SC-13 SC-21 rejects malformed or foreign Account observations before any local projection', function (string $failure) {
     $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
-    $actor->forceFill(['workos_user_id' => 'user_validation_actor', 'account_id' => Account::factory()->create()->id])->save();
+    $actor->forceFill(['workos_user_id' => 'user_validation_actor', 'account_id' => AccountFactory::new()->create()->id])->save();
     $person = employeeUser();
     $person->forceFill(['workos_invitation_id' => 'invitation_exact', 'invitation_generation' => 1])->save();
     knownSyncInvitationLink($person);
@@ -164,7 +164,7 @@ it('SC-13 SC-21 rejects malformed or foreign Account observations before any loc
 it('SC-15 restores tenant context after a real new-format synchronization job completes', function () {
     $company = currentCompany();
     $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
-    $actor->forceFill(['workos_user_id' => 'user_context_actor', 'account_id' => Account::factory()->create()->id])->save();
+    $actor->forceFill(['workos_user_id' => 'user_context_actor', 'account_id' => AccountFactory::new()->create()->id])->save();
     $person = employeeUser();
     knownSyncInvitationLink($actor);
     knownSyncInvitationLink($person);
@@ -174,7 +174,7 @@ it('SC-15 restores tenant context after a real new-format synchronization job co
 
         return Http::response(Fixture::observationReceipt($request->data(), $person, 'none'));
     }]);
-    $other = Company::factory()->create();
+    $other = CompanyFactory::new()->create();
     app(TenantContext::class)->set($other);
     $job = new App\Jobs\ReconcileWorkosInvitations($company->id, $actor->id, $run->id);
     $job->protocolVersion = 2;
@@ -185,7 +185,7 @@ it('SC-15 restores tenant context after a real new-format synchronization job co
 
 it('CR-04 retains transient unknown polling and later completes the original Account operations', function () {
     $actor = userWithPermissions([Permission::PeopleSyncWorkos]);
-    $actor->forceFill(['workos_user_id' => 'user_transient_actor', 'account_id' => Account::factory()->create()->id])->save();
+    $actor->forceFill(['workos_user_id' => 'user_transient_actor', 'account_id' => AccountFactory::new()->create()->id])->save();
     knownSyncInvitationLink($actor);
     $person = employeeUser();
     knownSyncInvitationLink($person);
