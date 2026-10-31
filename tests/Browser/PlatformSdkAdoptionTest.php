@@ -23,7 +23,7 @@ it('adds an existing verified administrator and preserves platform company cours
     $page = visit(route('platform.users', absolute: false))->resize(1440, 900)->assertSee('Platform administrators')->assertSee('Oceanix SDK')->screenshot(filename: 'direct-sdk-users-desktop');
     $page->press('Add administrator')->fill('input[wire\\:model="administratorName"]', 'Browser Administrator')
         ->fill('input[wire\\:model="administratorEmail"]', 'browser-admin@example.com')
-        ->press('Add administrator')->assertSee('No invitation was sent.')
+        ->click('form[wire\\:submit="inviteAdministrator"] button[type="submit"]')->assertSee('No invitation was sent.')
         ->assertSee('browser-admin@example.com')->assertNoJavaScriptErrors()
         ->resize(375, 812)->assertSee('Add administrator')
         ->assertScript('document.documentElement.scrollWidth <= window.innerWidth + 1')->screenshot(filename: 'direct-sdk-users-mobile');
@@ -44,7 +44,7 @@ it('shows provider failure without granting platform access', function () {
     visit(route('platform.users', absolute: false))->resize(1440, 900)
         ->press('Add administrator')->fill('input[wire\\:model="administratorName"]', 'Unavailable Administrator')
         ->fill('input[wire\\:model="administratorEmail"]', 'unavailable@example.com')
-        ->press('Add administrator')->assertSee('No access was granted and no invitation was sent.')
+        ->click('form[wire\\:submit="inviteAdministrator"] button[type="submit"]')->assertSee('No access was granted and no invitation was sent.')
         ->assertNoJavaScriptErrors();
     expect(Account::where('email', 'unavailable@example.com')->exists())->toBeFalse();
 });
