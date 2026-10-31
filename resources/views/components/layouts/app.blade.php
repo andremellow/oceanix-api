@@ -168,6 +168,9 @@
                             <p class="truncate text-sm font-semibold">{{ $user->name }}</p>
                             <p class="truncate text-[11px] text-[#6f797f]">{{ $user->email }}</p>
                         </div>
+                    </div>
+                    <div class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#d9e5ea] pt-3">
+                        @include('oceanix-platform::components.locale-switcher')
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
                             <button type="submit" class="grid size-8 place-items-center rounded-lg text-[#6f797f] hover:bg-white hover:text-[#1f262b]" aria-label="{{ __('ui.logout') }}">
@@ -206,12 +209,6 @@
                             <span class="size-1.5 rounded-full bg-[#3e9cb8] shadow-[0_0_0_3px_rgba(62,156,184,.15)]"></span>
                             {{ __('ui.system_operational') }}
                         </span>
-                        <form method="POST" action="{{ route('locale.update', app()->getLocale() === 'pt_BR' ? 'en' : 'pt_BR') }}">
-                            @csrf
-                            <button type="submit" class="grid size-10 place-items-center rounded-full border border-[#dce1e5] bg-white text-[#566067] shadow-sm transition hover:border-[#bcc5cb] hover:bg-[#f8fafb]" aria-label="{{ __('ui.switch_language') }}" title="{{ __('ui.switch_language') }}">
-                                <flux:icon.language class="size-[18px]" />
-                            </button>
-                        </form>
                         <div class="grid size-10 place-items-center rounded-full border border-[#dce1e5] bg-white text-sm font-bold text-[#464f55] shadow-sm">
                             {{ $user->initial() }}
                         </div>

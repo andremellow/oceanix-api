@@ -46,13 +46,6 @@ Route::get('/verify/{code?}', CertificateVerificationController::class)
     ->middleware('throttle:30,1')
     ->name('certificates.verify');
 
-Route::post('/locale/{locale}', function (string $locale) {
-    abort_unless(in_array($locale, ['en', 'pt_BR'], true), 404);
-    session(['locale' => $locale]);
-
-    return back();
-})->name('locale.update');
-
 // Local development video provider (see App\Services\Video\FakeVideoProvider). Signed,
 // short-lived URLs, and the routes do not exist outside the local environment.
 if (app()->environment('local')) {

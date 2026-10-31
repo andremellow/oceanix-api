@@ -108,11 +108,13 @@ return [
         'profile_placeholder' => 'Training coordinator',
         'product_removal_message' => 'This removes only Compliance access for this company. Identity, other products and operational evidence are retained.',
         'platform_navigation' => [
-            ['route' => 'platform.shared-courses.index', 'label' => 'Shared courses', 'active' => ['platform.shared-courses.*']],
-            ['route' => 'platform.shared-modules.index', 'label' => 'Shared modules', 'active' => ['platform.shared-modules.*']],
-            ['route' => 'platform.tasks.index', 'label' => 'Tasks', 'active' => ['platform.tasks.*']],
+            ['route' => 'platform.shared-courses.index', 'label' => 'Shared courses', 'active' => ['platform.shared-courses.*'], 'icon' => 'academic-cap'],
+            ['route' => 'platform.shared-modules.index', 'label' => 'Shared modules', 'active' => ['platform.shared-modules.*'], 'icon' => 'squares-2x2'],
+            ['route' => 'platform.tasks.index', 'label' => 'Tasks', 'active' => ['platform.tasks.*'], 'icon' => 'clipboard-document-list'],
         ],
         'slots' => [
+            'platform_name' => 'platform-extensions.platform_name',
+            'platform_logo' => 'platform-extensions.platform_logo',
             'platform_company_after_details' => 'platform-extensions.company_courses',
             'login_local' => 'platform-extensions.login_local',
             'people_actions' => 'platform-extensions.people_actions',

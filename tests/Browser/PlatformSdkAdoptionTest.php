@@ -21,9 +21,9 @@ it('adds an existing verified administrator and preserves platform company cours
     ])]);
 
     $page = visit(route('platform.users', absolute: false))->resize(1440, 900)->assertSee('Platform administrators')->assertSee('Oceanix SDK')->screenshot(filename: 'direct-sdk-users-desktop');
-    $page->fill('input[wire\\:model="administratorName"]', 'Browser Administrator')
+    $page->press('Add administrator')->fill('input[wire\\:model="administratorName"]', 'Browser Administrator')
         ->fill('input[wire\\:model="administratorEmail"]', 'browser-admin@example.com')
-        ->press('Add administrator')->assertSee('No invitation was sent.')
+        ->click('form[wire\\:submit="inviteAdministrator"] button[type="submit"]')->assertSee('No invitation was sent.')
         ->assertSee('browser-admin@example.com')->assertNoJavaScriptErrors()
         ->resize(375, 812)->assertSee('Add administrator')
         ->assertScript('document.documentElement.scrollWidth <= window.innerWidth + 1')->screenshot(filename: 'direct-sdk-users-mobile');
@@ -42,9 +42,33 @@ it('shows provider failure without granting platform access', function () {
     Http::preventStrayRequests();
     Http::fake(['api.workos.com/user_management/users*' => Http::response([], 503)]);
     visit(route('platform.users', absolute: false))->resize(1440, 900)
-        ->fill('input[wire\\:model="administratorName"]', 'Unavailable Administrator')
+        ->press('Add administrator')->fill('input[wire\\:model="administratorName"]', 'Unavailable Administrator')
         ->fill('input[wire\\:model="administratorEmail"]', 'unavailable@example.com')
-        ->press('Add administrator')->assertSee('No access was granted and no invitation was sent.')
+        ->click('form[wire\\:submit="inviteAdministrator"] button[type="submit"]')->assertSee('No access was granted and no invitation was sent.')
         ->assertNoJavaScriptErrors();
     expect(Account::where('email', 'unavailable@example.com')->exists())->toBeFalse();
+});
+
+it('switches the full platform language with its query and keeps the sidebar usable on mobile', function () {
+    $account = AccountFactory::new()->platformAdmin()->create();
+    $this->withSession(['locale' => 'en', 'platform_account_id' => $account->id]);
+    Http::preventStrayRequests();
+    $path = route('platform.shared-courses.index', absolute: false).'?search=Safety';
+
+    $page = visit($path)->resize(1440, 900)->assertSee('Shared courses')->assertSee('Oceanix SDK')
+        ->click('button[name="locale"][value="pt_BR"]')
+        ->assertSee('Administradores da plataforma')
+        ->assertScript('document.documentElement.lang === "pt-BR"')
+        ->assertScript('window.location.search.includes("search=Safety")')
+        ->assertNoJavaScriptErrors()
+        ->resize(375, 812)
+        ->assertScript('document.documentElement.scrollWidth <= window.innerWidth + 1')
+        ->click('[aria-label="Abrir menu"]')->assertSee('Administradores da plataforma')
+        ->click('button[name="locale"][value="en"]')
+        ->assertScript('document.documentElement.lang === "en"')
+        ->assertScript('window.location.search.includes("search=Safety")')
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'sdk-platform-locale-mobile');
+
+    Http::assertNothingSent();
 });

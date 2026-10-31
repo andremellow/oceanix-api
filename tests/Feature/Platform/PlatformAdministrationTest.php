@@ -56,7 +56,7 @@ it('allows a platform administrator to view cross-company metrics', function ():
     $this->actingAs($user)
         ->get(route('platform.dashboard'))
         ->assertOk()
-        ->assertSee(__('Global overview'))
+        ->assertSee(__('Platform administration'))
         ->assertSee(__('Sign out'))
         ->assertSee(route('platform.logout'), escape: false);
 });
