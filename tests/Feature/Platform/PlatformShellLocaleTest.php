@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\User;
 use Composer\InstalledVersions;
 use Database\Factories\AccountFactory;
 use Illuminate\Support\Facades\Http;
@@ -13,14 +14,22 @@ beforeEach(function () {
 
 it('uses SDK navigation and brand slots across platform screens', function (string $route, string $label) {
     $account = AccountFactory::new()->platformAdmin()->create();
+    if ($route === 'platform.tasks.index') {
+        User::factory()->create(['account_id' => $account->id, 'email' => $account->email]);
+    }
     $this->withSession(['platform_account_id' => $account->id, 'locale' => 'en']);
     $rendered = [];
-    View::composer(['oceanix-platform::layouts.platform', 'platform-extensions.platform_name', 'platform-extensions.platform_logo'], function ($view) use (&$rendered): void {
-        $rendered[] = $view->name();
+    View::composer('*', function ($view) use (&$rendered): void {
+        if (realpath($view->getPath()) === realpath(base_path('vendor/oceanix/platform/resources/views/layouts/platform.blade.php'))) {
+            $rendered[] = 'sdk-platform-shell';
+        }
+        if (in_array($view->name(), ['platform-extensions.platform_name', 'platform-extensions.platform_logo'], true)) {
+            $rendered[] = $view->name();
+        }
     });
 
     $response = $this->get(route($route))->assertOk()->assertSee('Oceanix SDK '.InstalledVersions::getPrettyVersion('oceanix/platform'));
-    expect($rendered)->toContain('oceanix-platform::layouts.platform', 'platform-extensions.platform_name', 'platform-extensions.platform_logo');
+    expect($rendered)->toContain('sdk-platform-shell', 'platform-extensions.platform_name', 'platform-extensions.platform_logo');
     $document = new DOMDocument;
     @$document->loadHTML($response->getContent());
     $xpath = new DOMXPath($document);
