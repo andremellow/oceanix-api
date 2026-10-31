@@ -220,7 +220,8 @@ test('Owner PDF library pagination, private Open, reuse caret, retained archive,
         assert.equal(spawnSync('php', ['tests/Support/Documents/QaFixture.php', 'restore-library'], { env: environment }).status, 0);
         await modal.getByRole('button', { name: 'Try again', exact: true }).click();
         await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
-        await page.locator('form[action$="/locale/pt_BR"] button').click();
+        await page.locator('form[action$="/locale"] button[name="locale"][value="pt_BR"]').click();
+        await page.waitForFunction(() => document.documentElement.lang === 'pt-BR');
         await page.setViewportSize({ width: 390, height: 844 });
         await toolbar.focus(); await toolbar.press('Enter');
         const portuguese = page.locator('dialog[open]');
