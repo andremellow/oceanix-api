@@ -1,1 +1,1 @@
-{{ config('app.name') }}
+Compliance
